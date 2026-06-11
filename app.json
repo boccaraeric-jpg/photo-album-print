@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "photo-album-print",
+    "slug": "photo-album-print",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "L'app utilise l'appareil photo pour prendre les photos de votre album.",
+        "NSPhotoLibraryUsageDescription": "L'app accède à votre galerie pour importer des photos dans votre album."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "L'app accède à votre galerie pour importer des photos dans votre album.",
+          "cameraPermission": "L'app utilise l'appareil photo pour prendre les photos de votre album."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "L'app enregistre les photos prises dans votre photothèque."
+        }
+      ]
+    ]
+  }
+}
