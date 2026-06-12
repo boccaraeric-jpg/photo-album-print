@@ -3,12 +3,22 @@ import type { Photo } from '../types';
 
 interface Props {
   photo: Photo;
+  /** Vrai si cette photo est la couverture (choisie ou par défaut). */
+  isCover: boolean;
   onEdit: (photo: Photo) => void;
+  onSetCover: (photo: Photo) => void;
   onAdjust: (photo: Photo) => void;
   onDelete: (photo: Photo) => void;
 }
 
-export function PhotoCard({ photo, onEdit, onAdjust, onDelete }: Props) {
+export function PhotoCard({
+  photo,
+  isCover,
+  onEdit,
+  onSetCover,
+  onAdjust,
+  onDelete,
+}: Props) {
   const hasComment = photo.comment.trim().length > 0;
 
   return (
@@ -24,6 +34,15 @@ export function PhotoCard({ photo, onEdit, onAdjust, onDelete }: Props) {
         <Text style={styles.hint}>Modifier</Text>
       </View>
       <View style={styles.actions}>
+        <Pressable
+          style={[styles.iconBtn, isCover && styles.iconBtnCover]}
+          hitSlop={10}
+          onPress={() => onSetCover(photo)}
+        >
+          <Text style={[styles.iconText, isCover && styles.coverText]}>
+            {isCover ? '★' : '☆'}
+          </Text>
+        </Pressable>
         <Pressable
           style={[styles.iconBtn, photo.adjustments && styles.iconBtnActive]}
           hitSlop={10}
@@ -93,7 +112,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconBtnActive: { backgroundColor: '#fef3c7' },
+  iconBtnCover: { backgroundColor: '#fef3c7' },
   iconText: { fontSize: 13 },
+  coverText: { color: '#f59e0b', fontSize: 15 },
   deleteText: {
     color: '#6b7280',
     fontSize: 14,

@@ -11,9 +11,37 @@ export interface Adjustments {
   rotation: number;
 }
 
+/** Taille des photos dans le PDF : petite = 3/page, moyenne = 2/page, grande = 1/page. */
+export type PhotoSize = 'small' | 'medium' | 'large';
+
+/** Style d'encadré des photos dans le PDF. */
+export type FrameStyle = 'card' | 'border' | 'polaroid' | 'none';
+
+/** Options de personnalisation du mini album exporté. */
+export interface ExportOptions {
+  photoSize: PhotoSize;
+  /** Couleur de fond des pages (hex). */
+  background: string;
+  frame: FrameStyle;
+}
+
+/** Dossier de classement des photos (un PDF est exporté par dossier). */
+export interface Album {
+  /** Identifiant unique du dossier */
+  id: string;
+  /** Nom du dossier (titre de la couverture du PDF) */
+  name: string;
+  /** Timestamp de création (ms) */
+  createdAt: number;
+  /** Photo choisie pour la couverture (sinon la première du dossier) */
+  coverPhotoId?: string;
+}
+
 export interface Photo {
   /** Identifiant unique de la photo */
   id: string;
+  /** Identifiant du dossier auquel la photo appartient */
+  albumId: string;
   /** URI persistante du fichier image affiché (ajusté si des réglages sont appliqués) */
   uri: string;
   /** Commentaire / légende associé à la photo */

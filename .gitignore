@@ -40,5 +40,9 @@ yarn-error.*
 /ios
 /android
 
-# QR code de dev local (dépend de l'IP de la machine)
+# QR codes générés (dev local et partage)
 expo-qr.png
+partage-qr.png
+
+# export EAS Update
+dist/
