@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import type { Adjustments, Album, ExportOptions, Photo } from './src/types';
 import {
+  comparePhotos,
   loadData,
   loadExportOptions,
   saveAlbums,
@@ -26,16 +27,27 @@ import {
   savePhotos,
 } from './src/storage';
 import { newId } from './src/id';
+import { extractTakenAt } from './src/exif';
+import { getCurrentCoords, resolveCoords } from './src/photoLocation';
+import { reverseGeocode } from './src/geocode';
 import { deleteImage, persistImage } from './src/photoFiles';
 import { saveToPhotoLibrary } from './src/mediaLibrary';
+import { zipImages } from './src/albumZip';
 import { bakeAdjustedImage, isNeutral } from './src/adjustments';
-import { DEFAULT_EXPORT_OPTIONS, exportAlbumPdf } from './src/pdf';
+import {
+  buildAlbumHtml,
+  DEFAULT_EXPORT_OPTIONS,
+  htmlToPdfFile,
+  shareFile,
+} from './src/pdf';
+import { buildAlbumImages } from './src/pageImages';
 import { PhotoCard } from './src/components/PhotoCard';
 import { AlbumCard } from './src/components/AlbumCard';
 import { CommentModal } from './src/components/CommentModal';
 import { AdjustModal } from './src/components/AdjustModal';
 import { NameModal } from './src/components/NameModal';
 import { ExportModal } from './src/components/ExportModal';
+import { PreviewModal } from './src/components/PreviewModal';
 
 export default function App() {
   return (
@@ -271,18 +283,48 @@ function AlbumScreen({
   const insets = useSafeAreaInsets();
   const [editing, setEditing] = useState<Photo | null>(null);
   const [adjusting, setAdjusting] = useState<Photo | null>(null);
-  const [exporting, setExporting] = useState(false);
   const [exportVisible, setExportVisible] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [exportOptions, setExportOptions] = useState<ExportOptions>(
     DEFAULT_EXPORT_OPTIONS,
   );
 
-  // Repart des dernières options d'export choisies.
+  // Photos du dossier triées selon l'ordre manuel (glisser-déposer).
+  const orderedPhotos = useMemo(
+    () => [...photos].sort(comparePhotos),
+    [photos],
+  );
+  const defaultCoverId = album.coverPhotoId ?? orderedPhotos[0]?.id;
+
+  // Repart des dernières options d'export choisies (fusionnées aux défauts
+  // pour absorber les nouveaux réglages absents des anciennes sauvegardes).
   useEffect(() => {
     loadExportOptions().then((stored) => {
-      if (stored) setExportOptions(stored);
+      if (stored) setExportOptions({ ...DEFAULT_EXPORT_OPTIONS, ...stored });
     });
   }, []);
+
+  // Réordonne en échangeant une photo avec sa voisine (boutons ↑/↓), puis
+  // réattribue un rang contigu à toutes les photos du dossier.
+  const movePhoto = useCallback(
+    (photoId: string, direction: 'up' | 'down') => {
+      const arr = [...orderedPhotos];
+      const i = arr.findIndex((p) => p.id === photoId);
+      const j = direction === 'up' ? i - 1 : i + 1;
+      if (i < 0 || j < 0 || j >= arr.length) return;
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+      const rankById = new Map(arr.map((p, idx) => [p.id, idx]));
+      setPhotos((prev) =>
+        prev.map((p) =>
+          rankById.has(p.id) ? { ...p, order: rankById.get(p.id)! } : p,
+        ),
+      );
+    },
+    [orderedPhotos, setPhotos],
+  );
 
   // Bouton retour Android : revient à la liste des dossiers.
   useEffect(() => {
@@ -294,19 +336,39 @@ function AlbumScreen({
   }, [onBack]);
 
   const addAsset = useCallback(
-    async (uri: string, openEditor: boolean) => {
+    async (
+      uri: string,
+      openEditor: boolean,
+      takenAt?: number,
+      coords?: { lat: number; lon: number },
+    ) => {
       const id = newId();
       try {
         const persisted = await persistImage(uri, id);
+        // `order` laissé indéfini : la comparaison place les nouvelles photos en
+        // fin de dossier (puis le chargement leur attribue un rang contigu).
         const photo: Photo = {
           id,
           albumId: album.id,
           uri: persisted,
           comment: '',
           createdAt: Date.now(),
+          takenAt,
+          coords,
         };
         setPhotos((prev) => [...prev, photo]);
         if (openEditor) setEditing(photo);
+        // Géocodage inverse best-effort en arrière-plan : renseigne le lieu
+        // sans bloquer l'import (l'utilisateur peut le corriger à la main).
+        if (coords) {
+          reverseGeocode(coords).then((place) => {
+            if (place) {
+              setPhotos((prev) =>
+                prev.map((p) => (p.id === id ? { ...p, place } : p)),
+              );
+            }
+          });
+        }
       } catch {
         Alert.alert('Erreur', "Impossible d'enregistrer la photo.");
       }
@@ -323,13 +385,13 @@ function AlbumScreen({
       );
       return;
     }
-    const res = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+    const res = await ImagePicker.launchCameraAsync({ quality: 0.8, exif: true });
     if (!res.canceled && res.assets[0]) {
-      const uri = res.assets[0].uri;
+      const asset = res.assets[0];
       // Enregistre d'abord la photo dans la photothèque du téléphone
       // (sans commentaire), pour la conserver en dehors de l'album.
       try {
-        const saved = await saveToPhotoLibrary(uri);
+        const saved = await saveToPhotoLibrary(asset.uri);
         if (!saved) {
           Alert.alert(
             'Photo non ajoutée à Photos',
@@ -339,7 +401,9 @@ function AlbumScreen({
       } catch {
         // L'échec d'enregistrement dans Photos ne doit pas bloquer l'album.
       }
-      await addAsset(uri, true);
+      // Appareil photo : la capture ne porte pas de GPS → position de l'appareil.
+      const coords = (await resolveCoords(asset)) ?? (await getCurrentCoords());
+      await addAsset(asset.uri, true, extractTakenAt(asset), coords);
     }
   }, [addAsset]);
 
@@ -355,20 +419,28 @@ function AlbumScreen({
     const res = await ImagePicker.launchImageLibraryAsync({
       quality: 0.8,
       allowsMultipleSelection: true,
+      exif: true,
     });
     if (!res.canceled) {
       // Une seule photo → ouvre l'éditeur de commentaire ; plusieurs → ajout direct.
       const openEditor = res.assets.length === 1;
       for (const asset of res.assets) {
-        await addAsset(asset.uri, openEditor);
+        await addAsset(
+          asset.uri,
+          openEditor,
+          extractTakenAt(asset),
+          await resolveCoords(asset),
+        );
       }
     }
   }, [addAsset]);
 
   const saveComment = useCallback(
-    (id: string, comment: string) => {
+    (id: string, comment: string, place: string) => {
       setPhotos((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, comment } : p)),
+        prev.map((p) =>
+          p.id === id ? { ...p, comment, place: place || undefined } : p,
+        ),
       );
       setEditing(null);
     },
@@ -425,28 +497,84 @@ function AlbumScreen({
     [setPhotos],
   );
 
-  const exportAlbum = useCallback(
+  const albumTitle = album.name.trim() || 'Mon album';
+
+  // Étape 1 : prépare l'aperçu (même HTML que le PDF) à partir des options.
+  const openPreview = useCallback(
     async (options: ExportOptions) => {
       if (photos.length === 0) return;
-      setExporting(true);
+      setExportOptions(options);
+      saveExportOptions(options);
+      setPreparing(true);
       try {
-        setExportOptions(options);
-        saveExportOptions(options);
-        await exportAlbumPdf(
-          photos,
-          album.name.trim() || 'Mon album',
+        const html = await buildAlbumHtml(
+          orderedPhotos,
+          albumTitle,
           options,
-          album.coverPhotoId,
+          defaultCoverId,
         );
+        setPreviewHtml(html);
         setExportVisible(false);
+        setPreviewVisible(true);
       } catch {
-        Alert.alert('Erreur', 'La génération du PDF a échoué.');
+        Alert.alert('Erreur', "La préparation de l'aperçu a échoué.");
       } finally {
-        setExporting(false);
+        setPreparing(false);
       }
     },
-    [photos, album.name],
+    [photos.length, orderedPhotos, albumTitle, defaultCoverId],
   );
+
+  // Étape 2a : PDF prêt à imprimer, nommé, puis feuille de partage.
+  const sendPdf = useCallback(async () => {
+    if (!previewHtml) return;
+    setSending(true);
+    try {
+      const uri = await htmlToPdfFile(previewHtml, albumTitle);
+      await shareFile(uri, albumTitle, 'application/pdf', 'com.adobe.pdf');
+      setPreviewVisible(false);
+    } catch {
+      Alert.alert('Erreur', 'La génération du PDF a échoué.');
+    } finally {
+      setSending(false);
+    }
+  }, [previewHtml, albumTitle]);
+
+  // Étape 2b : une image JPEG par page, partagée via la feuille d'envoi. Une
+  // seule page → l'image directement ; plusieurs → un ZIP unique (expo-sharing
+  // ne partageant qu'un fichier à la fois).
+  const sendImages = useCallback(async () => {
+    setSending(true);
+    try {
+      const uris = await buildAlbumImages(
+        orderedPhotos,
+        albumTitle,
+        exportOptions,
+        defaultCoverId,
+      );
+      if (uris.length === 0) throw new Error('aucune page générée');
+      if (uris.length === 1) {
+        await shareFile(uris[0], albumTitle, 'image/jpeg', 'public.jpeg');
+      } else {
+        const zip = await zipImages(uris, albumTitle);
+        await shareFile(zip, albumTitle, 'application/zip', 'public.zip-archive');
+      }
+      setPreviewVisible(false);
+    } catch {
+      Alert.alert('Erreur', 'La génération des images a échoué.');
+    } finally {
+      setSending(false);
+    }
+  }, [orderedPhotos, albumTitle, exportOptions, defaultCoverId]);
+
+  // Choix du format au moment de l'envoi.
+  const chooseFormat = useCallback(() => {
+    Alert.alert('Envoyer le mini album', 'Choisis le format', [
+      { text: 'PDF', onPress: sendPdf },
+      { text: 'Images (JPEG)', onPress: sendImages },
+      { text: 'Annuler', style: 'cancel' },
+    ]);
+  }, [sendPdf, sendImages]);
 
   return (
     <View style={styles.screen}>
@@ -462,6 +590,9 @@ function AlbumScreen({
           onChangeText={onRename}
           placeholder="Nom du dossier"
           placeholderTextColor="#9ca3af"
+          autoCorrect
+          spellCheck
+          autoCapitalize="sentences"
         />
         <Text style={styles.count}>
           {photos.length} photo{photos.length > 1 ? 's' : ''}
@@ -469,20 +600,31 @@ function AlbumScreen({
       </View>
 
       <FlatList
-        data={photos}
+        data={orderedPhotos}
         keyExtractor={(p) => p.id}
         style={styles.listFlex}
         contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <PhotoCard
             photo={item}
-            isCover={item.id === (album.coverPhotoId ?? photos[0]?.id)}
+            isCover={item.id === defaultCoverId}
             onEdit={setEditing}
             onSetCover={(photo) => onSetCover(photo.id)}
             onAdjust={setAdjusting}
             onDelete={removePhoto}
+            onMoveUp={() => movePhoto(item.id, 'up')}
+            onMoveDown={() => movePhoto(item.id, 'down')}
+            isFirst={index === 0}
+            isLast={index === orderedPhotos.length - 1}
           />
         )}
+        ListHeaderComponent={
+          photos.length > 1 ? (
+            <Text style={styles.reorderHint}>
+              Utilise ▲▼ pour réordonner les photos
+            </Text>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Aucune photo</Text>
@@ -504,7 +646,7 @@ function AlbumScreen({
           onPress={() => setExportVisible(true)}
           disabled={photos.length === 0}
         >
-          <Text style={styles.btnPrimaryText}>Exporter ce dossier (PDF) →</Text>
+          <Text style={styles.btnPrimaryText}>Exporter ce dossier →</Text>
         </Pressable>
         <View style={styles.row}>
           <Pressable
@@ -537,9 +679,24 @@ function AlbumScreen({
       <ExportModal
         visible={exportVisible}
         initial={exportOptions}
-        exporting={exporting}
-        onExport={exportAlbum}
+        preparing={preparing}
+        onPreview={openPreview}
         onClose={() => setExportVisible(false)}
+      />
+
+      <PreviewModal
+        visible={previewVisible}
+        html={previewHtml}
+        sending={sending}
+        onBackToAlbum={() => {
+          setPreviewVisible(false);
+          setExportVisible(false);
+        }}
+        onEditLayout={() => {
+          setPreviewVisible(false);
+          setExportVisible(true);
+        }}
+        onSend={chooseFormat}
       />
     </View>
   );
@@ -548,6 +705,12 @@ function AlbumScreen({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f4f5f7' },
   center: { alignItems: 'center', justifyContent: 'center' },
+  reorderHint: {
+    fontSize: 12,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
   header: {
     paddingHorizontal: 20,
     paddingTop: 12,

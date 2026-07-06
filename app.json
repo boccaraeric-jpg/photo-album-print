@@ -10,7 +10,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "L'app utilise l'appareil photo pour prendre les photos de votre album.",
-        "NSPhotoLibraryUsageDescription": "L'app accède à votre galerie pour importer des photos dans votre album."
+        "NSPhotoLibraryUsageDescription": "L'app accède à votre galerie pour importer des photos dans votre album.",
+        "NSLocationWhenInUseUsageDescription": "L'app utilise la localisation des photos pour indiquer le lieu de prise de vue sous chacune."
       }
     },
     "android": {
@@ -54,7 +55,7 @@
         "projectId": "e309c8a1-b634-41dc-989c-51ac6e50e4fa"
       }
     },
-    "owner": "boccara",
+    "owner": "boccaras-team",
     "runtimeVersion": {
       "policy": "sdkVersion"
     },

@@ -60,6 +60,9 @@ export function NameModal({
             placeholder="Nom du dossier"
             placeholderTextColor="#9ca3af"
             autoFocus
+            autoCorrect
+            spellCheck
+            autoCapitalize="sentences"
             returnKeyType="done"
             onSubmitEditing={() => name && onSubmit(name)}
           />

@@ -14,15 +14,39 @@ export interface Adjustments {
 /** Taille des photos dans le PDF : petite = 3/page, moyenne = 2/page, grande = 1/page. */
 export type PhotoSize = 'small' | 'medium' | 'large';
 
-/** Style d'encadré des photos dans le PDF. */
+/** Support de la photo (mutuellement exclusif). */
 export type FrameStyle = 'card' | 'border' | 'polaroid' | 'none';
+
+/**
+ * Rendu global du mini album :
+ * - `family` : livre photo chaleureux, personnalisable (fond, cadre, taille…).
+ * - `pro`    : rapport photographique sobre et factuel (fond blanc, photos
+ *              numérotées, date/heure + lieu + description) ; gabarit imposé.
+ */
+export type RenderStyle = 'family' | 'pro';
+
+/**
+ * Format de la date inscrite sous chaque photo.
+ * - `short` : « 08/07/2026 »
+ * - `long`  : « mercredi 8 juillet 2026 »
+ * - `full`  : « mercredi 8 juillet 2026 à 19h37 »
+ * - `none`  : date masquée
+ */
+export type DateFormat = 'short' | 'long' | 'full' | 'none';
 
 /** Options de personnalisation du mini album exporté. */
 export interface ExportOptions {
+  /** Rendu global (familial personnalisable ou professionnel sobre). */
+  style: RenderStyle;
   photoSize: PhotoSize;
-  /** Couleur de fond des pages (hex). */
+  /** Couleur de fond des pages (hex) — mode familial uniquement. */
   background: string;
+  /** Support de la photo (carte, bordure, polaroïd, sans cadre). */
   frame: FrameStyle;
+  /** Liseré (fin trait) entourant la photo — s'ajoute au support choisi. */
+  liseret: boolean;
+  /** Format de la date affichée sous chaque photo — mode familial. */
+  dateFormat: DateFormat;
 }
 
 /** Dossier de classement des photos (un PDF est exporté par dossier). */
@@ -44,10 +68,24 @@ export interface Photo {
   albumId: string;
   /** URI persistante du fichier image affiché (ajusté si des réglages sont appliqués) */
   uri: string;
-  /** Commentaire / légende associé à la photo */
+  /** Commentaire / légende (sert de « description » en rendu professionnel) */
   comment: string;
-  /** Timestamp de création (ms) */
+  /** Lieu de prise de vue (géocodé depuis le GPS, ou saisi à la main) */
+  place?: string;
+  /** Coordonnées GPS lues dans l'EXIF (pour re-géocoder au besoin) */
+  coords?: { lat: number; lon: number };
+  /** Timestamp d'ajout dans l'app (ms) — sert de repli et d'ordre par défaut */
   createdAt: number;
+  /**
+   * Timestamp de prise de vue réelle (ms), lu dans l'EXIF à l'import.
+   * C'est la date affichée sous la photo ; repli sur `createdAt` si absent.
+   */
+  takenAt?: number;
+  /**
+   * Rang manuel dans le dossier (glisser-déposer). Les photos sans `order`
+   * (anciennes données) retombent sur un tri par `createdAt`.
+   */
+  order?: number;
   /** URI du fichier d'origine quand `uri` pointe vers une version ajustée */
   originalUri?: string;
   /** Réglages actuellement appliqués (pour ré-édition) */

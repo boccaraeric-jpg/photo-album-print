@@ -23,6 +23,19 @@ export interface StoredData {
 }
 
 /**
+ * Ordre d'affichage des photos : rang manuel (`order`) d'abord, puis, à défaut,
+ * date d'ajout. Les photos rangées à la main passent avant les non rangées.
+ */
+export function comparePhotos(a: Photo, b: Photo): number {
+  const ao = a.order;
+  const bo = b.order;
+  if (ao != null && bo != null && ao !== bo) return ao - bo;
+  if (ao != null && bo == null) return -1;
+  if (ao == null && bo != null) return 1;
+  return a.createdAt - b.createdAt;
+}
+
+/**
  * Charge les dossiers et les photos persistés.
  *
  * Migration depuis la version sans dossiers : si aucun dossier n'est encore
@@ -37,9 +50,7 @@ export async function loadData(): Promise<StoredData> {
   ]);
 
   let albums = parse<Album[]>(rawAlbums) ?? [];
-  let photos = (parse<Photo[]>(rawPhotos) ?? []).sort(
-    (a, b) => a.createdAt - b.createdAt,
-  );
+  let photos = (parse<Photo[]>(rawPhotos) ?? []).sort(comparePhotos);
 
   if (!rawAlbums && photos.length > 0) {
     const first: Album = {
@@ -57,7 +68,36 @@ export async function loadData(): Promise<StoredData> {
     );
   }
 
-  return { albums, photos };
+  // Normalise le rang : chaque photo reçoit un `order` contigu au sein de son
+  // dossier (dans l'ordre actuel). Ainsi le tri, l'ajout en fin et le
+  // glisser-déposer manipulent tous des rangs cohérents.
+  if (normalizeOrder(photos)) await savePhotos(photos);
+
+  return { albums, photos: photos.sort(comparePhotos) };
+}
+
+/**
+ * Attribue un rang contigu (0,1,2…) aux photos de chaque dossier, selon l'ordre
+ * courant. Mute les photos concernées et retourne `true` si un rang a changé.
+ */
+function normalizeOrder(photos: Photo[]): boolean {
+  const byAlbum = new Map<string, Photo[]>();
+  for (const p of photos) {
+    const group = byAlbum.get(p.albumId);
+    if (group) group.push(p);
+    else byAlbum.set(p.albumId, [p]);
+  }
+  let changed = false;
+  for (const group of byAlbum.values()) {
+    group.sort(comparePhotos);
+    group.forEach((p, i) => {
+      if (p.order !== i) {
+        p.order = i;
+        changed = true;
+      }
+    });
+  }
+  return changed;
 }
 
 /** Persiste la liste des dossiers. */

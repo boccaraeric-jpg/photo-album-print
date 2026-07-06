@@ -1,12 +1,18 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import type { ExportOptions, Photo } from './types';
 import { readBase64 } from './photoFiles';
+import { fileDateStamp, formatPhotoDate, photoDate } from './dateFormat';
+import { paginatePhotos, PER_PAGE } from './paginate';
 
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
+  style: 'family',
   photoSize: 'medium',
   background: '#f6f1e9',
   frame: 'card',
+  liseret: false,
+  dateFormat: 'long',
 };
 
 function escapeHtml(input: string): string {
@@ -19,17 +25,9 @@ function escapeHtml(input: string): string {
     .replace(/\n/g, '<br/>');
 }
 
-function formatDate(ts: number): string {
-  return new Date(ts).toLocaleDateString('fr-FR', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-}
-
 /** Période couverte par l'album (ex. « mai – juin 2026 »), pour la couverture. */
 function formatRange(photos: Photo[]): string {
-  const times = photos.map((p) => p.createdAt);
+  const times = photos.map(photoDate);
   const first = new Date(Math.min(...times));
   const last = new Date(Math.max(...times));
   const monthYear = (d: Date) =>
@@ -55,51 +53,30 @@ interface Item {
   src: string;
 }
 
-/** Au-delà de cette longueur, le commentaire vaut à sa photo une page entière. */
-const LONG_COMMENT = 160;
-
-function isLong(item: Item): boolean {
-  return item.photo.comment.trim().length > LONG_COMMENT;
-}
-
-/**
- * Répartit les photos en pages de `perPage` (commentaire en pied de photo).
- * Une photo au commentaire très long obtient sa page à elle, pour laisser
- * la place au texte.
- */
-function paginate(items: Item[], perPage: number): Item[][] {
-  if (perPage <= 1) return items.map((item) => [item]);
-  const pages: Item[][] = [];
-  let i = 0;
-  while (i < items.length) {
-    if (isLong(items[i])) {
-      pages.push([items[i]]);
-      i++;
-      continue;
-    }
-    const group: Item[] = [];
-    while (group.length < perPage && i < items.length && !isLong(items[i])) {
-      group.push(items[i]);
-      i++;
-    }
-    pages.push(group);
-  }
-  return pages;
-}
-
-function figureHtml(item: Item, variant: '' | 'solo' | 'large'): string {
+function figureHtml(
+  item: Item,
+  variant: '' | 'solo' | 'large',
+  dateFormat: ExportOptions['dateFormat'],
+): string {
   const { photo, src } = item;
   const comment = photo.comment.trim();
+  const place = photo.place?.trim();
+  const date = formatPhotoDate(photoDate(photo), dateFormat);
   const img = src
     ? `<img src="${src}" />`
     : '<span class="missing">Image indisponible</span>';
+  const meta = [place, date].filter(Boolean).join(' · ');
+  const caption =
+    comment || meta
+      ? `<figcaption class="caption">
+          ${comment ? escapeHtml(comment) : ''}
+          ${meta ? `<span class="date">${escapeHtml(meta)}</span>` : ''}
+        </figcaption>`
+      : '';
   return `
     <figure class="card ${variant}">
       <div class="ph">${img}</div>
-      <figcaption class="caption">
-        ${comment ? escapeHtml(comment) : ''}
-        <span class="date">${escapeHtml(formatDate(photo.createdAt))}</span>
-      </figcaption>
+      ${caption}
     </figure>`;
 }
 
@@ -108,12 +85,14 @@ function pageHtml(
   perPage: number,
   title: string,
   pageNo: number,
+  dateFormat: ExportOptions['dateFormat'],
 ): string {
   // Page d'une seule photo : « large » si c'est la taille choisie,
   // « solo » si c'est une exception (commentaire long ou photo restante).
-  const variant =
-    group.length > 1 ? '' : perPage === 1 ? 'large' : 'solo';
-  const figures = group.map((item) => figureHtml(item, variant)).join('');
+  const variant = group.length > 1 ? '' : perPage === 1 ? 'large' : 'solo';
+  const figures = group
+    .map((item) => figureHtml(item, variant, dateFormat))
+    .join('');
   // En taille « petite », les photos s'organisent en grille 2 colonnes.
   const body =
     perPage === 4 && group.length > 1
@@ -140,13 +119,6 @@ const PH_HEIGHTS: Record<ExportOptions['photoSize'], string> = {
   small: '170px',
   medium: '250px',
   large: '500px',
-};
-
-/** Petite = grille 2×2, moyenne = 2 empilées, grande = pleine page. */
-const PER_PAGE: Record<ExportOptions['photoSize'], number> = {
-  small: 4,
-  medium: 2,
-  large: 1,
 };
 
 /**
@@ -186,12 +158,15 @@ function buildStyles(options: ExportOptions): string {
       captionMuted = muted;
       break;
     case 'polaroid':
-      // Cadre blanc épais et photos légèrement inclinées, façon scrapbook.
+      // Cadre blanc épais, façon scrapbook. Les photos empilées (2 ou 4/page)
+      // sont légèrement inclinées en alternance ; les photos seules (grande
+      // taille ou page « solo ») restent DROITES et centrées.
       frameCss = `
         .card { background: #fff; border-radius: 3px; padding: 14px 14px 18px;
           box-shadow: 0 10px 24px rgba(0, 0, 0, ${dark ? '0.6' : '0.28'}); }
-        .card:nth-of-type(odd) { transform: rotate(-1.4deg); }
-        .card:nth-of-type(even) { transform: rotate(1.1deg); }
+        .card:not(.large):not(.solo):nth-of-type(odd) { transform: rotate(-1.4deg); }
+        .card:not(.large):not(.solo):nth-of-type(even) { transform: rotate(1.1deg); }
+        .card.large, .card.solo { transform: none; margin-left: auto; margin-right: auto; }
         .ph { border-radius: 0; }
         .caption { text-align: center; }`;
       break;
@@ -254,7 +229,8 @@ function buildStyles(options: ExportOptions): string {
     display: flex; align-items: center; justify-content: center;
     background: ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(31,29,26,0.05)'};
   }
-  .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ph img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .card.solo { max-width: 460px; }
   .card.solo .ph { height: 380px; }
   .card.solo .ph img { object-fit: contain; }
   .card.large .ph { height: 480px; }
@@ -277,25 +253,31 @@ function buildStyles(options: ExportOptions): string {
     font-size: 26px; margin: 12px 0 6px; color: ${ink};
   }
   .end p { color: ${muted}; font-size: 13px; margin: 0; }
+  ${
+    options.liseret
+      ? `/* Liseré (option additive) : l'image prend sa taille réelle (sans marges
+            vides) et porte le trait, pour entourer la photo et non la boîte. Se
+            combine avec n'importe quel support (carte, bordure, polaroïd, aucun). */
+         .ph { background: transparent; }
+         .ph img { width: auto; height: auto; max-width: 100%; max-height: 100%;
+           box-sizing: border-box; border-radius: 2px;
+           border: 1.5px solid ${dark ? 'rgba(243,239,231,0.75)' : 'rgba(20,24,31,0.6)'}; }`
+      : ''
+  }
 `;
 }
 
 /**
- * Génère le mini album photo du dossier en PDF — couverture, pages photo
- * personnalisables (taille, fond, encadré) et page de fin — puis ouvre la
- * feuille de partage pour l'envoyer à un service d'impression, par email
- * ou AirDrop.
- *
- * @returns l'URI du PDF généré, ou null si aucune photo.
+ * Construit le HTML complet du mini album (couverture, pages photo, page de
+ * fin), avec les images intégrées en base64. Réutilisé tel quel par l'aperçu
+ * (WebView) et par la génération PDF, pour que l'aperçu soit fidèle au rendu.
  */
-export async function exportAlbumPdf(
+export async function buildAlbumHtml(
   photos: Photo[],
   title: string,
-  options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
+  options: ExportOptions,
   coverPhotoId?: string,
-): Promise<string | null> {
-  if (photos.length === 0) return null;
-
+): Promise<string> {
   const items: Item[] = await Promise.all(
     photos.map(async (photo) => {
       try {
@@ -307,6 +289,12 @@ export async function exportAlbumPdf(
     }),
   );
 
+  // Rendu professionnel : gabarit sobre imposé (fond blanc, photos numérotées,
+  // date/heure + lieu + description), indépendant des réglages familiaux.
+  if (options.style === 'pro') {
+    return buildProDocument(items, title);
+  }
+
   const range = formatRange(photos);
   const subtitle = `${photos.length} photo${photos.length > 1 ? 's' : ''} · ${range}`;
   // Photo de couverture : celle choisie par l'utilisateur (étoile),
@@ -317,13 +305,24 @@ export async function exportAlbumPdf(
     '';
   const perPage = PER_PAGE[options.photoSize];
 
-  const pages = paginate(items, perPage)
-    .map((group, index) => pageHtml(group, perPage, title, index + 1))
+  const pages = paginatePhotos(photos, perPage)
+    .map((group, index) => {
+      const groupItems = group.map(
+        (photo) => items.find((it) => it.photo.id === photo.id)!,
+      );
+      return pageHtml(groupItems, perPage, title, index + 1, options.dateFormat);
+    })
     .join('');
 
-  const html = `<!DOCTYPE html>
+  return `<!DOCTYPE html>
     <html lang="fr">
-      <head><meta charset="utf-8" /><style>${buildStyles(options)}</style></head>
+      <head>
+        <meta charset="utf-8" />
+        <!-- width = largeur de page A4 en points : l'aperçu WebView met la page
+             à l'échelle de l'écran ; ignoré par expo-print (dimensions fournies). -->
+        <meta name="viewport" content="width=${PAGE_WIDTH}, initial-scale=1" />
+        <style>${buildStyles(options)}</style>
+      </head>
       <body>
         <section class="sheet cover">
           <div class="cover-frame">${coverSrc ? `<img src="${coverSrc}" />` : ''}</div>
@@ -339,20 +338,136 @@ export async function exportAlbumPdf(
         </section>
       </body>
     </html>`;
+}
 
+/** Une ligne factuelle « Clé : valeur » du rapport professionnel. */
+function proMeta(label: string, value: string): string {
+  return `<div class="row"><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`;
+}
+
+function proEntryHtml(item: Item, number: number): string {
+  const { photo, src } = item;
+  const date = formatPhotoDate(photoDate(photo), 'full') || '—';
+  const place = photo.place?.trim() || '—';
+  const desc = photo.comment.trim() || '—';
+  const img = src
+    ? `<img src="${src}" />`
+    : '<span class="missing">Image indisponible</span>';
+  return `
+    <article class="entry">
+      <div class="num">Photo n° ${number}</div>
+      <div class="frame">${img}</div>
+      <dl class="meta">
+        ${proMeta('Lieu', place)}
+        ${proMeta('Date', date)}
+        ${proMeta('Description', desc)}
+      </dl>
+    </article>`;
+}
+
+/**
+ * Rapport photographique sobre (fond blanc, factuel). Mise en page en flux avec
+ * `page-break-inside: avoid` sur chaque fiche : ~2 photos par page, sans jamais
+ * tronquer une description (essentiel pour une expertise).
+ */
+function buildProDocument(items: Item[], title: string): string {
+  const number = new Map(items.map((it, i) => [it.photo.id, i + 1]));
+  const entries = items
+    .map((it) => proEntryHtml(it, number.get(it.photo.id)!))
+    .join('');
+  const today = new Date().toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  const styles = `
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact; }
+    body { margin: 0; background: #ffffff; color: #14181f;
+      font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; font-size: 12px; }
+    .cover { padding: 96px 56px 0; page-break-after: always; }
+    .cover .kicker { font-size: 12px; letter-spacing: 5px; color: #6b7280; font-weight: 700; }
+    .cover h1 { font-size: 34px; font-weight: 700; margin: 10px 0 18px; color: #111827; }
+    .cover .rule { height: 2px; background: #111827; width: 64px; margin-bottom: 26px; }
+    .cover .row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid #eef0f3; }
+    .cover dt { width: 150px; color: #6b7280; margin: 0; }
+    .cover dd { margin: 0; font-weight: 600; }
+    .pages { padding: 40px 56px; }
+    .entry { page-break-inside: avoid; margin-bottom: 28px; }
+    .num { font-size: 13px; font-weight: 700; color: #111827; margin-bottom: 8px;
+      letter-spacing: 0.5px; }
+    .frame { border: 1px solid #d7dbe0; border-radius: 4px; height: 300px; overflow: hidden;
+      display: flex; align-items: center; justify-content: center; background: #f8f9fa; }
+    .frame img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+    .missing { color: #9ca3af; font-style: italic; }
+    .meta { margin: 12px 0 0; }
+    .meta .row { display: flex; gap: 12px; padding: 5px 0; border-bottom: 1px solid #f1f2f4; }
+    .meta dt { width: 96px; flex-shrink: 0; color: #6b7280; margin: 0; text-transform: uppercase;
+      font-size: 10px; letter-spacing: 1px; padding-top: 2px; }
+    .meta dd { margin: 0; color: #14181f; line-height: 1.5; }`;
+
+  return `<!DOCTYPE html>
+    <html lang="fr">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=${PAGE_WIDTH}, initial-scale=1" />
+        <style>${styles}</style>
+      </head>
+      <body>
+        <section class="cover">
+          <div class="kicker">RAPPORT PHOTOGRAPHIQUE</div>
+          <h1>${escapeHtml(title)}</h1>
+          <div class="rule"></div>
+          <dl>
+            ${proMeta('Établi le', today)}
+            ${proMeta('Nombre de photos', String(items.length))}
+          </dl>
+        </section>
+        <main class="pages">${entries}</main>
+      </body>
+    </html>`;
+}
+
+/** Base de nom de fichier « Titre JJ-MM-AAAA » (sans caractères interdits). */
+export function albumFileBase(title: string): string {
+  const safe = title.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
+  return `${safe || 'Album'} ${fileDateStamp()}`;
+}
+
+/**
+ * Rend le HTML en PDF puis copie le fichier vers un nom lisible
+ * (« Nom de l'album JJ-MM-AAAA.pdf ») pour qu'il soit identifiable au partage.
+ * @returns l'URI du PDF nommé.
+ */
+export async function htmlToPdfFile(html: string, title: string): Promise<string> {
   const { uri } = await Print.printToFileAsync({
     html,
     width: PAGE_WIDTH,
     height: PAGE_HEIGHT,
   });
+  const dest = `${FileSystem.cacheDirectory}${albumFileBase(title)}.pdf`;
+  try {
+    await FileSystem.deleteAsync(dest, { idempotent: true });
+    await FileSystem.copyAsync({ from: uri, to: dest });
+    return dest;
+  } catch {
+    // En cas d'échec de renommage, on partage au moins le PDF d'origine.
+    return uri;
+  }
+}
 
+/** Ouvre la feuille de partage iOS pour un fichier généré. */
+export async function shareFile(
+  uri: string,
+  title: string,
+  mimeType: string,
+  UTI: string,
+): Promise<void> {
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(uri, {
-      mimeType: 'application/pdf',
+      mimeType,
       dialogTitle: `Envoyer « ${title} »`,
-      UTI: 'com.adobe.pdf',
+      UTI,
     });
   }
-
-  return uri;
 }

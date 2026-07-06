@@ -7,14 +7,22 @@ import {
   Text,
   View,
 } from 'react-native';
-import type { ExportOptions, FrameStyle, PhotoSize } from '../types';
+import type {
+  DateFormat,
+  ExportOptions,
+  FrameStyle,
+  PhotoSize,
+  RenderStyle,
+} from '../types';
 
 interface Props {
   visible: boolean;
   /** Options pré-sélectionnées (dernier export). */
   initial: ExportOptions;
-  exporting: boolean;
-  onExport: (options: ExportOptions) => void;
+  /** Vrai pendant la préparation de l'aperçu (lecture des images). */
+  preparing: boolean;
+  /** Ouvre l'aperçu avant envoi avec les options choisies. */
+  onPreview: (options: ExportOptions) => void;
   onClose: () => void;
 }
 
@@ -31,11 +39,27 @@ const FRAMES: { value: FrameStyle; label: string }[] = [
   { value: 'none', label: 'Sans cadre' },
 ];
 
+const RENDER_STYLES: { value: RenderStyle; label: string; hint: string }[] = [
+  { value: 'family', label: 'Familial', hint: 'livre photo chaleureux' },
+  { value: 'pro', label: 'Professionnel', hint: 'rapport sobre et factuel' },
+];
+
+const DATE_FORMATS: { value: DateFormat; label: string; hint: string }[] = [
+  { value: 'short', label: 'Simple', hint: '08/07/2026' },
+  { value: 'long', label: 'Détaillée', hint: 'mercredi 8 juillet 2026' },
+  { value: 'full', label: 'Complète', hint: '… à 19h37' },
+  { value: 'none', label: 'Aucune', hint: 'sans date' },
+];
+
 const BACKGROUNDS = [
   '#f6f1e9', // crème
   '#ffffff', // blanc
   '#dfe3e8', // gris clair
   '#f6ddd0', // rose poudré
+  '#fbf3c4', // jaune clair
+  '#dcf3e0', // vert clair
+  '#f9dada', // rouge clair
+  '#dbeafe', // bleu clair
   '#22211f', // sombre
 ];
 
@@ -43,8 +67,8 @@ const BACKGROUNDS = [
 export function ExportModal({
   visible,
   initial,
-  exporting,
-  onExport,
+  preparing,
+  onPreview,
   onClose,
 }: Props) {
   const [options, setOptions] = useState<ExportOptions>(initial);
@@ -66,6 +90,38 @@ export function ExportModal({
           <View style={styles.handle} />
           <Text style={styles.title}>Mini album</Text>
 
+          <Text style={styles.label}>Rendu</Text>
+          <View style={styles.chips}>
+            {RENDER_STYLES.map(({ value, label, hint }) => {
+              const selected = options.style === value;
+              return (
+                <Pressable
+                  key={value}
+                  style={[styles.chip, selected && styles.chipSelected]}
+                  onPress={() => setOptions((o) => ({ ...o, style: value }))}
+                >
+                  <Text
+                    style={[styles.chipText, selected && styles.chipTextSelected]}
+                  >
+                    {label}
+                  </Text>
+                  <Text
+                    style={[styles.chipHint, selected && styles.chipHintSelected]}
+                  >
+                    {hint}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {options.style === 'pro' ? (
+            <Text style={styles.proNote}>
+              Mise en page sobre imposée : fond blanc, photos numérotées, avec
+              date/heure, lieu et description sous chacune.
+            </Text>
+          ) : (
+            <>
           <Text style={styles.label}>Taille des photos</Text>
           <View style={styles.chips}>
             {SIZES.map(({ value, label, hint }) => {
@@ -129,23 +185,73 @@ export function ExportModal({
             })}
           </View>
 
+          <Text style={styles.label}>Liseré autour de la photo</Text>
+          <View style={styles.chips}>
+            {[
+              { value: true, label: 'Oui' },
+              { value: false, label: 'Non' },
+            ].map(({ value, label }) => {
+              const selected = options.liseret === value;
+              return (
+                <Pressable
+                  key={label}
+                  style={[styles.chip, selected && styles.chipSelected]}
+                  onPress={() => setOptions((o) => ({ ...o, liseret: value }))}
+                >
+                  <Text
+                    style={[styles.chipText, selected && styles.chipTextSelected]}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={styles.label}>Date sous les photos</Text>
+          <View style={styles.chips}>
+            {DATE_FORMATS.map(({ value, label, hint }) => {
+              const selected = options.dateFormat === value;
+              return (
+                <Pressable
+                  key={value}
+                  style={[styles.chip, selected && styles.chipSelected]}
+                  onPress={() => setOptions((o) => ({ ...o, dateFormat: value }))}
+                >
+                  <Text
+                    style={[styles.chipText, selected && styles.chipTextSelected]}
+                  >
+                    {label}
+                  </Text>
+                  <Text
+                    style={[styles.chipHint, selected && styles.chipHintSelected]}
+                  >
+                    {hint}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+            </>
+          )}
+
           <View style={styles.actions}>
             <Pressable
               style={[styles.btn, styles.btnGhost]}
               onPress={onClose}
-              disabled={exporting}
+              disabled={preparing}
             >
               <Text style={styles.btnGhostText}>Annuler</Text>
             </Pressable>
             <Pressable
-              style={[styles.btn, styles.btnPrimary, exporting && styles.btnDisabled]}
-              disabled={exporting}
-              onPress={() => onExport(options)}
+              style={[styles.btn, styles.btnPrimary, preparing && styles.btnDisabled]}
+              disabled={preparing}
+              onPress={() => onPreview(options)}
             >
-              {exporting ? (
+              {preparing ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.btnPrimaryText}>Exporter le PDF →</Text>
+                <Text style={styles.btnPrimaryText}>Aperçu →</Text>
               )}
             </Pressable>
           </View>
@@ -209,6 +315,13 @@ const styles = StyleSheet.create({
   chipTextSelected: { color: '#fff' },
   chipHint: { fontSize: 11, color: '#9ca3af', marginTop: 1 },
   chipHintSelected: { color: 'rgba(255,255,255,0.75)' },
+  proNote: {
+    fontSize: 13,
+    color: '#6b7280',
+    lineHeight: 19,
+    marginTop: 14,
+    marginBottom: 4,
+  },
   swatch: {
     width: 38,
     height: 38,
