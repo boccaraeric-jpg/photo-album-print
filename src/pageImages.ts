@@ -11,8 +11,14 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import type { ExportOptions, Photo } from './types';
 import { formatPhotoDate, photoDate } from './dateFormat';
-import { paginatePhotos, PER_PAGE } from './paginate';
+import { paginateEntries, PER_PAGE } from './paginate';
 import { albumFileBase } from './pdf';
+
+/** Tronque un texte à `n` mots (légende de pleine page). */
+function limitWords(text: string, n: number): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  return words.length <= n ? text.trim() : `${words.slice(0, n).join(' ')}…`;
+}
 
 /** Page A4 à ~150 dpi : bonne qualité d'impression pour un poids raisonnable. */
 const W = 1240;
@@ -482,6 +488,73 @@ async function renderCover(
   return encodeSurface(surface, title, 0);
 }
 
+/** Page de texte seule (Skia) : texte centré sur le fond de l'album. */
+function renderTextPage(
+  item: Photo,
+  options: ExportOptions,
+  title: string,
+  pageNo: number,
+): PagePayload | null {
+  const surface = Skia.Surface.Make(W, H);
+  if (!surface) return null;
+  const canvas = surface.getCanvas();
+  const dark = isDark(options.background);
+  const ink = dark ? '#f3efe7' : '#1f1d1a';
+  const muted = dark ? '#8f8a80' : '#a89f8d';
+
+  const bg = Skia.Paint();
+  bg.setColor(Skia.Color(options.background));
+  canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
+
+  drawText(canvas, item.comment.trim(), PAD, H * 0.3, W - 2 * PAD, {
+    color: ink,
+    size: 46,
+    align: TextAlign.Center,
+    maxLines: 12,
+  });
+  drawText(canvas, title.toUpperCase(), PAD, H - PAD - 24, W - 2 * PAD, {
+    color: muted,
+    size: 18,
+    align: TextAlign.Center,
+    letterSpacing: 3,
+    maxLines: 1,
+  });
+  return encodeSurface(surface, title, pageNo);
+}
+
+/** Photo pleine page (bord à bord) + légende courte en pied (Skia). */
+async function renderFullPage(
+  item: Photo,
+  options: ExportOptions,
+  title: string,
+  pageNo: number,
+): Promise<PagePayload | null> {
+  const surface = Skia.Surface.Make(W, H);
+  if (!surface) return null;
+  const canvas = surface.getCanvas();
+  const dark = isDark(options.background);
+  const ink = dark ? '#f3efe7' : '#1f1d1a';
+
+  const bg = Skia.Paint();
+  bg.setColor(Skia.Color(options.background));
+  canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
+
+  const capH = 150;
+  const img = await loadImage(item.uri);
+  drawCoverImage(canvas, img, 0, 0, W, H - capH, 0);
+
+  const comment = limitWords(item.comment, 15);
+  if (comment) {
+    drawText(canvas, comment, PAD, H - capH + 54, W - 2 * PAD, {
+      color: ink,
+      size: 28,
+      align: TextAlign.Center,
+      maxLines: 2,
+    });
+  }
+  return encodeSurface(surface, title, pageNo);
+}
+
 function encodeSurface(
   surface: ReturnType<typeof Skia.Surface.Make>,
   title: string,
@@ -524,16 +597,28 @@ export async function buildAlbumImages(
     ? { ...options, background: '#ffffff', frame: 'none' }
     : options;
   const perPage = pro ? 2 : PER_PAGE[options.photoSize];
+  const full = !pro && options.photoSize === 'full';
 
-  await push(await renderCover(photos, eff, title, pro, coverPhotoId));
+  const photoEntries = photos.filter((p) => p.kind !== 'text');
+  await push(await renderCover(photoEntries, eff, title, pro, coverPhotoId));
 
-  const pages = paginatePhotos(photos, perPage);
+  // Les pages de texte s'intercalent dans les deux rendus (familial et pro).
+  const pages = paginateEntries(photos, perPage);
   let numbered = 0;
   for (let i = 0; i < pages.length; i++) {
+    const page = pages[i];
+    if (page.type === 'text') {
+      await push(renderTextPage(page.item, eff, title, i + 1));
+      continue;
+    }
+    if (full) {
+      await push(await renderFullPage(page.items[0], eff, title, i + 1));
+      continue;
+    }
     await push(
-      await renderPhotoPage(pages[i], eff, title, i + 1, perPage, pro, numbered),
+      await renderPhotoPage(page.items, eff, title, i + 1, perPage, pro, numbered),
     );
-    numbered += pages[i].length;
+    numbered += page.items.length;
   }
 
   return uris;

@@ -1,6 +1,7 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Photo } from '../types';
+import { C, F } from '../theme';
 
 interface Props {
   photo: Photo;
@@ -9,8 +10,9 @@ interface Props {
   onEdit: (photo: Photo) => void;
   onSetCover: (photo: Photo) => void;
   onAdjust: (photo: Photo) => void;
+  onCrop: (photo: Photo) => void;
   onDelete: (photo: Photo) => void;
-  /** Déplace la photo d'un cran vers le haut / le bas dans le dossier. */
+  /** Déplace l'entrée d'un cran vers le haut / le bas dans le dossier. */
   onMoveUp: () => void;
   onMoveDown: () => void;
   isFirst: boolean;
@@ -23,12 +25,14 @@ export function PhotoCard({
   onEdit,
   onSetCover,
   onAdjust,
+  onCrop,
   onDelete,
   onMoveUp,
   onMoveDown,
   isFirst,
   isLast,
 }: Props) {
+  const isText = photo.kind === 'text';
   const hasComment = photo.comment.trim().length > 0;
 
   return (
@@ -51,46 +55,75 @@ export function PhotoCard({
           <Text style={[styles.arrow, isLast && styles.arrowDisabled]}>▼</Text>
         </Pressable>
       </View>
-      <Image source={{ uri: photo.uri }} style={styles.thumb} />
+      {isText ? (
+        <View style={[styles.thumb, styles.textThumb]}>
+          <Text style={styles.textThumbMark}>¶</Text>
+        </View>
+      ) : (
+        <Image source={{ uri: photo.uri }} style={styles.thumb} />
+      )}
       <View style={styles.body}>
         <Text
           style={[styles.comment, !hasComment && styles.commentEmpty]}
           numberOfLines={3}
         >
-          {hasComment ? photo.comment : 'Touche pour ajouter un commentaire'}
+          {hasComment
+            ? photo.comment
+            : isText
+              ? 'Touche pour écrire le texte de la page'
+              : 'Touche pour ajouter un commentaire'}
         </Text>
-        <Text style={styles.hint}>Modifier</Text>
+        <Text style={styles.hint}>{isText ? 'PAGE DE TEXTE' : 'Modifier'}</Text>
       </View>
       <View style={styles.actions}>
-        <Pressable
-          style={[styles.iconBtn, isCover && styles.iconBtnCover]}
-          hitSlop={10}
-          onPress={() => onSetCover(photo)}
-        >
-          <Ionicons
-            name={isCover ? 'heart' : 'heart-outline'}
-            size={20}
-            color={isCover ? '#ef4444' : '#6b7280'}
-          />
-        </Pressable>
-        <Pressable
-          style={[styles.iconBtn, photo.adjustments && styles.iconBtnActive]}
-          hitSlop={10}
-          onPress={() => onAdjust(photo)}
-        >
-          <Ionicons
-            name="options-outline"
-            size={20}
-            color={photo.adjustments ? '#b45309' : '#6b7280'}
-          />
-        </Pressable>
-        <Pressable
-          style={styles.iconBtn}
-          hitSlop={10}
-          onPress={() => onDelete(photo)}
-        >
-          <Ionicons name="trash-outline" size={20} color="#6b7280" />
-        </Pressable>
+        {isText ? (
+          <Pressable
+            style={styles.iconBtn}
+            hitSlop={10}
+            onPress={() => onDelete(photo)}
+          >
+            <Ionicons name="trash-outline" size={20} color="#6b7280" />
+          </Pressable>
+        ) : (
+          <>
+            <Pressable
+              style={[styles.iconBtn, isCover && styles.iconBtnCover]}
+              hitSlop={10}
+              onPress={() => onSetCover(photo)}
+            >
+              <Ionicons
+                name={isCover ? 'heart' : 'heart-outline'}
+                size={20}
+                color={isCover ? '#ef4444' : '#6b7280'}
+              />
+            </Pressable>
+            <Pressable
+              style={styles.iconBtn}
+              hitSlop={10}
+              onPress={() => onCrop(photo)}
+            >
+              <Ionicons name="crop-outline" size={20} color="#6b7280" />
+            </Pressable>
+            <Pressable
+              style={[styles.iconBtn, photo.adjustments && styles.iconBtnActive]}
+              hitSlop={10}
+              onPress={() => onAdjust(photo)}
+            >
+              <Ionicons
+                name="options-outline"
+                size={20}
+                color={photo.adjustments ? '#b45309' : '#6b7280'}
+              />
+            </Pressable>
+            <Pressable
+              style={styles.iconBtn}
+              hitSlop={10}
+              onPress={() => onDelete(photo)}
+            >
+              <Ionicons name="trash-outline" size={20} color="#6b7280" />
+            </Pressable>
+          </>
+        )}
       </View>
     </Pressable>
   );
@@ -99,16 +132,13 @@ export function PhotoCard({
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: C.card,
     borderRadius: 16,
     padding: 10,
     marginBottom: 12,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: C.line,
   },
   reorder: {
     justifyContent: 'center',
@@ -120,18 +150,20 @@ const styles = StyleSheet.create({
     width: 30,
     height: 26,
     borderRadius: 8,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: C.tan,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  arrow: { fontSize: 13, color: '#374151', fontWeight: '700' },
-  arrowDisabled: { color: '#d1d5db' },
+  arrow: { fontSize: 13, color: C.inkSoft, fontWeight: '700' },
+  arrowDisabled: { color: C.faint },
   thumb: {
     width: 76,
     height: 76,
-    borderRadius: 12,
-    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    backgroundColor: C.tan,
   },
+  textThumb: { alignItems: 'center', justifyContent: 'center' },
+  textThumbMark: { fontFamily: F.display, fontSize: 34, color: C.sienna },
   body: {
     flex: 1,
     marginLeft: 12,
@@ -139,28 +171,29 @@ const styles = StyleSheet.create({
   },
   comment: {
     fontSize: 15,
-    color: '#1c1c1e',
+    color: C.ink,
     lineHeight: 20,
   },
   commentEmpty: {
-    color: '#9ca3af',
+    color: C.muted,
     fontStyle: 'italic',
   },
   hint: {
-    fontSize: 12,
-    color: '#2563eb',
-    fontWeight: '600',
-    marginTop: 6,
+    fontFamily: F.mono,
+    fontSize: 11,
+    color: C.sienna,
+    letterSpacing: 1,
+    marginTop: 7,
   },
   actions: { gap: 10 },
   iconBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: C.tan,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBtnActive: { backgroundColor: '#fef3c7' },
-  iconBtnCover: { backgroundColor: '#fee2e2' },
+  iconBtnActive: { backgroundColor: '#F0D9A8' },
+  iconBtnCover: { backgroundColor: '#EAC6B4' },
 });

@@ -48,7 +48,8 @@
         {
           "savePhotosPermission": "L'app enregistre les photos prises dans votre photothèque."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {

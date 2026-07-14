@@ -1,10 +1,14 @@
 import type { ExportOptions, Photo } from './types';
 
-/** Petite = grille 2×2, moyenne = 2 empilées, grande = pleine page. */
+/**
+ * Petite = grille 2×2, moyenne = 2 empilées, grande = pleine page (avec légende),
+ * pleine = photo bord à bord sur toute la page.
+ */
 export const PER_PAGE: Record<ExportOptions['photoSize'], number> = {
   small: 4,
   medium: 2,
   large: 1,
+  full: 1,
 };
 
 /** Au-delà de cette longueur, le commentaire vaut à sa photo une page entière. */
@@ -14,31 +18,39 @@ export function isLongComment(photo: Photo): boolean {
   return photo.comment.trim().length > LONG_COMMENT;
 }
 
+/** Une page de l'album : soit des photos, soit une page de texte seule. */
+export type AlbumPage =
+  | { type: 'photos'; items: Photo[] }
+  | { type: 'text'; item: Photo };
+
 /**
- * Répartit les photos en pages de `perPage`. Une photo au commentaire très long
- * obtient sa page à elle, pour laisser la place au texte. L'ordre reçu est
- * conservé (les photos arrivent déjà triées selon l'ordre manuel du dossier).
+ * Répartit les entrées (photos + pages de texte) en pages. Les pages de texte
+ * sont toujours autonomes ; une photo au commentaire très long (ou la taille
+ * « grande / pleine ») obtient sa page à elle. L'ordre reçu est conservé.
  */
-export function paginatePhotos(photos: Photo[], perPage: number): Photo[][] {
-  if (perPage <= 1) return photos.map((p) => [p]);
-  const pages: Photo[][] = [];
-  let i = 0;
-  while (i < photos.length) {
-    if (isLongComment(photos[i])) {
-      pages.push([photos[i]]);
-      i++;
+export function paginateEntries(entries: Photo[], perPage: number): AlbumPage[] {
+  const pages: AlbumPage[] = [];
+  let group: Photo[] = [];
+  const flush = () => {
+    if (group.length) {
+      pages.push({ type: 'photos', items: group });
+      group = [];
+    }
+  };
+  for (const e of entries) {
+    if (e.kind === 'text') {
+      flush();
+      pages.push({ type: 'text', item: e });
       continue;
     }
-    const group: Photo[] = [];
-    while (
-      group.length < perPage &&
-      i < photos.length &&
-      !isLongComment(photos[i])
-    ) {
-      group.push(photos[i]);
-      i++;
+    if (perPage <= 1 || isLongComment(e)) {
+      flush();
+      pages.push({ type: 'photos', items: [e] });
+      continue;
     }
-    pages.push(group);
+    group.push(e);
+    if (group.length >= perPage) flush();
   }
+  flush();
   return pages;
 }

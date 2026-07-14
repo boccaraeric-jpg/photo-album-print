@@ -15,7 +15,10 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
 import * as ImagePicker from 'expo-image-picker';
+
+import { C, F } from './src/theme';
 
 import type { Adjustments, Album, ExportOptions, Photo } from './src/types';
 import {
@@ -48,8 +51,17 @@ import { AdjustModal } from './src/components/AdjustModal';
 import { NameModal } from './src/components/NameModal';
 import { ExportModal } from './src/components/ExportModal';
 import { PreviewModal } from './src/components/PreviewModal';
+import { CropModal } from './src/components/CropModal';
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    Gloock: require('./assets/fonts/Gloock-Regular.ttf'),
+    PlexMono: require('./assets/fonts/IBMPlexMono-Regular.ttf'),
+    PlexMonoBold: require('./assets/fonts/IBMPlexMono-Bold.ttf'),
+  });
+  if (!fontsLoaded) {
+    return <View style={{ flex: 1, backgroundColor: C.paper }} />;
+  }
   return (
     <SafeAreaProvider>
       <Root />
@@ -130,7 +142,7 @@ function Root() {
   if (loading) {
     return (
       <View style={[styles.screen, styles.center]}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color="#A64B24" />
       </View>
     );
   }
@@ -283,6 +295,7 @@ function AlbumScreen({
   const insets = useSafeAreaInsets();
   const [editing, setEditing] = useState<Photo | null>(null);
   const [adjusting, setAdjusting] = useState<Photo | null>(null);
+  const [cropping, setCropping] = useState<Photo | null>(null);
   const [exportVisible, setExportVisible] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [sending, setSending] = useState(false);
@@ -297,7 +310,8 @@ function AlbumScreen({
     () => [...photos].sort(comparePhotos),
     [photos],
   );
-  const defaultCoverId = album.coverPhotoId ?? orderedPhotos[0]?.id;
+  const defaultCoverId =
+    album.coverPhotoId ?? orderedPhotos.find((p) => p.kind !== 'text')?.id;
 
   // Repart des dernières options d'export choisies (fusionnées aux défauts
   // pour absorber les nouveaux réglages absents des anciennes sauvegardes).
@@ -435,6 +449,49 @@ function AlbumScreen({
     }
   }, [addAsset]);
 
+  // Ajoute une page de texte seule (intro, dédicace, séparateur) et l'ouvre pour
+  // saisir le texte. Réordonnable comme une photo.
+  const addTextPage = useCallback(() => {
+    const entry: Photo = {
+      id: newId(),
+      kind: 'text',
+      albumId: album.id,
+      uri: '',
+      comment: '',
+      createdAt: Date.now(),
+    };
+    setPhotos((prev) => [...prev, entry]);
+    setEditing(entry);
+  }, [album.id, setPhotos]);
+
+  // Enregistre une photo recadrée : la version recadrée devient la nouvelle base
+  // (les réglages d'image sont réinitialisés, ils se recomposeront dessus).
+  const saveCrop = useCallback(
+    async (id: string, croppedUri: string) => {
+      const target = photos.find((p) => p.id === id);
+      if (!target || target.uri === croppedUri) {
+        setCropping(null);
+        return;
+      }
+      try {
+        const persisted = await persistImage(croppedUri, `${id}-crop-${Date.now()}`);
+        setPhotos((prev) =>
+          prev.map((p) => {
+            if (p.id !== id) return p;
+            if (p.uri && p.uri !== persisted) deleteImage(p.uri);
+            if (p.originalUri && p.originalUri !== p.uri) deleteImage(p.originalUri);
+            return { ...p, uri: persisted, originalUri: persisted, adjustments: undefined };
+          }),
+        );
+      } catch {
+        Alert.alert('Erreur', "Impossible d'enregistrer le recadrage.");
+      } finally {
+        setCropping(null);
+      }
+    },
+    [photos, setPhotos],
+  );
+
   const saveComment = useCallback(
     (id: string, comment: string, place: string) => {
       setPhotos((prev) =>
@@ -525,12 +582,19 @@ function AlbumScreen({
     [photos.length, orderedPhotos, albumTitle, defaultCoverId],
   );
 
-  // Étape 2a : PDF prêt à imprimer, nommé, puis feuille de partage.
+  // Étape 2a : PDF prêt à imprimer, nommé, puis feuille de partage. Reconstruit
+  // le HTML depuis les options courantes (fonctionne aussi en partage direct,
+  // sans être passé par l'aperçu).
   const sendPdf = useCallback(async () => {
-    if (!previewHtml) return;
     setSending(true);
     try {
-      const uri = await htmlToPdfFile(previewHtml, albumTitle);
+      const html = await buildAlbumHtml(
+        orderedPhotos,
+        albumTitle,
+        exportOptions,
+        defaultCoverId,
+      );
+      const uri = await htmlToPdfFile(html, albumTitle);
       await shareFile(uri, albumTitle, 'application/pdf', 'com.adobe.pdf');
       setPreviewVisible(false);
     } catch {
@@ -538,7 +602,7 @@ function AlbumScreen({
     } finally {
       setSending(false);
     }
-  }, [previewHtml, albumTitle]);
+  }, [orderedPhotos, albumTitle, exportOptions, defaultCoverId]);
 
   // Étape 2b : une image JPEG par page, partagée via la feuille d'envoi. Une
   // seule page → l'image directement ; plusieurs → un ZIP unique (expo-sharing
@@ -569,12 +633,34 @@ function AlbumScreen({
 
   // Choix du format au moment de l'envoi.
   const chooseFormat = useCallback(() => {
+    if (photos.length === 0) return;
     Alert.alert('Envoyer le mini album', 'Choisis le format', [
       { text: 'PDF', onPress: sendPdf },
       { text: 'Images (JPEG)', onPress: sendImages },
       { text: 'Annuler', style: 'cancel' },
     ]);
-  }, [sendPdf, sendImages]);
+  }, [photos.length, sendPdf, sendImages]);
+
+  // Les deux boutons de rendu (barre du bas) sont les points d'entrée de l'export :
+  // « Familial » ouvre d'abord la mise en page ; « Professionnel » va directement
+  // à l'aperçu avant envoi (gabarit sobre imposé, sans réglages).
+  const openFamilial = useCallback(() => {
+    if (photos.length === 0) return;
+    const next: ExportOptions = { ...exportOptions, style: 'family' };
+    setExportOptions(next);
+    saveExportOptions(next);
+    setExportVisible(true);
+  }, [photos.length, exportOptions]);
+
+  const openPro = useCallback(() => {
+    if (photos.length === 0) return;
+    const next: ExportOptions = { ...exportOptions, style: 'pro' };
+    setExportOptions(next);
+    saveExportOptions(next);
+    openPreview(next);
+  }, [photos.length, exportOptions, openPreview]);
+
+  const sendLabel = exportOptions.style === 'pro' ? 'Envoyer' : "Partager l'album";
 
   return (
     <View style={styles.screen}>
@@ -597,6 +683,23 @@ function AlbumScreen({
         <Text style={styles.count}>
           {photos.length} photo{photos.length > 1 ? 's' : ''}
         </Text>
+        <View style={styles.topActions}>
+          <Pressable
+            style={[styles.topBtn, styles.btnLight]}
+            onPress={takePhoto}
+          >
+            <Text style={styles.btnLightText}>＋  Nouvelle photo</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.topBtn, styles.btnLight]}
+            onPress={pickFromLibrary}
+          >
+            <Text style={styles.btnLightText}>🖼  Galerie photos</Text>
+          </Pressable>
+        </View>
+        <Pressable style={styles.textPageBtn} onPress={addTextPage}>
+          <Text style={styles.textPageBtnText}>＋ Page de texte</Text>
+        </Pressable>
       </View>
 
       <FlatList
@@ -611,6 +714,7 @@ function AlbumScreen({
             onEdit={setEditing}
             onSetCover={(photo) => onSetCover(photo.id)}
             onAdjust={setAdjusting}
+            onCrop={setCropping}
             onDelete={removePhoto}
             onMoveUp={() => movePhoto(item.id, 'up')}
             onMoveDown={() => movePhoto(item.id, 'down')}
@@ -637,31 +741,39 @@ function AlbumScreen({
       />
 
       <View style={[styles.toolbar, { paddingBottom: insets.bottom + 12 }]}>
-        <Pressable
-          style={[
-            styles.btn,
-            styles.btnPrimary,
-            photos.length === 0 && styles.btnDisabled,
-          ]}
-          onPress={() => setExportVisible(true)}
-          disabled={photos.length === 0}
-        >
-          <Text style={styles.btnPrimaryText}>Exporter ce dossier →</Text>
-        </Pressable>
-        <View style={styles.row}>
-          <Pressable
-            style={[styles.btn, styles.rowBtn, styles.btnLight]}
-            onPress={takePhoto}
-          >
-            <Text style={styles.btnLightText}>📷  Photo</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.btn, styles.rowBtn, styles.btnLight]}
-            onPress={pickFromLibrary}
-          >
-            <Text style={styles.btnLightText}>🖼  Galerie</Text>
-          </Pressable>
-        </View>
+        <Text style={styles.renduLabel}>CRÉER LE MINI ALBUM — RENDU</Text>
+        {preparing ? (
+          <View style={[styles.btn, styles.btnFamilial]}>
+            <ActivityIndicator color={C.paper} />
+          </View>
+        ) : (
+          <View style={styles.renduRow}>
+            <Pressable
+              style={[
+                styles.btn,
+                styles.rowBtn,
+                styles.btnFamilial,
+                photos.length === 0 && styles.btnDisabled,
+              ]}
+              disabled={photos.length === 0}
+              onPress={openFamilial}
+            >
+              <Text style={styles.btnActionText}>Familial</Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.btn,
+                styles.rowBtn,
+                styles.btnPro,
+                photos.length === 0 && styles.btnDisabled,
+              ]}
+              disabled={photos.length === 0}
+              onPress={openPro}
+            >
+              <Text style={styles.btnActionText}>Professionnel</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       <CommentModal
@@ -676,6 +788,12 @@ function AlbumScreen({
         onClose={() => setAdjusting(null)}
       />
 
+      <CropModal
+        photo={cropping}
+        onSave={saveCrop}
+        onClose={() => setCropping(null)}
+      />
+
       <ExportModal
         visible={exportVisible}
         initial={exportOptions}
@@ -688,6 +806,7 @@ function AlbumScreen({
         visible={previewVisible}
         html={previewHtml}
         sending={sending}
+        sendLabel={sendLabel}
         onBackToAlbum={() => {
           setPreviewVisible(false);
           setExportVisible(false);
@@ -703,44 +822,54 @@ function AlbumScreen({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f4f5f7' },
+  screen: { flex: 1, backgroundColor: C.paper },
   center: { alignItems: 'center', justifyContent: 'center' },
   reorderHint: {
-    fontSize: 12,
-    color: '#9ca3af',
+    fontFamily: F.mono,
+    fontSize: 11,
+    color: C.muted,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
+    letterSpacing: 1,
   },
   header: {
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 12,
   },
   kicker: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#9ca3af',
-    letterSpacing: 1,
+    fontFamily: F.mono,
+    fontSize: 11,
+    color: C.sienna,
+    letterSpacing: 3,
   },
   backLink: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2563eb',
-    marginBottom: 2,
+    fontFamily: F.mono,
+    fontSize: 13,
+    color: C.sienna,
+    letterSpacing: 1,
+    marginBottom: 6,
   },
   homeTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1c1c1e',
+    fontFamily: F.display,
+    fontSize: 40,
+    color: C.ink,
     paddingVertical: 2,
+    marginTop: 2,
   },
   titleInput: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1c1c1e',
+    fontFamily: F.display,
+    fontSize: 34,
+    color: C.ink,
     paddingVertical: 2,
   },
-  count: { fontSize: 14, color: '#6b7280' },
+  count: {
+    fontFamily: F.mono,
+    fontSize: 12,
+    color: C.muted,
+    letterSpacing: 1,
+    marginTop: 4,
+  },
   listFlex: { flex: 1 },
   list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, flexGrow: 1 },
   empty: {
@@ -751,24 +880,24 @@ const styles = StyleSheet.create({
     paddingTop: 80,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#374151',
-    marginBottom: 8,
+    fontFamily: F.display,
+    fontSize: 24,
+    color: C.inkSoft,
+    marginBottom: 10,
   },
   emptyText: {
     fontSize: 15,
-    color: '#9ca3af',
+    color: C.muted,
     textAlign: 'center',
-    lineHeight: 21,
+    lineHeight: 22,
   },
   toolbar: {
     padding: 16,
     paddingBottom: 24,
     gap: 12,
-    backgroundColor: '#fff',
+    backgroundColor: C.card,
     borderTopWidth: 1,
-    borderTopColor: '#ececec',
+    borderTopColor: C.line,
     flexShrink: 0,
   },
   row: { flexDirection: 'row', gap: 12 },
@@ -780,9 +909,78 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   rowBtn: { flex: 1 },
-  btnLight: { backgroundColor: '#eef2ff' },
-  btnLightText: { color: '#2563eb', fontSize: 16, fontWeight: '600' },
-  btnPrimary: { backgroundColor: '#2563eb' },
-  btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  topActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  topBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textPageBtn: {
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  textPageBtnText: { fontFamily: F.mono, fontSize: 13, color: C.inkSoft, letterSpacing: 0.5 },
+  renduRow: { flexDirection: 'row', gap: 10 },
+  renduLabel: {
+    fontFamily: F.monoBold,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: C.muted,
+    marginBottom: 10,
+  },
+  btnFamilial: { backgroundColor: C.sienna },
+  btnPro: { backgroundColor: C.ink },
+  btnActionText: {
+    fontFamily: F.monoBold,
+    fontSize: 16,
+    fontWeight: '700',
+    color: C.paper,
+    letterSpacing: 0.5,
+  },
+  renduChip: {
+    flex: 1,
+    height: 42,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.tan,
+  },
+  renduChipOn: { backgroundColor: C.sienna },
+  renduChipText: {
+    fontFamily: F.monoBold,
+    fontSize: 15,
+    fontWeight: '700',
+    color: C.ink,
+    letterSpacing: 0.5,
+  },
+  renduChipTextOn: { color: C.paper },
+  btnGhost: {
+    height: 46,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: C.sienna,
+    backgroundColor: 'transparent',
+  },
+  btnGhostText: { fontFamily: F.mono, color: C.sienna, fontSize: 13, letterSpacing: 0.5 },
+  btnLight: { backgroundColor: C.tan },
+  btnLightText: { color: C.ink, fontSize: 15, fontWeight: '600' },
+  btnPrimary: { backgroundColor: C.ink },
+  btnPrimaryText: {
+    fontFamily: F.mono,
+    color: C.paper,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
   btnDisabled: { opacity: 0.4 },
 });

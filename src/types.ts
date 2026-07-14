@@ -11,8 +11,11 @@ export interface Adjustments {
   rotation: number;
 }
 
-/** Taille des photos dans le PDF : petite = 3/page, moyenne = 2/page, grande = 1/page. */
-export type PhotoSize = 'small' | 'medium' | 'large';
+/**
+ * Taille des photos dans le PDF : petite = 4/page, moyenne = 2/page,
+ * grande = 1/page, pleine = photo bord à bord sur toute la page.
+ */
+export type PhotoSize = 'small' | 'medium' | 'large' | 'full';
 
 /** Support de la photo (mutuellement exclusif). */
 export type FrameStyle = 'card' | 'border' | 'polaroid' | 'none';
@@ -62,8 +65,13 @@ export interface Album {
 }
 
 export interface Photo {
-  /** Identifiant unique de la photo */
+  /** Identifiant unique de l'entrée */
   id: string;
+  /**
+   * Type d'entrée : `photo` (défaut) ou `text` (page de texte seule, sans
+   * image : `uri` vide, `comment` contient le texte de la page).
+   */
+  kind?: 'photo' | 'text';
   /** Identifiant du dossier auquel la photo appartient */
   albumId: string;
   /** URI persistante du fichier image affiché (ajusté si des réglages sont appliqués) */

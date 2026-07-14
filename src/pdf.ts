@@ -4,7 +4,13 @@ import * as FileSystem from 'expo-file-system/legacy';
 import type { ExportOptions, Photo } from './types';
 import { readBase64 } from './photoFiles';
 import { fileDateStamp, formatPhotoDate, photoDate } from './dateFormat';
-import { paginatePhotos, PER_PAGE } from './paginate';
+import { paginateEntries, PER_PAGE } from './paginate';
+
+/** Tronque un texte à `n` mots (pour la légende en pleine page). */
+function limitWords(text: string, n: number): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  return words.length <= n ? text.trim() : `${words.slice(0, n).join(' ')}…`;
+}
 
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   style: 'family',
@@ -35,6 +41,14 @@ function formatRange(photos: Photo[]): string {
   return monthYear(first) === monthYear(last)
     ? monthYear(first)
     : `${monthYear(first)} – ${monthYear(last)}`;
+}
+
+/** Année ou plage d'années couverte par l'album (ex. « 2026 » ou « 2024 – 2026 »). */
+function yearLabel(photos: Photo[]): string {
+  const years = photos.map((p) => new Date(photoDate(p)).getFullYear());
+  const min = Math.min(...years);
+  const max = Math.max(...years);
+  return min === max ? `${min}` : `${min} – ${max}`;
 }
 
 /** Vrai si la couleur (hex 6 chiffres) est sombre — pour adapter le texte. */
@@ -105,6 +119,30 @@ function pageHtml(
     </section>`;
 }
 
+/** Photo pleine page (bord à bord) + légende courte (≤ 15 mots) en pied. */
+function fullPageHtml(item: Item): string {
+  const { photo, src } = item;
+  const comment = limitWords(photo.comment, 15);
+  const img = src
+    ? `<img src="${src}" />`
+    : '<span class="missing">Image indisponible</span>';
+  return `
+    <section class="sheet full-sheet">
+      <div class="full-img">${img}</div>
+      <div class="full-cap">${comment ? escapeHtml(comment) : ''}</div>
+    </section>`;
+}
+
+/** Page de texte seule (intro, dédicace, séparateur…). */
+function textPageHtml(item: Photo, title: string, pageNo: number): string {
+  const text = escapeHtml(item.comment.trim()).replace(/\n/g, '<br/>');
+  return `
+    <section class="sheet textpage">
+      <div class="textpage-body">${text}</div>
+      <p class="footer"><span>${escapeHtml(title)}</span><span>${pageNo}</span></p>
+    </section>`;
+}
+
 /**
  * Page A4 en points PDF (72 dpi) : les px CSS correspondent à ces unités,
  * ce qui permet de dimensionner les pages au pixel près. L'unité vh est
@@ -119,6 +157,7 @@ const PH_HEIGHTS: Record<ExportOptions['photoSize'], string> = {
   small: '170px',
   medium: '250px',
   large: '500px',
+  full: '500px', // non utilisé (la pleine page a son propre gabarit)
 };
 
 /**
@@ -202,22 +241,38 @@ function buildStyles(options: ExportOptions): string {
     text-transform: uppercase; color: ${muted};
   }
 
-  /* --- Couverture --- */
-  .cover { text-align: center; }
-  .cover-frame {
-    height: 500px; border-radius: 26px; overflow: hidden;
-    box-shadow: 0 8px 22px rgba(0, 0, 0, ${dark ? '0.5' : '0.16'});
-  }
-  .cover-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* --- 1ère de couverture (titre + année + montage, façon carnet) --- */
+  .cover { position: relative; padding: 62px 46px 0; text-align: center; }
+  .crop { position: absolute; width: 22px; height: 22px; border: 0 solid ${ink}; }
+  .crop.tl { top: 26px; left: 26px; border-top-width: 1.5px; border-left-width: 1.5px; }
+  .crop.tr { top: 26px; right: 26px; border-top-width: 1.5px; border-right-width: 1.5px; }
+  .crop.bl { bottom: 26px; left: 26px; border-bottom-width: 1.5px; border-left-width: 1.5px; }
+  .crop.br { bottom: 26px; right: 26px; border-bottom-width: 1.5px; border-right-width: 1.5px; }
   .cover-kicker {
-    margin: 26px 0 0; font-size: 11px; letter-spacing: 4px;
-    color: ${accent}; font-weight: 700;
+    margin: 14px 0 0; font-family: "Courier New", monospace;
+    font-size: 12px; letter-spacing: 5px; color: ${accent}; font-weight: 700;
   }
-  .cover h1 {
-    margin: 8px 0 6px; font-family: Georgia, "Times New Roman", serif;
-    font-weight: 400; font-size: 44px; color: ${ink};
+  .cover-title {
+    margin: 16px 0 0; font-family: Georgia, "Times New Roman", serif;
+    font-weight: 400; font-size: 66px; line-height: 0.98; letter-spacing: 1px; color: ${ink};
   }
-  .cover-sub { margin: 0 0 4px; font-size: 14px; color: ${muted}; }
+  .cover-year {
+    margin: 12px 0 0; font-family: Georgia, "Times New Roman", serif;
+    font-size: 40px; letter-spacing: 4px; color: ${accent};
+  }
+  .cover-hero {
+    height: 470px; margin: 40px 0 0; overflow: hidden;
+    border: 6px solid #fff; box-shadow: 0 8px 22px rgba(0, 0, 0, ${dark ? '0.55' : '0.22'});
+  }
+  .cover-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cover-foot {
+    display: flex; justify-content: space-between; align-items: center;
+    margin: 42px 6px 0; font-family: "Courier New", monospace;
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: ${muted};
+  }
+  .cover-foot .reg {
+    width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid ${accent};
+  }
 
   /* --- Pages photo : hauteurs fixes --- */
   .card { margin-bottom: ${cardGap}; }
@@ -243,6 +298,23 @@ function buildStyles(options: ExportOptions): string {
   .caption .date {
     display: block; margin-top: 3px; font-size: 9px;
     letter-spacing: 2px; text-transform: uppercase; color: ${captionMuted};
+  }
+
+  /* --- Photo pleine page (bord à bord) --- */
+  .full-sheet { padding: 0; page-break-after: always; }
+  .full-sheet:last-of-type { page-break-after: auto; }
+  .full-img { height: 778px; overflow: hidden; }
+  .full-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .full-cap {
+    height: 64px; padding: 0 44px; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; line-height: 1.4; text-align: center; color: ${ink};
+  }
+
+  /* --- Page de texte seule --- */
+  .textpage { padding: 150px 60px 0; page-break-after: always; }
+  .textpage-body {
+    font-family: Georgia, "Times New Roman", serif; font-size: 22px; line-height: 1.7;
+    color: ${ink}; text-align: center; white-space: pre-wrap;
   }
 
   /* --- Page de fin --- */
@@ -295,8 +367,11 @@ export async function buildAlbumHtml(
     return buildProDocument(items, title);
   }
 
-  const range = formatRange(photos);
-  const subtitle = `${photos.length} photo${photos.length > 1 ? 's' : ''} · ${range}`;
+  // Les pages de texte ne comptent pas comme des photos (couverture, année, total).
+  const photoEntries = photos.filter((p) => p.kind !== 'text');
+  const count = photoEntries.length;
+  const range = photoEntries.length ? formatRange(photoEntries) : '';
+  const subtitle = `${count} photo${count > 1 ? 's' : ''}${range ? ` · ${range}` : ''}`;
   // Photo de couverture : celle choisie par l'utilisateur (étoile),
   // sinon la première photo lisible du dossier.
   const coverSrc =
@@ -305,12 +380,15 @@ export async function buildAlbumHtml(
     '';
   const perPage = PER_PAGE[options.photoSize];
 
-  const pages = paginatePhotos(photos, perPage)
-    .map((group, index) => {
-      const groupItems = group.map(
-        (photo) => items.find((it) => it.photo.id === photo.id)!,
+  const pages = paginateEntries(photos, perPage)
+    .map((page, index) => {
+      const no = index + 1;
+      if (page.type === 'text') return textPageHtml(page.item, title, no);
+      const groupItems = page.items.map(
+        (p) => items.find((it) => it.photo.id === p.id)!,
       );
-      return pageHtml(groupItems, perPage, title, index + 1, options.dateFormat);
+      if (options.photoSize === 'full') return fullPageHtml(groupItems[0]);
+      return pageHtml(groupItems, perPage, title, no, options.dateFormat);
     })
     .join('');
 
@@ -325,10 +403,16 @@ export async function buildAlbumHtml(
       </head>
       <body>
         <section class="sheet cover">
-          <div class="cover-frame">${coverSrc ? `<img src="${coverSrc}" />` : ''}</div>
-          <p class="cover-kicker">ALBUM PHOTO</p>
-          <h1>${escapeHtml(title)}</h1>
-          <p class="cover-sub">${escapeHtml(subtitle)}</p>
+          <span class="crop tl"></span><span class="crop tr"></span>
+          <span class="crop bl"></span><span class="crop br"></span>
+          <p class="cover-kicker">ALBUM · TIRAGE</p>
+          <h1 class="cover-title">${escapeHtml(title.toUpperCase())}</h1>
+          <p class="cover-year">${escapeHtml(photoEntries.length ? yearLabel(photoEntries) : '')}</p>
+          <div class="cover-hero">${coverSrc ? `<img src="${coverSrc}" />` : ''}</div>
+          <div class="cover-foot">
+            <span>${escapeHtml(subtitle)}</span>
+            <span class="reg"></span>
+          </div>
         </section>
         ${pages}
         <section class="sheet end">
@@ -365,15 +449,26 @@ function proEntryHtml(item: Item, number: number): string {
     </article>`;
 }
 
+/** Page de texte seule dans le rapport professionnel (pleine page, sobre). */
+function proTextPageHtml(item: Photo): string {
+  const text = escapeHtml(item.comment.trim()).replace(/\n/g, '<br/>');
+  return `<div class="pro-textpage">${text}</div>`;
+}
+
 /**
  * Rapport photographique sobre (fond blanc, factuel). Mise en page en flux avec
  * `page-break-inside: avoid` sur chaque fiche : ~2 photos par page, sans jamais
  * tronquer une description (essentiel pour une expertise).
  */
 function buildProDocument(items: Item[], title: string): string {
-  const number = new Map(items.map((it, i) => [it.photo.id, i + 1]));
+  // Les photos sont numérotées ; les pages de texte s'intercalent en pleine page.
+  let photoNo = 0;
   const entries = items
-    .map((it) => proEntryHtml(it, number.get(it.photo.id)!))
+    .map((it) =>
+      it.photo.kind === 'text'
+        ? proTextPageHtml(it.photo)
+        : proEntryHtml(it, ++photoNo),
+    )
     .join('');
   const today = new Date().toLocaleDateString('fr-FR', {
     day: 'numeric',
@@ -404,7 +499,10 @@ function buildProDocument(items: Item[], title: string): string {
     .meta .row { display: flex; gap: 12px; padding: 5px 0; border-bottom: 1px solid #f1f2f4; }
     .meta dt { width: 96px; flex-shrink: 0; color: #6b7280; margin: 0; text-transform: uppercase;
       font-size: 10px; letter-spacing: 1px; padding-top: 2px; }
-    .meta dd { margin: 0; color: #14181f; line-height: 1.5; }`;
+    .meta dd { margin: 0; color: #14181f; line-height: 1.5; }
+    .pro-textpage { page-break-before: always; page-break-after: always;
+      padding: 130px 40px 0; text-align: center; white-space: pre-wrap;
+      font-size: 20px; line-height: 1.7; color: #14181f; }`;
 
   return `<!DOCTYPE html>
     <html lang="fr">

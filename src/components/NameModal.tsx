@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#1c1c1e',
+    color: '#201B14',
     marginBottom: 14,
   },
   input: {
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     fontSize: 16,
-    color: '#1c1c1e',
+    color: '#201B14',
   },
   actions: {
     flexDirection: 'row',
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   },
   btnGhost: { backgroundColor: '#f3f4f6' },
   btnGhostText: { color: '#374151', fontSize: 16, fontWeight: '600' },
-  btnPrimary: { backgroundColor: '#2563eb' },
+  btnPrimary: { backgroundColor: '#A64B24' },
   btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   btnDisabled: { opacity: 0.4 },
 });

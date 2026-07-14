@@ -16,67 +16,108 @@ npm run android        # Ouvre sur Android
 npx tsc --noEmit       # Vérification de types (pas de script lint/test dans ce projet)
 ```
 
-There is **no test suite, linter, or CI** configured — `tsc --noEmit` is the only static
-check. The app is validated manually in Expo Go on a physical iPhone.
+Il n'y a **ni tests, ni linter, ni CI** — `tsc --noEmit` est la seule vérification statique.
+L'app se valide **manuellement dans Expo Go sur un iPhone**. Boucle de validation côté PC :
+`npx expo start --clear` puis `curl "http://localhost:8081/index.bundle?platform=ios&dev=true"`
+(HTTP 200 = le bundle compile ; c'est là que sortent les erreurs d'import/transform).
 
 ### Connexion Expo Go (pièges récurrents)
-- Après **tout** `npm/expo install`, arrêter Metro et relancer avec `npx expo start --clear`
-  (sinon « Unable to resolve module »).
-- Si le LAN ne joint plus le téléphone (« même wifi mais ça ne charge pas ») : le PC sert bien,
-  c'est en général une **IP DHCP qui a changé** (rescanner le QR vivant, jamais un PNG figé).
-  Fallback infaillible : `npx expo start --tunnel` (`@expo/ngrok` est installé globalement).
-- Valider un bundle côté PC : `curl "http://localhost:8081/index.bundle?platform=ios&dev=true"` (200 = OK).
+- Après **tout** `npm/expo install`, arrêter Metro et relancer avec `npx expo start --clear`.
+- « Même wifi mais ça ne charge plus » : le PC sert bien, c'est en général une **IP DHCP qui a
+  changé** (rescanner le QR vivant, jamais un PNG figé). Fallback : `npx expo start --tunnel`.
+- Épingler les paquets natifs aux versions de `node_modules/expo/bundledNativeModules.json`
+  (Expo Go embarque des versions natives figées) : installer via `npx expo install`.
 
 ### Partage aux testeurs (EAS Update)
-- Projet `@boccaras-team/photo-album-print` (propriété de l'**organisation** `boccaras-team`,
+- Projet `@boccaras-team/photo-album-print` (propriété de l'**organisation** `boccaras-team` ;
   `owner` dans `app.json` ; le compte perso est `boccara`), canal **`preview`** :
   `npx eas-cli update --branch preview --message "..."`.
-- `runtimeVersion` doit rester `{ "policy": "sdkVersion" }` dans `app.json` — la politique
-  `appVersion` casse le chargement dans Expo Go.
-- ⚠️ **Depuis le 12 mai 2026, Expo Go ne charge un projet EAS Update que pour un compte membre
-  du propriétaire** (voir changelog Expo). Rendre le projet **public n'y change rien**. Un testeur
-  externe qui scanne le QR sans être membre obtient `HTTP 403 ... requires authentication` (alors
-  que `u.expo.dev/<projectId>` répond pourtant 200 en anonyme). Le partage passe donc par :
-  inviter le testeur en **Viewer** dans l'org `boccaras-team`, il accepte l'email et **se connecte
-  dans Expo Go avec ce compte**, puis scanne le QR.
+- `runtimeVersion` doit rester `{ "policy": "sdkVersion" }` dans `app.json` (la politique
+  `appVersion` casse le chargement dans Expo Go).
+- ⚠️ **Depuis le 12 mai 2026, Expo Go ne charge un projet EAS Update que pour un compte membre du
+  propriétaire.** Rendre le projet public n'y change rien. Un testeur doit être invité en **Viewer**
+  dans l'org `boccaras-team`, accepter l'email **avec l'adresse exacte de l'invitation** (pas de
+  « Se connecter avec Apple/Google » qui crée un autre email), puis se connecter dans Expo Go avec
+  ce compte avant de scanner le QR. Sinon : `HTTP 403 ... requires authentication`.
 
 ## Architecture
 
-Application mono-écran sans bibliothèque de navigation : **`App.tsx`** détient tout l'état et
-bascule entre trois vues selon `openAlbumId` — chargement, `HomeScreen` (liste des dossiers),
-`AlbumScreen` (photos d'un dossier). Les modaux (`src/components/*Modal.tsx`) se superposent.
+Application **mono-écran sans bibliothèque de navigation** : `App.tsx` détient tout l'état et
+bascule entre chargement / `HomeScreen` (liste des dossiers) / `AlbumScreen` (photos d'un dossier)
+selon `openAlbumId`. Tout se joue par superposition de modaux (`src/components/*Modal.tsx`).
 
-**Modèle de données** (`src/types.ts`) : un `Album` (dossier) regroupe des `Photo`. Les photos
-sont stockées en **liste plate globale** ; l'appartenance à un dossier passe par `Photo.albumId`,
-le filtrage se fait à l'affichage. Un PDF est exporté **par dossier**.
+**Données & persistance** (`src/types.ts`, `src/storage.ts`) : un `Album` (dossier) regroupe des
+`Photo` stockées en **liste plate globale** (appartenance via `Photo.albumId`, filtrage à
+l'affichage ; un export = un dossier). Tout l'état vit dans `useState` au niveau de `App`, réécrit
+dans **AsyncStorage** par des `useEffect` à chaque changement (clés `*.v1`). `loadData()` migre les
+anciennes données et **normalise `Photo.order`** (rang contigu par dossier). L'ordre d'affichage
+suit `comparePhotos` (`order`, sinon `createdAt`) ; le **réordonnancement** se fait par boutons
+**▲▼** dans `PhotoCard` (le glisser-déposer a été retiré : incompatible avec Reanimated 4).
 
-**Persistance** (`src/storage.ts`) : tout l'état vit dans `useState` au niveau de `App` et est
-réécrit dans **AsyncStorage** par des `useEffect` à chaque changement de `albums`/`photos`
-(clés versionnées `*.v1`). `loadData()` gère une **migration** depuis l'ancienne version sans
-dossiers (regroupe les photos orphelines dans un premier dossier).
+**Fichiers image, réglages & recadrage** (`src/photoFiles.ts`, `src/adjustments.ts`,
+`src/components/CropModal.tsx`) : les URI de la caméra/galerie sont temporaires → `persistImage()`
+**copie** vers `documentDirectory/album-photos/`. ⚠️ l'import est `expo-file-system/legacy`.
+`AdjustModal` prévisualise en direct via une **matrice couleur 4×5 Skia** ; `bakeAdjustedImage()`
+grave un nouveau JPEG (la photo garde `originalUri` + `uri` gravé + `adjustments`). `CropModal`
+recadre par **format + position** (pas de gestes : fiable en Expo Go) via `expo-image-manipulator` ;
+la version recadrée **devient la nouvelle base** (`uri` + `originalUri` remplacés, `adjustments`
+réinitialisés).
 
-**Fichiers image** (`src/photoFiles.ts`) : les URI de l'appareil photo / galerie sont temporaires,
-donc `persistImage()` les **copie** dans `documentDirectory/album-photos/`. ⚠️ L'import est
-`expo-file-system/legacy` — la nouvelle API FileSystem de SDK 54 n'est pas utilisée ici.
+**Chaîne d'export** (le cœur de l'app). Les **deux boutons du bas d'`AlbumScreen` sont les points
+d'entrée** (ils pilotent aussi les libellés) :
+- **Familial** → ouvre `ExportModal` (mise en page) → « Aperçu » → `PreviewModal` → « Partager
+  l'album » → pop-up **PDF / JPEG**.
+- **Professionnel** → va **directement** à `PreviewModal` (gabarit sobre imposé) → « Envoyer » →
+  pop-up format.
+- `ExportModal` = `ExportOptions` du mode familial : **taille** (`small`/`medium`/`large`/**`full`**
+  = pleine page bord à bord, légende ≤ 15 mots), fond, encadré, **liseré** (option additive posée
+  sur la photo, pas sur le support), format de date. Le **`style`** (`family`/`pro`) est piloté par
+  les boutons du bas, pas dans le modal.
+- **Types d'entrées** : une `Photo` est soit une image, soit une **page de texte** (`kind: 'text'`,
+  `uri` vide, `comment` = le texte) créée par « ＋ Page de texte ». `src/paginate.ts`
+  `paginateEntries()` renvoie des `AlbumPage` (`photos` groupées | `text` autonome) ; les pages de
+  texte s'intercalent dans **les deux** rendus.
+- `src/pdf.ts` `buildAlbumHtml()` (familial) / `buildProDocument()` (pro, photos numérotées,
+  Lieu / Date / Description, pages de texte intercalées, flux `page-break-inside: avoid`). La **1ère
+  de couverture** = titre + année (`yearLabel`, calculée sur les photos) + **la seule photo de
+  couverture** + repères de coupe. `htmlToPdfFile()` rend via `expo-print` puis **renomme**
+  (`albumFileBase` = « NomAlbum JJ-MM-AAAA »).
+- `PreviewModal` rend **le même HTML** dans une **WebView**. L'envoi JPEG : `src/pageImages.ts`
+  compose chaque page en **Skia** (déterministe, hors-ligne — la capture de WebView est peu fiable
+  sur iOS) ; plusieurs pages → **ZIP** (`src/albumZip.ts`, `jszip`).
+- Contraintes de mise en page PDF **à ne pas casser** : dimensionner en **px = points** (A4
+  595×842), **jamais de `vh`**, **hauteurs fixes** en familial (pas de flex vertical), et
+  `print-color-adjust: exact` (sinon iOS supprime fonds/ombres).
 
-**Réglages d'image** (`src/adjustments.ts`) : les curseurs (-100..100) sont composés en une
-**matrice couleur 4×5 Skia**. `AdjustModal` applique cette matrice en direct pour la prévisualisation
-(Canvas Skia + `ColorMatrix`) ; à la sauvegarde, `bakeAdjustedImage()` **grave** le résultat
-hors écran en un nouveau JPEG. La photo conserve alors `originalUri` (source intacte) + `uri`
-(version gravée) + `adjustments` (pour ré-édition). Des réglages neutres reviennent à l'original
-et suppriment le fichier gravé.
+**Lieu de prise de vue** (`src/exif.ts`, `src/photoLocation.ts`, `src/geocode.ts`) : le GPS EXIF est
+**souvent absent** (PHPicker iOS le retire) → `resolveCoords()` tente EXIF, puis `expo-media-library`
+via `assetId`, puis (photo prise dans l'app) la **position de l'appareil** (`expo-location`).
+`reverseGeocode()` transforme les coordonnées en « Ville, Pays » (permission demandée **seulement
+sur Android**). Repli : saisie manuelle du `Photo.place` dans `CommentModal`.
 
-**Export PDF** (`src/pdf.ts`) : génère du **HTML** transformé en PDF via `expo-print`, puis ouvre
-la feuille de partage iOS (`expo-sharing`). Le HTML produit une couverture, des pages photo
-personnalisables (taille → 1/2/4 par page, fond, style d'encadré) et une page de fin.
-Contraintes de mise en page apprises à la dure, **à ne pas casser** :
-- Dimensionner en **px = points PDF** (page A4 = 595×842 à 72 dpi). **Jamais de `vh`** (dépend de
-  la fenêtre du moteur de rendu → pages blanches et chevauchements).
-- Utiliser des **hauteurs fixes**, jamais de flex vertical, pour que rien ne déborde sur la page suivante.
-- `print-color-adjust: exact` est **indispensable** : sinon iOS supprime fonds et ombres du PDF.
+**Correcteur français** (`src/spellcheck.ts`, `src/frenchRules.ts`, `SpellCheckModal`) : 100 %
+hors-ligne. Orthographe = **index phonétique précalculé** `src/frenchPhonetic.json` (~336 000 formes,
+généré avec `talisman/phonetics/french/phonetic` + `an-array-of-french-words`) + Levenshtein ;
+grammaire/expressions = **règles regex** (`frenchRules`, ex. « tout le tant » → « tout le temps »,
+élisions). `SpellCheckModal` est une **surcouche `<View>` (pas un `<Modal>`)** : iOS ne présente pas
+deux Modal imbriqués. Le correcteur natif iOS (`spellCheck`/`autoCorrect`) est **désactivé** sur les
+champs pour ne pas parasiter.
 
-## Versions natives figées (Expo Go)
-Expo Go embarque des versions natives figées. Aligner les versions JS sur
-`node_modules/expo/bundledNativeModules.json`. En particulier **`react-native-worklets` doit
-rester `0.5.1`** (reanimated tire sinon une 0.8.x incompatible, masquée par Skia derrière
-« react-native-reanimated is not installed! »).
+**Thème « Chambre Claire »** (`src/theme.ts`) : palette **crème / encre / terre de Sienne** (objet
+`C`) et polices (objet `F`) — titres **Gloock** (serif display), labels **IBM Plex Mono**. Les 3
+`.ttf` sont dans `assets/fonts/`, chargés au démarrage via `useFonts` d'`expo-font` dans `App()`
+(l'app rend un écran crème tant que les polices ne sont pas prêtes). Réutiliser `C`/`F` pour tout
+nouveau style plutôt que de re-hardcoder des hex. Le PDF/JPEG utilise Georgia (serif système) car on
+n'embarque pas Gloock dans le HTML.
+
+## Dépendances & assets à connaître
+- Ajouts : `react-native-webview` (aperçu), `expo-location` (lieu), `jszip` (export multi-images),
+  `talisman` (phonétique FR), `@expo/vector-icons` (icônes), `expo-font` (polices du thème),
+  `expo-image-manipulator` (recadrage). Toutes épinglées pour Expo Go.
+- `react-native-reanimated` / `react-native-worklets` sont **présents mais plus utilisés** (restes
+  du glisser-déposer supprimé) — sûrs à retirer si besoin.
+- `src/frenchPhonetic.json` est un **asset généré de ~5,9 Mo** (bundle ~15 Mo, premier chargement
+  plus long) : ne pas le supprimer ; régénérable par un script node (talisman + `an-array-of-french-words`).
+- Outils **PC uniquement** (génération d'images/affiches hors app) comme `sharp`/`@resvg/resvg-js` :
+  toujours les **désinstaller** après usage et `git checkout package.json` — ils ne doivent pas
+  entrer dans les dépendances de l'app RN. La skill de design vit dans `.agents/skills/` (non suivi).

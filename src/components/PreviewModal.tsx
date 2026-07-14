@@ -15,6 +15,8 @@ interface Props {
   html: string | null;
   /** Vrai pendant la génération/partage du fichier final. */
   sending: boolean;
+  /** Libellé du bouton d'envoi (« Partager l'album » ou « Envoyer »). */
+  sendLabel: string;
   /** Revenir à l'album pour en modifier le contenu (photos, ordre, textes). */
   onBackToAlbum: () => void;
   /** Revenir aux options de mise en page. */
@@ -33,6 +35,7 @@ export function PreviewModal({
   visible,
   html,
   sending,
+  sendLabel,
   onBackToAlbum,
   onEditLayout,
   onSend,
@@ -63,7 +66,7 @@ export function PreviewModal({
             />
           ) : (
             <View style={styles.center}>
-              <ActivityIndicator size="large" color="#2563eb" />
+              <ActivityIndicator size="large" color="#A64B24" />
             </View>
           )}
         </View>
@@ -84,7 +87,7 @@ export function PreviewModal({
             {sending ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.btnPrimaryText}>Envoyer →</Text>
+              <Text style={styles.btnPrimaryText}>{sendLabel} →</Text>
             )}
           </Pressable>
         </View>
@@ -99,10 +102,10 @@ const styles = StyleSheet.create({
   backLink: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2563eb',
+    color: '#A64B24',
     marginBottom: 6,
   },
-  title: { fontSize: 20, fontWeight: '700', color: '#1c1c1e' },
+  title: { fontSize: 20, fontWeight: '700', color: '#201B14' },
   subtitle: { fontSize: 13, color: '#6b7280', marginTop: 2 },
   webWrap: { flex: 1, backgroundColor: '#e5e7eb' },
   web: { flex: 1, backgroundColor: 'transparent' },
@@ -124,7 +127,7 @@ const styles = StyleSheet.create({
   },
   btnGhost: { backgroundColor: '#f3f4f6' },
   btnGhostText: { color: '#374151', fontSize: 16, fontWeight: '600' },
-  btnPrimary: { backgroundColor: '#2563eb' },
+  btnPrimary: { backgroundColor: '#A64B24' },
   btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   btnDisabled: { opacity: 0.6 },
 });

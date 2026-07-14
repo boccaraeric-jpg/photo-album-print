@@ -7,13 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import type {
-  DateFormat,
-  ExportOptions,
-  FrameStyle,
-  PhotoSize,
-  RenderStyle,
-} from '../types';
+import type { DateFormat, ExportOptions, FrameStyle, PhotoSize } from '../types';
 
 interface Props {
   visible: boolean;
@@ -30,6 +24,7 @@ const SIZES: { value: PhotoSize; label: string; hint: string }[] = [
   { value: 'small', label: 'Petite', hint: '4 / page' },
   { value: 'medium', label: 'Moyenne', hint: '2 / page' },
   { value: 'large', label: 'Grande', hint: '1 / page' },
+  { value: 'full', label: 'Pleine page', hint: 'bord à bord' },
 ];
 
 const FRAMES: { value: FrameStyle; label: string }[] = [
@@ -37,11 +32,6 @@ const FRAMES: { value: FrameStyle; label: string }[] = [
   { value: 'border', label: 'Bordure' },
   { value: 'polaroid', label: 'Polaroïd' },
   { value: 'none', label: 'Sans cadre' },
-];
-
-const RENDER_STYLES: { value: RenderStyle; label: string; hint: string }[] = [
-  { value: 'family', label: 'Familial', hint: 'livre photo chaleureux' },
-  { value: 'pro', label: 'Professionnel', hint: 'rapport sobre et factuel' },
 ];
 
 const DATE_FORMATS: { value: DateFormat; label: string; hint: string }[] = [
@@ -88,32 +78,7 @@ export function ExportModal({
       <View style={styles.backdrop}>
         <View style={styles.sheet}>
           <View style={styles.handle} />
-          <Text style={styles.title}>Mini album</Text>
-
-          <Text style={styles.label}>Rendu</Text>
-          <View style={styles.chips}>
-            {RENDER_STYLES.map(({ value, label, hint }) => {
-              const selected = options.style === value;
-              return (
-                <Pressable
-                  key={value}
-                  style={[styles.chip, selected && styles.chipSelected]}
-                  onPress={() => setOptions((o) => ({ ...o, style: value }))}
-                >
-                  <Text
-                    style={[styles.chipText, selected && styles.chipTextSelected]}
-                  >
-                    {label}
-                  </Text>
-                  <Text
-                    style={[styles.chipHint, selected && styles.chipHintSelected]}
-                  >
-                    {hint}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <Text style={styles.title}>Mise en page</Text>
 
           {options.style === 'pro' ? (
             <Text style={styles.proNote}>
@@ -285,7 +250,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#1c1c1e',
+    color: '#201B14',
     marginBottom: 4,
   },
   label: {
@@ -310,7 +275,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3f4f6',
     alignItems: 'center',
   },
-  chipSelected: { backgroundColor: '#2563eb' },
+  chipSelected: { backgroundColor: '#A64B24' },
   chipText: { fontSize: 14, fontWeight: '600', color: '#374151' },
   chipTextSelected: { color: '#fff' },
   chipHint: { fontSize: 11, color: '#9ca3af', marginTop: 1 },
@@ -331,7 +296,7 @@ const styles = StyleSheet.create({
   },
   swatchSelected: {
     borderWidth: 3,
-    borderColor: '#2563eb',
+    borderColor: '#A64B24',
   },
   actions: {
     flexDirection: 'row',
@@ -347,7 +312,7 @@ const styles = StyleSheet.create({
   },
   btnGhost: { backgroundColor: '#f3f4f6' },
   btnGhostText: { color: '#374151', fontSize: 16, fontWeight: '600' },
-  btnPrimary: { backgroundColor: '#2563eb' },
+  btnPrimary: { backgroundColor: '#A64B24' },
   btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   btnDisabled: { opacity: 0.6 },
 });

@@ -172,10 +172,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: '#eef2ff',
+    backgroundColor: '#EADDC4',
     marginBottom: 8,
   },
-  suggText: { fontSize: 16, color: '#2563eb', fontWeight: '600' },
+  suggText: { fontSize: 16, color: '#A64B24', fontWeight: '600' },
   actions: { flexDirection: 'row', gap: 12, marginTop: 8 },
   btn: {
     flex: 1,

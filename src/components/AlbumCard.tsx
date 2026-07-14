@@ -1,5 +1,6 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Album } from '../types';
+import { C, F } from '../theme';
 
 interface Props {
   album: Album;
@@ -60,22 +61,19 @@ export function AlbumCard({
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: C.card,
     borderRadius: 16,
     padding: 10,
     marginBottom: 12,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: C.line,
   },
   thumb: {
     width: 76,
     height: 76,
-    borderRadius: 12,
-    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    backgroundColor: C.tan,
   },
   thumbEmpty: {
     alignItems: 'center',
@@ -84,30 +82,32 @@ const styles = StyleSheet.create({
   thumbIcon: { fontSize: 28 },
   body: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 14,
     marginRight: 8,
   },
   name: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1c1c1e',
+    fontFamily: F.display,
+    fontSize: 22,
+    color: C.ink,
   },
   count: {
-    fontSize: 13,
-    color: '#6b7280',
+    fontFamily: F.mono,
+    fontSize: 12,
+    color: C.muted,
+    letterSpacing: 1,
     marginTop: 4,
   },
   actions: { gap: 8 },
   iconBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#f3f4f6',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: C.tan,
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconText: {
-    color: '#6b7280',
+    color: C.inkSoft,
     fontSize: 14,
     fontWeight: '700',
   },

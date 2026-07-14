@@ -57,6 +57,8 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
     }
   };
 
+  const isText = photo?.kind === 'text';
+
   return (
     <Modal
       visible={photo !== null}
@@ -77,19 +79,23 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {photo && (
+            {photo && !isText && (
               <Image
                 source={{ uri: photo.uri }}
                 style={styles.preview}
                 resizeMode="contain"
               />
             )}
-            <Text style={styles.label}>Commentaire</Text>
+            <Text style={styles.label}>
+              {isText ? 'Texte de la page' : 'Commentaire'}
+            </Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, isText && styles.inputText]}
               value={text}
               onChangeText={setText}
-              placeholder="Décris ce moment…"
+              placeholder={
+                isText ? 'Écris le texte de cette page…' : 'Décris ce moment…'
+              }
               placeholderTextColor="#9ca3af"
               multiline
               autoCorrect={false}
@@ -103,7 +109,7 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
               disabled={checking || !text.trim()}
             >
               {checking ? (
-                <ActivityIndicator color="#2563eb" size="small" />
+                <ActivityIndicator color="#A64B24" size="small" />
               ) : (
                 <Text
                   style={[
@@ -115,17 +121,21 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
                 </Text>
               )}
             </Pressable>
-            <Text style={styles.label}>Lieu</Text>
-            <TextInput
-              style={styles.inputLine}
-              value={place}
-              onChangeText={setPlace}
-              placeholder="Lieu de la prise de vue…"
-              placeholderTextColor="#9ca3af"
-              autoCorrect={false}
-              spellCheck={false}
-              autoCapitalize="words"
-            />
+            {!isText && (
+              <>
+                <Text style={styles.label}>Lieu</Text>
+                <TextInput
+                  style={styles.inputLine}
+                  value={place}
+                  onChangeText={setPlace}
+                  placeholder="Lieu de la prise de vue…"
+                  placeholderTextColor="#9ca3af"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  autoCapitalize="words"
+                />
+              </>
+            )}
           </ScrollView>
           <View style={styles.actions}>
             <Pressable style={[styles.btn, styles.btnGhost]} onPress={onClose}>
@@ -203,8 +213,9 @@ const styles = StyleSheet.create({
     padding: 14,
     fontSize: 16,
     textAlignVertical: 'top',
-    color: '#1c1c1e',
+    color: '#201B14',
   },
+  inputText: { minHeight: 200 },
   inputLine: {
     borderWidth: 1,
     borderColor: '#e5e7eb',
@@ -212,7 +223,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#1c1c1e',
+    color: '#201B14',
   },
   spellBtn: {
     alignSelf: 'flex-start',
@@ -220,9 +231,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 10,
-    backgroundColor: '#eef2ff',
+    backgroundColor: '#EADDC4',
   },
-  spellText: { color: '#2563eb', fontSize: 14, fontWeight: '600' },
+  spellText: { color: '#A64B24', fontSize: 14, fontWeight: '600' },
   spellTextDisabled: { color: '#9ca3af' },
   actions: {
     flexDirection: 'row',
@@ -238,6 +249,6 @@ const styles = StyleSheet.create({
   },
   btnGhost: { backgroundColor: '#f3f4f6' },
   btnGhostText: { color: '#374151', fontSize: 16, fontWeight: '600' },
-  btnPrimary: { backgroundColor: '#2563eb' },
+  btnPrimary: { backgroundColor: '#A64B24' },
   btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });
