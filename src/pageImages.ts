@@ -1,6 +1,5 @@
 import {
   ClipOp,
-  FontWeight,
   ImageFormat,
   PaintStyle,
   Skia,
@@ -13,6 +12,7 @@ import type { ExportOptions, Photo } from './types';
 import { formatPhotoDate, photoDate } from './dateFormat';
 import { paginateEntries, PER_PAGE } from './paginate';
 import { albumFileBase } from './pdf';
+import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 
 /** Tronque un texte à `n` mots (légende de pleine page). */
 function limitWords(text: string, n: number): string {
@@ -49,11 +49,17 @@ function typefaceFor(bold: boolean): SkTypeface | undefined {
   if (!tfResolved) {
     tfResolved = true;
     try {
-      const fm = Skia.FontMgr.System();
-      tfRegular = fm.matchFamilyStyle('Helvetica', { weight: FontWeight.Normal });
-      tfBold = fm.matchFamilyStyle('Helvetica', { weight: FontWeight.Bold });
+      // Montserrat embarquée (500 corps / 800 titres), pour coller au PDF.
+      tfRegular =
+        Skia.Typeface.MakeFreeTypeFaceFromData(
+          Skia.Data.fromBase64(MONTSERRAT_500),
+        ) ?? undefined;
+      tfBold =
+        Skia.Typeface.MakeFreeTypeFaceFromData(
+          Skia.Data.fromBase64(MONTSERRAT_800),
+        ) ?? undefined;
     } catch {
-      // Polices système indisponibles : Skia.Font(undefined) prendra la défaut.
+      // Chargement impossible : Skia.Font(undefined) prendra la police par défaut.
     }
   }
   return bold ? tfBold ?? tfRegular : tfRegular;
@@ -325,7 +331,7 @@ async function renderPhotoPage(
     const place = photo.place?.trim();
     const date = formatPhotoDate(photoDate(photo), options.dateFormat);
     const meta = [place, date].filter(Boolean).join(' · ');
-    const captionH = comment || meta ? (perPage === 4 ? 70 : 96) : 0;
+    const captionH = comment || meta ? (perPage === 4 ? 92 : 122) : 0;
 
     const imgX = cellX + pad;
     const imgY = cellY + pad;
@@ -334,53 +340,64 @@ async function renderPhotoPage(
     // « contain » : photo entière, non rognée (comme le PDF).
     const drawn = drawContainImage(canvas, images[i], imgX, imgY, imgW, imgH);
 
-    // Liseré (option additive) : fin trait posé sur la photo elle-même.
+    // Liseré BLANC autour de la photo (+ fin contour extérieur pour la définition).
     if (options.liseret && drawn) {
-      const line = Skia.Paint();
-      line.setAntiAlias(true);
-      line.setStyle(PaintStyle.Stroke);
-      line.setStrokeWidth(2);
-      line.setColor(Skia.Color(dark ? '#f3efe7' : '#14181f'));
-      canvas.drawRRect(rrect(drawn.x, drawn.y, drawn.w, drawn.h, 3), line);
+      const white = Skia.Paint();
+      white.setAntiAlias(true);
+      white.setStyle(PaintStyle.Stroke);
+      white.setStrokeWidth(12);
+      white.setColor(Skia.Color('#ffffff'));
+      canvas.drawRRect(rrect(drawn.x, drawn.y, drawn.w, drawn.h, 3), white);
+      const edge = Skia.Paint();
+      edge.setAntiAlias(true);
+      edge.setStyle(PaintStyle.Stroke);
+      edge.setStrokeWidth(1.5);
+      edge.setColor(Skia.Color(dark ? '#5a5348' : '#b9ac93'));
+      canvas.drawRRect(
+        rrect(drawn.x - 6, drawn.y - 6, drawn.w + 12, drawn.h + 12, 4),
+        edge,
+      );
     }
 
     // Légende (commentaire tronqué + date · lieu) sous la photo.
     let ty = imgY + imgH + 14;
     const captionColor = whiteFrame ? '#2c2a26' : ink;
-    const metaColor = whiteFrame ? '#a89f8d' : muted;
+    // Date/lieu nettement lisibles (le tan clair passait inaperçu sur fond crème).
+    const metaColor = dark ? '#cbc5b8' : '#6b6456';
     const align =
       options.frame === 'polaroid' ? TextAlign.Center : TextAlign.Left;
+    // Alignement de la date/lieu selon l'option (Gauche/Centre/Droite).
+    const dateAlign =
+      options.dateAlign === 'center'
+        ? TextAlign.Center
+        : options.dateAlign === 'right'
+          ? TextAlign.Right
+          : TextAlign.Left;
     if (comment) {
       ty += drawText(canvas, comment, imgX, ty, imgW, {
         color: captionColor,
-        size: perPage === 4 ? 20 : 24,
+        size: perPage === 4 ? 28 : 34,
         maxLines: 2,
         align,
       });
       ty += 6;
     }
     if (meta) {
-      drawText(canvas, meta.toUpperCase(), imgX, ty, imgW, {
+      drawText(canvas, meta.toLowerCase(), imgX, ty, imgW, {
         color: metaColor,
-        size: perPage === 4 ? 15 : 17,
+        size: perPage === 4 ? 10 : 11,
         maxLines: 1,
-        align,
-        letterSpacing: 2,
+        align: dateAlign,
+        letterSpacing: 1,
       });
     }
   }
 
-  // Pied de page : titre + numéro.
-  drawText(canvas, title.toUpperCase(), PAD, H - PAD - 24, contentW * 0.7, {
+  // Pied de page : numéro seul (le titre ne figure que sur la couverture).
+  drawText(canvas, String(pageNo), PAD, H - PAD - 24, contentW, {
     color: muted,
     size: 18,
-    maxLines: 1,
-    letterSpacing: 3,
-  });
-  drawText(canvas, String(pageNo), PAD + contentW * 0.7, H - PAD - 24, contentW * 0.3, {
-    color: muted,
-    size: 18,
-    align: TextAlign.Right,
+    align: TextAlign.Center,
     maxLines: 1,
   });
 
@@ -473,17 +490,30 @@ async function renderCover(
   ty += 18;
   ty += drawText(canvas, title, PAD, ty, W - 2 * PAD, {
     color: ink,
-    size: 84,
+    size: 76,
     align: TextAlign.Center,
+    bold: true,
     maxLines: 2,
   });
-  ty += 16;
-  drawText(canvas, count, PAD, ty, W - 2 * PAD, {
-    color: muted,
-    size: 28,
-    align: TextAlign.Center,
-    maxLines: 1,
-  });
+  // Année (ou plage d'années) en gras sous le titre, comme dans l'aperçu.
+  const years = photos.map((p) => new Date(photoDate(p)).getFullYear());
+  const yearLabel = years.length
+    ? Math.min(...years) === Math.max(...years)
+      ? `${Math.min(...years)}`
+      : `${Math.min(...years)} – ${Math.max(...years)}`
+    : '';
+  if (yearLabel) {
+    ty += 16;
+    drawText(canvas, yearLabel, PAD, ty, W - 2 * PAD, {
+      color: accent,
+      size: 52,
+      align: TextAlign.Center,
+      bold: true,
+      letterSpacing: 4,
+      maxLines: 1,
+    });
+  }
+  // Familial : pas de nombre total de photos affiché sur la couverture.
 
   return encodeSurface(surface, title, 0);
 }
@@ -506,17 +536,33 @@ function renderTextPage(
   bg.setColor(Skia.Color(options.background));
   canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
 
-  drawText(canvas, item.comment.trim(), PAD, H * 0.3, W - 2 * PAD, {
+  // Centrage vertical du bloc de texte dans la page : on mesure d'abord sa
+  // hauteur (mêmes règles que drawText), puis on choisit le y de départ.
+  const bodyText = item.comment.trim();
+  const bodySize = 46;
+  const bodyFont = Skia.Font(typefaceFor(false), bodySize);
+  const bodyLines = wrapLines(bodyFont, bodyText, W - 2 * PAD, 12);
+  const blockH = bodyLines.length * bodySize * 1.32;
+  // Pro : texte en HAUT à gauche (présentation « document ») ; familial : centré
+  // verticalement.
+  const isPro = options.style === 'pro';
+  const startY = isPro ? PAD + 20 : Math.max(PAD + 40, (H - blockH) / 2);
+  const bodyAlign =
+    options.textAlign === 'left'
+      ? TextAlign.Left
+      : options.textAlign === 'right'
+        ? TextAlign.Right
+        : TextAlign.Center;
+  drawText(canvas, bodyText, PAD, startY, W - 2 * PAD, {
     color: ink,
-    size: 46,
-    align: TextAlign.Center,
+    size: bodySize,
+    align: bodyAlign,
     maxLines: 12,
   });
-  drawText(canvas, title.toUpperCase(), PAD, H - PAD - 24, W - 2 * PAD, {
+  drawText(canvas, String(pageNo), PAD, H - PAD - 24, W - 2 * PAD, {
     color: muted,
     size: 18,
     align: TextAlign.Center,
-    letterSpacing: 3,
     maxLines: 1,
   });
   return encodeSurface(surface, title, pageNo);
@@ -602,8 +648,17 @@ export async function buildAlbumImages(
   const photoEntries = photos.filter((p) => p.kind !== 'text');
   await push(await renderCover(photoEntries, eff, title, pro, coverPhotoId));
 
+  // La photo de couverture ne réapparaît dans les pages que si elle porte un
+  // commentaire ; sinon elle n'est visible que sur la couverture.
+  const coverPhoto =
+    photoEntries.find((p) => p.id === coverPhotoId) ?? photoEntries[0];
+  const pageSource =
+    !pro && coverPhoto && coverPhoto.comment.trim().length === 0
+      ? photos.filter((p) => p.id !== coverPhoto.id)
+      : photos;
+
   // Les pages de texte s'intercalent dans les deux rendus (familial et pro).
-  const pages = paginateEntries(photos, perPage);
+  const pages = paginateEntries(pageSource, perPage);
   let numbered = 0;
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];

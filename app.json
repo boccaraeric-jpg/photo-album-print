@@ -9,6 +9,9 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
+        "CFBundleDevelopmentRegion": "fr",
+        "CFBundleAllowMixedLocalizations": true,
+        "CFBundleLocalizations": ["fr", "en"],
         "NSCameraUsageDescription": "L'app utilise l'appareil photo pour prendre les photos de votre album.",
         "NSPhotoLibraryUsageDescription": "L'app accède à votre galerie pour importer des photos dans votre album.",
         "NSLocationWhenInUseUsageDescription": "L'app utilise la localisation des photos pour indiquer le lieu de prise de vue sous chacune."

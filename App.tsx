@@ -35,7 +35,7 @@ import { getCurrentCoords, resolveCoords } from './src/photoLocation';
 import { reverseGeocode } from './src/geocode';
 import { deleteImage, persistImage } from './src/photoFiles';
 import { saveToPhotoLibrary } from './src/mediaLibrary';
-import { zipImages } from './src/albumZip';
+import { zipImages, zipPhotos } from './src/albumZip';
 import { bakeAdjustedImage, isNeutral } from './src/adjustments';
 import {
   buildAlbumHtml,
@@ -52,6 +52,7 @@ import { NameModal } from './src/components/NameModal';
 import { ExportModal } from './src/components/ExportModal';
 import { PreviewModal } from './src/components/PreviewModal';
 import { CropModal } from './src/components/CropModal';
+import { WelcomeScreen } from './src/components/WelcomeScreen';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -74,6 +75,7 @@ function Root() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [openAlbumId, setOpenAlbumId] = useState<string | null>(null);
+  const [showWelcome, setShowWelcome] = useState(true);
 
   // Chargement initial depuis le stockage persistant.
   useEffect(() => {
@@ -138,6 +140,10 @@ function Root() {
   );
 
   const openAlbum = albums.find((a) => a.id === openAlbumId) ?? null;
+
+  if (showWelcome) {
+    return <WelcomeScreen onEnter={() => setShowWelcome(false)} />;
+  }
 
   if (loading) {
     return (
@@ -631,15 +637,38 @@ function AlbumScreen({
     }
   }, [orderedPhotos, albumTitle, exportOptions, defaultCoverId]);
 
-  // Choix du format au moment de l'envoi.
+  // Étape 2c : les photos AFFICHÉES (fichiers d'origine réutilisables) + un
+  // fichier de contexte, dans un ZIP — pour que le destinataire retravaille les
+  // vraies photos (et pas seulement le rendu de l'album).
+  const sendReusablePhotos = useCallback(async () => {
+    setSending(true);
+    try {
+      const images = orderedPhotos.filter((p) => p.kind !== 'text');
+      if (images.length === 0) {
+        Alert.alert('Aucune photo', "Cet album ne contient pas de photo à envoyer.");
+        return;
+      }
+      const zip = await zipPhotos(orderedPhotos, albumTitle);
+      await shareFile(zip, albumTitle, 'application/zip', 'public.zip-archive');
+      setPreviewVisible(false);
+    } catch {
+      Alert.alert('Erreur', 'La préparation des photos a échoué.');
+    } finally {
+      setSending(false);
+    }
+  }, [orderedPhotos, albumTitle]);
+
+  // Choix du format au moment de l'envoi. Chaque option ouvre la feuille de
+  // partage native (Messenger, Mail, AirDrop… y figurent selon le contenu).
   const chooseFormat = useCallback(() => {
     if (photos.length === 0) return;
     Alert.alert('Envoyer le mini album', 'Choisis le format', [
       { text: 'PDF', onPress: sendPdf },
-      { text: 'Images (JPEG)', onPress: sendImages },
+      { text: "Images de l'album", onPress: sendImages },
+      { text: 'Photos (à réutiliser)', onPress: sendReusablePhotos },
       { text: 'Annuler', style: 'cancel' },
     ]);
-  }, [photos.length, sendPdf, sendImages]);
+  }, [photos.length, sendPdf, sendImages, sendReusablePhotos]);
 
   // Les deux boutons de rendu (barre du bas) sont les points d'entrée de l'export :
   // « Familial » ouvre d'abord la mise en page ; « Professionnel » va directement
@@ -657,8 +686,8 @@ function AlbumScreen({
     const next: ExportOptions = { ...exportOptions, style: 'pro' };
     setExportOptions(next);
     saveExportOptions(next);
-    openPreview(next);
-  }, [photos.length, exportOptions, openPreview]);
+    setExportVisible(true);
+  }, [photos.length, exportOptions]);
 
   const sendLabel = exportOptions.style === 'pro' ? 'Envoyer' : "Partager l'album";
 
@@ -667,8 +696,10 @@ function AlbumScreen({
       <StatusBar style="dark" />
 
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable hitSlop={10} onPress={onBack}>
-          <Text style={styles.backLink}>‹ Dossiers</Text>
+        <Pressable hitSlop={14} onPress={onBack} style={styles.backBtn}>
+          <Text style={styles.backLink}>
+            <Text style={styles.backChevron}>‹ </Text>Dossiers
+          </Text>
         </Pressable>
         <TextInput
           style={styles.titleInput}
@@ -725,7 +756,7 @@ function AlbumScreen({
         ListHeaderComponent={
           photos.length > 1 ? (
             <Text style={styles.reorderHint}>
-              Utilise ▲▼ pour réordonner les photos
+              Utilisez ▲▼ pour réordonner les photos
             </Text>
           ) : null
         }
@@ -733,15 +764,15 @@ function AlbumScreen({
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Aucune photo</Text>
             <Text style={styles.emptyText}>
-              Prends une photo ou importe-en depuis ta galerie, puis ajoute un
-              commentaire à chacune.
+              Prenez une photo ou importez-en une depuis votre galerie photo de
+              votre portable, puis ajoutez un commentaire si vous le souhaitez.
             </Text>
           </View>
         }
       />
 
       <View style={[styles.toolbar, { paddingBottom: insets.bottom + 12 }]}>
-        <Text style={styles.renduLabel}>CRÉER LE MINI ALBUM — RENDU</Text>
+        <Text style={styles.renduLabel}>CRÉEZ VOTRE ALBUM EN MODE</Text>
         {preparing ? (
           <View style={[styles.btn, styles.btnFamilial]}>
             <ActivityIndicator color={C.paper} />
@@ -758,8 +789,9 @@ function AlbumScreen({
               disabled={photos.length === 0}
               onPress={openFamilial}
             >
-              <Text style={styles.btnActionText}>Familial</Text>
+              <Text style={styles.btnActionText}>Privé</Text>
             </Pressable>
+            <Text style={styles.orText}>ou</Text>
             <Pressable
               style={[
                 styles.btn,
@@ -843,13 +875,15 @@ const styles = StyleSheet.create({
     color: C.sienna,
     letterSpacing: 3,
   },
+  backBtn: { alignSelf: 'flex-start', paddingVertical: 4, marginBottom: 4 },
   backLink: {
-    fontFamily: F.mono,
-    fontSize: 13,
+    fontFamily: F.monoBold,
+    fontSize: 18,
+    fontWeight: '700',
     color: C.sienna,
-    letterSpacing: 1,
-    marginBottom: 6,
+    letterSpacing: 0.5,
   },
+  backChevron: { fontSize: 28, fontWeight: '700' },
   homeTitle: {
     fontFamily: F.display,
     fontSize: 40,
@@ -927,7 +961,13 @@ const styles = StyleSheet.create({
     borderColor: C.line,
   },
   textPageBtnText: { fontFamily: F.mono, fontSize: 13, color: C.inkSoft, letterSpacing: 0.5 },
-  renduRow: { flexDirection: 'row', gap: 10 },
+  renduRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  orText: {
+    fontFamily: F.mono,
+    fontSize: 13,
+    color: C.muted,
+    letterSpacing: 1,
+  },
   renduLabel: {
     fontFamily: F.monoBold,
     fontSize: 12,

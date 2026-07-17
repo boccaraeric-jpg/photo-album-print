@@ -28,6 +28,16 @@ export function formatPhotoDate(ts: number, format: DateFormat): string {
         month: '2-digit',
         year: 'numeric',
       });
+    case 'shortTime': {
+      const day = d.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      return `${day} à ${hh}h${mm}`;
+    }
     case 'long':
       return cap(
         d.toLocaleDateString('fr-FR', {

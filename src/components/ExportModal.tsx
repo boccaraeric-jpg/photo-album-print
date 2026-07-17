@@ -28,14 +28,21 @@ const SIZES: { value: PhotoSize; label: string; hint: string }[] = [
 ];
 
 const FRAMES: { value: FrameStyle; label: string }[] = [
-  { value: 'card', label: 'Carte' },
+  { value: 'card', label: 'Cadre' },
   { value: 'border', label: 'Bordure' },
   { value: 'polaroid', label: 'Polaroïd' },
   { value: 'none', label: 'Sans cadre' },
 ];
 
+const DATE_ALIGNS: { value: 'left' | 'center' | 'right'; label: string }[] = [
+  { value: 'left', label: 'Gauche' },
+  { value: 'center', label: 'Centre' },
+  { value: 'right', label: 'Droite' },
+];
+
 const DATE_FORMATS: { value: DateFormat; label: string; hint: string }[] = [
   { value: 'short', label: 'Simple', hint: '08/07/2026' },
+  { value: 'shortTime', label: 'Simple + heure', hint: '08/07/2026 à 19h37' },
   { value: 'long', label: 'Détaillée', hint: 'mercredi 8 juillet 2026' },
   { value: 'full', label: 'Complète', hint: '… à 19h37' },
   { value: 'none', label: 'Aucune', hint: 'sans date' },
@@ -130,7 +137,7 @@ export function ExportModal({
             })}
           </View>
 
-          <Text style={styles.label}>Encadré</Text>
+          <Text style={styles.label}>Encadrement</Text>
           <View style={styles.chips}>
             {FRAMES.map(({ value, label }) => {
               const selected = options.frame === value;
@@ -197,8 +204,57 @@ export function ExportModal({
               );
             })}
           </View>
+
+          {options.dateFormat !== 'none' && (
+            <>
+              <Text style={styles.label}>Position de la date</Text>
+              <View style={styles.chips}>
+                {DATE_ALIGNS.map(({ value, label }) => {
+                  const selected = options.dateAlign === value;
+                  return (
+                    <Pressable
+                      key={value}
+                      style={[styles.chip, selected && styles.chipSelected]}
+                      onPress={() =>
+                        setOptions((o) => ({ ...o, dateAlign: value }))
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          selected && styles.chipTextSelected,
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </>
           )}
+            </>
+          )}
+
+          <Text style={styles.label}>Alignement du texte (pages de texte)</Text>
+          <View style={styles.chips}>
+            {DATE_ALIGNS.map(({ value, label }) => {
+              const selected = options.textAlign === value;
+              return (
+                <Pressable
+                  key={value}
+                  style={[styles.chip, selected && styles.chipSelected]}
+                  onPress={() => setOptions((o) => ({ ...o, textAlign: value }))}
+                >
+                  <Text
+                    style={[styles.chipText, selected && styles.chipTextSelected]}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
           <View style={styles.actions}>
             <Pressable
@@ -255,8 +311,8 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#6b7280',
+    fontWeight: '700',
+    color: '#A64B24',
     marginTop: 16,
     marginBottom: 8,
     textTransform: 'uppercase',

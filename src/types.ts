@@ -35,7 +35,7 @@ export type RenderStyle = 'family' | 'pro';
  * - `full`  : « mercredi 8 juillet 2026 à 19h37 »
  * - `none`  : date masquée
  */
-export type DateFormat = 'short' | 'long' | 'full' | 'none';
+export type DateFormat = 'short' | 'shortTime' | 'long' | 'full' | 'none';
 
 /** Options de personnalisation du mini album exporté. */
 export interface ExportOptions {
@@ -50,6 +50,10 @@ export interface ExportOptions {
   liseret: boolean;
   /** Format de la date affichée sous chaque photo — mode familial. */
   dateFormat: DateFormat;
+  /** Alignement de la date/lieu sous la photo — mode familial. */
+  dateAlign: 'left' | 'center' | 'right';
+  /** Alignement du texte des pages de texte — pro et familial. */
+  textAlign: 'left' | 'center' | 'right';
 }
 
 /** Dossier de classement des photos (un PDF est exporté par dossier). */

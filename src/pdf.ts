@@ -5,6 +5,15 @@ import type { ExportOptions, Photo } from './types';
 import { readBase64 } from './photoFiles';
 import { fileDateStamp, formatPhotoDate, photoDate } from './dateFormat';
 import { paginateEntries, PER_PAGE } from './paginate';
+import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
+
+/** Déclarations @font-face Montserrat (500 corps + 800 titres) embarquées en
+ *  base64, pour un rendu identique et hors-ligne dans le PDF/aperçu. */
+const MONTSERRAT_FACE = `
+  @font-face { font-family: 'Montserrat'; font-weight: 500; font-style: normal;
+    src: url(data:font/ttf;base64,${MONTSERRAT_500}) format('truetype'); }
+  @font-face { font-family: 'Montserrat'; font-weight: 800; font-style: normal;
+    src: url(data:font/ttf;base64,${MONTSERRAT_800}) format('truetype'); }`;
 
 /** Tronque un texte à `n` mots (pour la légende en pleine page). */
 function limitWords(text: string, n: number): string {
@@ -19,6 +28,8 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   frame: 'card',
   liseret: false,
   dateFormat: 'long',
+  dateAlign: 'left',
+  textAlign: 'center',
 };
 
 function escapeHtml(input: string): string {
@@ -115,7 +126,7 @@ function pageHtml(
   return `
     <section class="sheet">
       ${body}
-      <p class="footer"><span>${escapeHtml(title)}</span><span>${pageNo}</span></p>
+      <p class="footer"><span>${pageNo}</span></p>
     </section>`;
 }
 
@@ -139,7 +150,7 @@ function textPageHtml(item: Photo, title: string, pageNo: number): string {
   return `
     <section class="sheet textpage">
       <div class="textpage-body">${text}</div>
-      <p class="footer"><span>${escapeHtml(title)}</span><span>${pageNo}</span></p>
+      <p class="footer"><span>${pageNo}</span></p>
     </section>`;
 }
 
@@ -173,7 +184,7 @@ function buildStyles(options: ExportOptions): string {
   const accent = dark ? '#e3a455' : '#b45309';
 
   const phHeight = PH_HEIGHTS[options.photoSize];
-  const captionSize = options.photoSize === 'small' ? '11px' : '13px';
+  const captionSize = options.photoSize === 'small' ? '16px' : '18px';
   const cardGap = options.photoSize === 'small' ? '12px' : '16px';
 
   // Encadré : les cadres à fond blanc gardent un texte sombre ; les cadres
@@ -219,6 +230,7 @@ function buildStyles(options: ExportOptions): string {
   }
 
   return `
+  ${MONTSERRAT_FACE}
   * {
     box-sizing: border-box;
     /* Indispensable : sans cela, le moteur d'impression iOS supprime les
@@ -228,7 +240,7 @@ function buildStyles(options: ExportOptions): string {
   }
   body {
     margin: 0; background: ${options.background}; color: ${ink};
-    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-family: 'Montserrat', Georgia, serif; font-weight: 500;
   }
   figure { margin: 0; }
   /* Pas de hauteur imposée : le contenu (dimensionné en px, total < page)
@@ -236,7 +248,7 @@ function buildStyles(options: ExportOptions): string {
   .sheet { padding: 24px 28px 0; page-break-after: always; }
   .sheet:last-of-type { page-break-after: auto; }
   .footer {
-    display: flex; justify-content: space-between; align-items: center;
+    display: flex; justify-content: center; align-items: center;
     margin: 6px 4px 0; font-size: 10px; letter-spacing: 2.5px;
     text-transform: uppercase; color: ${muted};
   }
@@ -253,12 +265,12 @@ function buildStyles(options: ExportOptions): string {
     font-size: 12px; letter-spacing: 5px; color: ${accent}; font-weight: 700;
   }
   .cover-title {
-    margin: 16px 0 0; font-family: Georgia, "Times New Roman", serif;
-    font-weight: 400; font-size: 66px; line-height: 0.98; letter-spacing: 1px; color: ${ink};
+    margin: 16px 0 0; font-family: 'Montserrat', Georgia, serif;
+    font-weight: 800; font-size: 58px; line-height: 1.04; letter-spacing: 0.5px; color: ${ink};
   }
   .cover-year {
-    margin: 12px 0 0; font-family: Georgia, "Times New Roman", serif;
-    font-size: 40px; letter-spacing: 4px; color: ${accent};
+    margin: 12px 0 0; font-family: 'Montserrat', Georgia, serif;
+    font-size: 38px; letter-spacing: 3px; color: ${accent}; font-weight: 800;
   }
   .cover-hero {
     height: 470px; margin: 40px 0 0; overflow: hidden;
@@ -267,7 +279,7 @@ function buildStyles(options: ExportOptions): string {
   .cover-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .cover-foot {
     display: flex; justify-content: space-between; align-items: center;
-    margin: 42px 6px 0; font-family: "Courier New", monospace;
+    margin: 42px 6px 0; font-family: 'Montserrat', Georgia, serif;
     font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: ${muted};
   }
   .cover-foot .reg {
@@ -296,8 +308,10 @@ function buildStyles(options: ExportOptions): string {
     color: ${captionInk};
   }
   .caption .date {
-    display: block; margin-top: 3px; font-size: 9px;
-    letter-spacing: 2px; text-transform: uppercase; color: ${captionMuted};
+    display: block; margin-top: 3px; font-size: 6.5px;
+    text-align: ${options.dateAlign ?? 'left'};
+    letter-spacing: 1px; text-transform: lowercase; font-weight: 500;
+    color: ${dark ? '#cbc5b8' : '#6b6456'};
   }
 
   /* --- Photo pleine page (bord à bord) --- */
@@ -310,30 +324,38 @@ function buildStyles(options: ExportOptions): string {
     font-size: 14px; line-height: 1.4; text-align: center; color: ${ink};
   }
 
-  /* --- Page de texte seule --- */
-  .textpage { padding: 150px 60px 0; page-break-after: always; }
+  /* --- Page de texte seule (texte centré verticalement sur la page) --- */
+  .textpage {
+    position: relative; height: 842px; padding: 90px 60px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    page-break-after: always;
+  }
+  .textpage:last-of-type { page-break-after: auto; }
+  .textpage .footer { position: absolute; left: 0; right: 0; bottom: 30px; margin: 0; }
   .textpage-body {
-    font-family: Georgia, "Times New Roman", serif; font-size: 22px; line-height: 1.7;
-    color: ${ink}; text-align: center; white-space: pre-wrap;
+    font-family: 'Montserrat', Georgia, serif; font-size: 21px; line-height: 1.6;
+    color: ${ink}; text-align: ${options.textAlign}; white-space: pre-wrap;
   }
 
   /* --- Page de fin --- */
   .end { text-align: center; padding-top: 330px; }
   .end .orn { font-size: 22px; color: ${accent}; margin: 0; }
   .end h2 {
-    font-family: Georgia, "Times New Roman", serif; font-weight: 400;
+    font-family: 'Montserrat', Georgia, serif; font-weight: 800;
     font-size: 26px; margin: 12px 0 6px; color: ${ink};
   }
   .end p { color: ${muted}; font-size: 13px; margin: 0; }
   ${
     options.liseret
-      ? `/* Liseré (option additive) : l'image prend sa taille réelle (sans marges
-            vides) et porte le trait, pour entourer la photo et non la boîte. Se
-            combine avec n'importe quel support (carte, bordure, polaroïd, aucun). */
-         .ph { background: transparent; }
+      ? `/* Liseré BLANC (option additive) autour de CHAQUE photo : l'image prend
+            sa taille réelle et porte une bordure blanche + une légère ombre pour
+            rester visible sur tout fond. overflow:visible pour ne pas rogner
+            l'ombre. Se combine avec n'importe quel support. */
+         .ph { background: transparent; overflow: visible; }
          .ph img { width: auto; height: auto; max-width: 100%; max-height: 100%;
            box-sizing: border-box; border-radius: 2px;
-           border: 1.5px solid ${dark ? 'rgba(243,239,231,0.75)' : 'rgba(20,24,31,0.6)'}; }`
+           border: 6px solid #ffffff;
+           box-shadow: 0 2px 8px rgba(0, 0, 0, ${dark ? '0.55' : '0.28'}); }`
       : ''
   }
 `;
@@ -364,23 +386,31 @@ export async function buildAlbumHtml(
   // Rendu professionnel : gabarit sobre imposé (fond blanc, photos numérotées,
   // date/heure + lieu + description), indépendant des réglages familiaux.
   if (options.style === 'pro') {
-    return buildProDocument(items, title);
+    return buildProDocument(items, title, options.textAlign);
   }
 
-  // Les pages de texte ne comptent pas comme des photos (couverture, année, total).
+  // Les pages de texte ne comptent pas comme des photos (couverture, année).
   const photoEntries = photos.filter((p) => p.kind !== 'text');
-  const count = photoEntries.length;
   const range = photoEntries.length ? formatRange(photoEntries) : '';
-  const subtitle = `${count} photo${count > 1 ? 's' : ''}${range ? ` · ${range}` : ''}`;
+  // Mode familial : on n'affiche pas le nombre total de photos (juste la période).
+  const subtitle = range;
   // Photo de couverture : celle choisie par l'utilisateur (étoile),
   // sinon la première photo lisible du dossier.
-  const coverSrc =
-    items.find((it) => it.photo.id === coverPhotoId && it.src)?.src ??
-    items.find((it) => it.src)?.src ??
-    '';
+  const coverItem =
+    items.find((it) => it.photo.id === coverPhotoId && it.src) ??
+    items.find((it) => it.src);
+  const coverSrc = coverItem?.src ?? '';
   const perPage = PER_PAGE[options.photoSize];
 
-  const pages = paginateEntries(photos, perPage)
+  // La photo de couverture ne réapparaît dans les pages que si elle porte un
+  // commentaire ; sinon elle n'est visible que sur la couverture.
+  const coverPhoto = coverItem?.photo;
+  const pageSource =
+    coverPhoto && coverPhoto.comment.trim().length === 0
+      ? photos.filter((p) => p.id !== coverPhoto.id)
+      : photos;
+
+  const pages = paginateEntries(pageSource, perPage)
     .map((page, index) => {
       const no = index + 1;
       if (page.type === 'text') return textPageHtml(page.item, title, no);
@@ -405,7 +435,6 @@ export async function buildAlbumHtml(
         <section class="sheet cover">
           <span class="crop tl"></span><span class="crop tr"></span>
           <span class="crop bl"></span><span class="crop br"></span>
-          <p class="cover-kicker">ALBUM · TIRAGE</p>
           <h1 class="cover-title">${escapeHtml(title.toUpperCase())}</h1>
           <p class="cover-year">${escapeHtml(photoEntries.length ? yearLabel(photoEntries) : '')}</p>
           <div class="cover-hero">${coverSrc ? `<img src="${coverSrc}" />` : ''}</div>
@@ -417,7 +446,6 @@ export async function buildAlbumHtml(
         ${pages}
         <section class="sheet end">
           <p class="orn">✦</p>
-          <h2>${escapeHtml(title)}</h2>
           <p>${escapeHtml(subtitle)}</p>
         </section>
       </body>
@@ -460,7 +488,11 @@ function proTextPageHtml(item: Photo): string {
  * `page-break-inside: avoid` sur chaque fiche : ~2 photos par page, sans jamais
  * tronquer une description (essentiel pour une expertise).
  */
-function buildProDocument(items: Item[], title: string): string {
+function buildProDocument(
+  items: Item[],
+  title: string,
+  textAlign: ExportOptions['textAlign'],
+): string {
   // Les photos sont numérotées ; les pages de texte s'intercalent en pleine page.
   let photoNo = 0;
   const entries = items
@@ -477,9 +509,10 @@ function buildProDocument(items: Item[], title: string): string {
   });
 
   const styles = `
+    ${MONTSERRAT_FACE}
     * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact; }
     body { margin: 0; background: #ffffff; color: #14181f;
-      font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; font-size: 12px; }
+      font-family: 'Montserrat', Georgia, serif; font-size: 12px; }
     .cover { padding: 96px 56px 0; page-break-after: always; }
     .cover .kicker { font-size: 12px; letter-spacing: 5px; color: #6b7280; font-weight: 700; }
     .cover h1 { font-size: 34px; font-weight: 700; margin: 10px 0 18px; color: #111827; }
@@ -501,7 +534,7 @@ function buildProDocument(items: Item[], title: string): string {
       font-size: 10px; letter-spacing: 1px; padding-top: 2px; }
     .meta dd { margin: 0; color: #14181f; line-height: 1.5; }
     .pro-textpage { page-break-before: always; page-break-after: always;
-      padding: 130px 40px 0; text-align: center; white-space: pre-wrap;
+      padding: 64px 56px 0; text-align: ${textAlign}; white-space: pre-wrap;
       font-size: 20px; line-height: 1.7; color: #14181f; }`;
 
   return `<!DOCTYPE html>

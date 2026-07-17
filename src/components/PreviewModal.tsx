@@ -51,7 +51,7 @@ export function PreviewModal({
           </Pressable>
           <Text style={styles.title}>Aperçu avant envoi</Text>
           <Text style={styles.subtitle}>
-            Fais défiler pour vérifier chaque page
+            Faites défiler pour vérifier chaque page
           </Text>
         </View>
 

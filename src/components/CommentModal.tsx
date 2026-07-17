@@ -94,7 +94,7 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
               value={text}
               onChangeText={setText}
               placeholder={
-                isText ? 'Écris le texte de cette page…' : 'Décris ce moment…'
+                isText ? 'Écrivez le texte de cette page…' : 'Commentez ce moment…'
               }
               placeholderTextColor="#9ca3af"
               multiline

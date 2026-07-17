@@ -70,8 +70,8 @@ export function PhotoCard({
           {hasComment
             ? photo.comment
             : isText
-              ? 'Touche pour écrire le texte de la page'
-              : 'Touche pour ajouter un commentaire'}
+              ? 'Toucher pour écrire le texte de la page'
+              : 'Toucher pour ajouter un commentaire'}
         </Text>
         <Text style={styles.hint}>{isText ? 'PAGE DE TEXTE' : 'Modifier'}</Text>
       </View>
@@ -92,9 +92,9 @@ export function PhotoCard({
               onPress={() => onSetCover(photo)}
             >
               <Ionicons
-                name={isCover ? 'heart' : 'heart-outline'}
+                name={isCover ? 'star' : 'star-outline'}
                 size={20}
-                color={isCover ? '#ef4444' : '#6b7280'}
+                color={isCover ? '#A64B24' : '#6b7280'}
               />
             </Pressable>
             <Pressable

@@ -37,6 +37,14 @@ export function AlbumCard({
         <Text style={styles.count}>
           {count} photo{count > 1 ? 's' : ''}
         </Text>
+        <Text style={styles.created}>
+          Créé le{' '}
+          {new Date(album.createdAt).toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          })}
+        </Text>
       </View>
       <View style={styles.actions}>
         <Pressable
@@ -87,15 +95,23 @@ const styles = StyleSheet.create({
   },
   name: {
     fontFamily: F.display,
-    fontSize: 22,
+    fontSize: 18,
     color: C.ink,
+    marginLeft: -1, // compense le léger décalage à gauche de la police serif
   },
   count: {
     fontFamily: F.mono,
     fontSize: 12,
     color: C.muted,
     letterSpacing: 1,
-    marginTop: 4,
+    marginTop: 5,
+  },
+  created: {
+    fontFamily: F.mono,
+    fontSize: 11,
+    color: C.faint,
+    letterSpacing: 1,
+    marginTop: 3,
   },
   actions: { gap: 8 },
   iconBtn: {

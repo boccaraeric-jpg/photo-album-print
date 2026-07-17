@@ -52,7 +52,9 @@ l'affichage ; un export = un dossier). Tout l'état vit dans `useState` au nivea
 dans **AsyncStorage** par des `useEffect` à chaque changement (clés `*.v1`). `loadData()` migre les
 anciennes données et **normalise `Photo.order`** (rang contigu par dossier). L'ordre d'affichage
 suit `comparePhotos` (`order`, sinon `createdAt`) ; le **réordonnancement** se fait par boutons
-**▲▼** dans `PhotoCard` (le glisser-déposer a été retiré : incompatible avec Reanimated 4).
+**▲▼** dans `PhotoCard` (le glisser-déposer a été retiré : incompatible avec Reanimated 4). La
+**photo de couverture** se choisit via l'**étoile** ★ de `PhotoCard` (`onSetCover`, une seule par
+dossier ; sinon la 1ʳᵉ photo sert de couverture par défaut).
 
 **Fichiers image, réglages & recadrage** (`src/photoFiles.ts`, `src/adjustments.ts`,
 `src/components/CropModal.tsx`) : les URI de la caméra/galerie sont temporaires → `persistImage()`
@@ -66,9 +68,13 @@ réinitialisés).
 **Chaîne d'export** (le cœur de l'app). Les **deux boutons du bas d'`AlbumScreen` sont les points
 d'entrée** (ils pilotent aussi les libellés) :
 - **Familial** → ouvre `ExportModal` (mise en page) → « Aperçu » → `PreviewModal` → « Partager
-  l'album » → pop-up **PDF / JPEG**.
+  l'album » → pop-up **PDF / Images (partager)**.
 - **Professionnel** → va **directement** à `PreviewModal` (gabarit sobre imposé) → « Envoyer » →
-  pop-up format.
+  même pop-up format.
+- Le pop-up format (`chooseFormat`) n'a que **deux options** : **PDF** (`sendPdf`) et **Images
+  (partager)** (`sendImages`). Chacune ouvre la **feuille de partage native iOS** (`expo-sharing`) —
+  Messenger, Mail, AirDrop… y figurent selon le contenu ; **pas** de bouton « enregistrer dans la
+  photothèque » (retiré : la feuille de partage suffit).
 - `ExportModal` = `ExportOptions` du mode familial : **taille** (`small`/`medium`/`large`/**`full`**
   = pleine page bord à bord, légende ≤ 15 mots), fond, encadré, **liseré** (option additive posée
   sur la photo, pas sur le support), format de date. Le **`style`** (`family`/`pro`) est piloté par
