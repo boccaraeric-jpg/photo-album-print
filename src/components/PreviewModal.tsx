@@ -9,6 +9,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 
+import { F } from '../theme';
+
 interface Props {
   visible: boolean;
   /** HTML complet du mini album (identique au futur PDF). */
@@ -100,13 +102,13 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#fff' },
   header: { paddingHorizontal: 20, paddingBottom: 12 },
   backLink: {
+    fontFamily: F.monoBold,
     fontSize: 16,
-    fontWeight: '600',
     color: '#A64B24',
     marginBottom: 6,
   },
-  title: { fontSize: 20, fontWeight: '700', color: '#201B14' },
-  subtitle: { fontSize: 13, color: '#6b7280', marginTop: 2 },
+  title: { fontFamily: F.display, fontSize: 20, color: '#201B14' },
+  subtitle: { fontFamily: F.mono, fontSize: 13, color: '#6b7280', marginTop: 2 },
   webWrap: { flex: 1, backgroundColor: '#e5e7eb' },
   web: { flex: 1, backgroundColor: 'transparent' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -126,8 +128,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   btnGhost: { backgroundColor: '#f3f4f6' },
-  btnGhostText: { color: '#374151', fontSize: 16, fontWeight: '600' },
+  btnGhostText: { fontFamily: F.monoBold, color: '#374151', fontSize: 16 },
   btnPrimary: { backgroundColor: '#A64B24' },
-  btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  btnPrimaryText: { fontFamily: F.monoBold, color: '#fff', fontSize: 16 },
   btnDisabled: { opacity: 0.6 },
 });

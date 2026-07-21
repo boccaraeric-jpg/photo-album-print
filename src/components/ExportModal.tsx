@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { F } from '../theme';
 import type { DateFormat, ExportOptions, FrameStyle, PhotoSize } from '../types';
 
 interface Props {
@@ -304,14 +305,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: {
+    fontFamily: F.display,
     fontSize: 17,
-    fontWeight: '700',
     color: '#201B14',
     marginBottom: 4,
   },
   label: {
+    fontFamily: F.monoBold,
     fontSize: 13,
-    fontWeight: '700',
     color: '#A64B24',
     marginTop: 16,
     marginBottom: 8,
@@ -332,11 +333,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   chipSelected: { backgroundColor: '#A64B24' },
-  chipText: { fontSize: 14, fontWeight: '600', color: '#374151' },
+  chipText: { fontFamily: F.monoBold, fontSize: 14, color: '#374151' },
   chipTextSelected: { color: '#fff' },
-  chipHint: { fontSize: 11, color: '#9ca3af', marginTop: 1 },
+  chipHint: { fontFamily: F.mono, fontSize: 11, color: '#9ca3af', marginTop: 1 },
   chipHintSelected: { color: 'rgba(255,255,255,0.75)' },
   proNote: {
+    fontFamily: F.mono,
     fontSize: 13,
     color: '#6b7280',
     lineHeight: 19,
@@ -367,8 +369,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   btnGhost: { backgroundColor: '#f3f4f6' },
-  btnGhostText: { color: '#374151', fontSize: 16, fontWeight: '600' },
+  btnGhostText: { fontFamily: F.monoBold, color: '#374151', fontSize: 16 },
   btnPrimary: { backgroundColor: '#A64B24' },
-  btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  btnPrimaryText: { fontFamily: F.monoBold, color: '#fff', fontSize: 16 },
   btnDisabled: { opacity: 0.6 },
 });

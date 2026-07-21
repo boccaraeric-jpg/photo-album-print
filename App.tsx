@@ -56,9 +56,9 @@ import { WelcomeScreen } from './src/components/WelcomeScreen';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    Gloock: require('./assets/fonts/Gloock-Regular.ttf'),
-    PlexMono: require('./assets/fonts/IBMPlexMono-Regular.ttf'),
-    PlexMonoBold: require('./assets/fonts/IBMPlexMono-Bold.ttf'),
+    Montserrat: require('./assets/fonts/Montserrat-Medium.ttf'),
+    MontserratBold: require('./assets/fonts/Montserrat-Bold.ttf'),
+    MontserratExtraBold: require('./assets/fonts/Montserrat-ExtraBold.ttf'),
   });
   if (!fontsLoaded) {
     return <View style={{ flex: 1, backgroundColor: C.paper }} />;
@@ -879,11 +879,10 @@ const styles = StyleSheet.create({
   backLink: {
     fontFamily: F.monoBold,
     fontSize: 18,
-    fontWeight: '700',
     color: C.sienna,
     letterSpacing: 0.5,
   },
-  backChevron: { fontSize: 28, fontWeight: '700' },
+  backChevron: { fontFamily: F.monoBold, fontSize: 28 },
   homeTitle: {
     fontFamily: F.display,
     fontSize: 40,
@@ -971,7 +970,6 @@ const styles = StyleSheet.create({
   renduLabel: {
     fontFamily: F.monoBold,
     fontSize: 12,
-    fontWeight: '700',
     letterSpacing: 2,
     color: C.muted,
     marginBottom: 10,
@@ -981,7 +979,6 @@ const styles = StyleSheet.create({
   btnActionText: {
     fontFamily: F.monoBold,
     fontSize: 16,
-    fontWeight: '700',
     color: C.paper,
     letterSpacing: 0.5,
   },
@@ -997,7 +994,6 @@ const styles = StyleSheet.create({
   renduChipText: {
     fontFamily: F.monoBold,
     fontSize: 15,
-    fontWeight: '700',
     color: C.ink,
     letterSpacing: 0.5,
   },
@@ -1013,13 +1009,12 @@ const styles = StyleSheet.create({
   },
   btnGhostText: { fontFamily: F.mono, color: C.sienna, fontSize: 13, letterSpacing: 0.5 },
   btnLight: { backgroundColor: C.tan },
-  btnLightText: { color: C.ink, fontSize: 15, fontWeight: '600' },
+  btnLightText: { fontFamily: F.monoBold, color: C.ink, fontSize: 15 },
   btnPrimary: { backgroundColor: C.ink },
   btnPrimaryText: {
-    fontFamily: F.mono,
+    fontFamily: F.monoBold,
     color: C.paper,
     fontSize: 15,
-    fontWeight: '700',
     letterSpacing: 1,
   },
   btnDisabled: { opacity: 0.4 },

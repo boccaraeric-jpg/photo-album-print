@@ -120,7 +120,6 @@ const styles = StyleSheet.create({
     fontFamily: F.monoBold,
     fontSize: 19,
     lineHeight: 27,
-    fontWeight: '700',
     letterSpacing: 0.3,
     color: C.sienna,
     textAlign: 'center',
@@ -145,7 +144,6 @@ const styles = StyleSheet.create({
   ctaText: {
     fontFamily: F.monoBold,
     fontSize: 16,
-    fontWeight: '700',
     letterSpacing: 1,
     color: '#F6EFE0',
   },

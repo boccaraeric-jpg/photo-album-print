@@ -123,8 +123,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconText: {
+    fontFamily: F.monoBold,
     color: C.inkSoft,
     fontSize: 14,
-    fontWeight: '700',
   },
 });

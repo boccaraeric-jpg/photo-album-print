@@ -19,6 +19,7 @@ import {
 
 import type { Adjustments, Photo } from '../types';
 import { buildColorMatrix, DEFAULT_ADJUSTMENTS } from '../adjustments';
+import { F } from '../theme';
 
 interface Props {
   /** Photo en cours de réglage, ou null si le modal est fermé. */
@@ -190,9 +191,9 @@ const styles = StyleSheet.create({
     paddingTop: 56,
     paddingBottom: 12,
   },
-  topBtn: { color: '#d1d5db', fontSize: 16, fontWeight: '600' },
-  topBtnSave: { color: '#fbbf24', fontWeight: '700' },
-  topTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  topBtn: { fontFamily: F.mono, color: '#d1d5db', fontSize: 16 },
+  topBtnSave: { fontFamily: F.monoBold, color: '#fbbf24' },
+  topTitle: { fontFamily: F.monoBold, color: '#fff', fontSize: 16 },
   preview: {
     flex: 1,
     alignItems: 'center',
@@ -214,13 +215,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rotateText: { color: '#e5e7eb', fontSize: 14, fontWeight: '600' },
+  rotateText: { fontFamily: F.monoBold, color: '#e5e7eb', fontSize: 14 },
   sliderRow: { marginTop: 6 },
   sliderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: -2,
   },
-  sliderLabel: { color: '#9ca3af', fontSize: 13, fontWeight: '600' },
-  sliderValue: { color: '#fbbf24', fontSize: 13, fontWeight: '700' },
+  sliderLabel: { fontFamily: F.mono, color: '#9ca3af', fontSize: 13 },
+  sliderValue: { fontFamily: F.monoBold, color: '#fbbf24', fontSize: 13 },
 });

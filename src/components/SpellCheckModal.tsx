@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { SpellMatch } from '../spellcheck';
+import { F } from '../theme';
 
 interface Props {
   visible: boolean;
@@ -144,29 +145,41 @@ const styles = StyleSheet.create({
   },
   card: { backgroundColor: '#fff', borderRadius: 20, padding: 20 },
   progress: {
+    fontFamily: F.monoBold,
     fontSize: 12,
-    fontWeight: '700',
     color: '#9ca3af',
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 12,
   },
-  context: { fontSize: 16, lineHeight: 23, color: '#374151', marginBottom: 10 },
+  context: {
+    fontFamily: F.mono,
+    fontSize: 16,
+    lineHeight: 23,
+    color: '#374151',
+    marginBottom: 10,
+  },
   bad: {
+    fontFamily: F.monoBold,
     color: '#dc2626',
-    fontWeight: '700',
     textDecorationLine: 'underline',
   },
   label: {
+    fontFamily: F.monoBold,
     fontSize: 13,
-    fontWeight: '600',
     color: '#6b7280',
     marginTop: 8,
     marginBottom: 6,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  noSugg: { fontSize: 14, color: '#9ca3af', marginTop: 8, marginBottom: 4 },
+  noSugg: {
+    fontFamily: F.mono,
+    fontSize: 14,
+    color: '#9ca3af',
+    marginTop: 8,
+    marginBottom: 4,
+  },
   suggScroll: { maxHeight: 220 },
   sugg: {
     paddingVertical: 12,
@@ -175,7 +188,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#EADDC4',
     marginBottom: 8,
   },
-  suggText: { fontSize: 16, color: '#A64B24', fontWeight: '600' },
+  suggText: { fontFamily: F.monoBold, fontSize: 16, color: '#A64B24' },
   actions: { flexDirection: 'row', gap: 12, marginTop: 8 },
   btn: {
     flex: 1,
@@ -185,7 +198,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   btnGhost: { backgroundColor: '#f3f4f6' },
-  btnGhostText: { color: '#374151', fontSize: 15, fontWeight: '600' },
+  btnGhostText: { fontFamily: F.monoBold, color: '#374151', fontSize: 15 },
   btnLight: { backgroundColor: '#fef3c7' },
-  btnLightText: { color: '#b45309', fontSize: 15, fontWeight: '600' },
+  btnLightText: { fontFamily: F.monoBold, color: '#b45309', fontSize: 15 },
 });

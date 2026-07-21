@@ -13,8 +13,11 @@ export const C = {
   line: 'rgba(32,27,20,0.14)',
 };
 
+// Typographie unique : Montserrat partout — interface et rendu album (PDF/JPEG)
+// partagent la même famille. Les clés gardent leurs noms d'origine pour ne pas
+// toucher aux styles existants ; seules les graisses changent.
 export const F = {
-  display: 'Gloock', // titres serif à haute tension
-  mono: 'PlexMono', // annotations cliniques
-  monoBold: 'PlexMonoBold',
+  display: 'MontserratExtraBold', // titres (800, comme les titres du rendu album)
+  mono: 'Montserrat', // corps, labels, champs (500, comme le corps du rendu album)
+  monoBold: 'MontserratBold', // boutons, valeurs mises en avant (700)
 };

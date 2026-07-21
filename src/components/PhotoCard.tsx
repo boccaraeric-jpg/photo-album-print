@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  arrow: { fontSize: 13, color: C.inkSoft, fontWeight: '700' },
+  arrow: { fontFamily: F.monoBold, fontSize: 13, color: C.inkSoft },
   arrowDisabled: { color: C.faint },
   thumb: {
     width: 76,

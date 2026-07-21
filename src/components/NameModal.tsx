@@ -10,6 +10,8 @@ import {
   View,
 } from 'react-native';
 
+import { F } from '../theme';
+
 interface Props {
   visible: boolean;
   /** Titre affiché en haut du modal (ex. « Nouveau dossier »). */
@@ -106,8 +108,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: {
+    fontFamily: F.display,
     fontSize: 17,
-    fontWeight: '700',
     color: '#201B14',
     marginBottom: 14,
   },
@@ -116,6 +118,7 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
     borderRadius: 12,
     padding: 14,
+    fontFamily: F.mono,
     fontSize: 16,
     color: '#201B14',
   },
@@ -132,8 +135,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   btnGhost: { backgroundColor: '#f3f4f6' },
-  btnGhostText: { color: '#374151', fontSize: 16, fontWeight: '600' },
+  btnGhostText: { fontFamily: F.monoBold, color: '#374151', fontSize: 16 },
   btnPrimary: { backgroundColor: '#A64B24' },
-  btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  btnPrimaryText: { fontFamily: F.monoBold, color: '#fff', fontSize: 16 },
   btnDisabled: { opacity: 0.4 },
 });

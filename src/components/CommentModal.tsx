@@ -13,6 +13,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { F } from '../theme';
 import type { Photo } from '../types';
 import { checkSpelling, type SpellMatch } from '../spellcheck';
 import { SpellCheckModal } from './SpellCheckModal';
@@ -197,8 +198,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3f4f6',
   },
   label: {
+    fontFamily: F.monoBold,
     fontSize: 13,
-    fontWeight: '600',
     color: '#6b7280',
     marginTop: 16,
     marginBottom: 8,
@@ -211,6 +212,7 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
     borderRadius: 12,
     padding: 14,
+    fontFamily: F.mono,
     fontSize: 16,
     textAlignVertical: 'top',
     color: '#201B14',
@@ -222,6 +224,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
+    fontFamily: F.mono,
     fontSize: 16,
     color: '#201B14',
   },
@@ -233,7 +236,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#EADDC4',
   },
-  spellText: { color: '#A64B24', fontSize: 14, fontWeight: '600' },
+  spellText: { fontFamily: F.monoBold, color: '#A64B24', fontSize: 14 },
   spellTextDisabled: { color: '#9ca3af' },
   actions: {
     flexDirection: 'row',
@@ -248,7 +251,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   btnGhost: { backgroundColor: '#f3f4f6' },
-  btnGhostText: { color: '#374151', fontSize: 16, fontWeight: '600' },
+  btnGhostText: { fontFamily: F.monoBold, color: '#374151', fontSize: 16 },
   btnPrimary: { backgroundColor: '#A64B24' },
-  btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  btnPrimaryText: { fontFamily: F.monoBold, color: '#fff', fontSize: 16 },
 });
