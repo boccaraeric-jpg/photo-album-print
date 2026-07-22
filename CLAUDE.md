@@ -121,6 +121,12 @@ d'entrée** (ils pilotent aussi les libellés) :
   **sauf si elle porte un commentaire** (familial ; le pro n'a pas de photo en couverture).
   `htmlToPdfFile()` rend via `expo-print` puis **renomme**
   (`albumFileBase` = « NomAlbum JJ-MM-AAAA »).
+- ⚠️ **Poids du PDF** : `buildAlbumHtml()` intègre chaque photo via **`readPrintBase64()`**
+  (`photoFiles.ts`), qui **redimensionne + recompresse** en JPEG (côté long plafonné, cache mémoire)
+  **avant** l'encodage base64. Ne **jamais** revenir à `readBase64(photo.uri)` sur l'original :
+  embarquer du 4000 px pour un affichage A4 donnait des PDF de ~190 Mo (9 photos). Budget adaptatif au
+  nombre de photos (≤15 → 1600 px/q0.72 ; >30 → 1024 px/q0.68). `htmlToPdfFile()` `console.warn` si le
+  fichier dépasse 10 Mo. L'export « Photos (à réutiliser) » garde, lui, la **pleine résolution**.
 - `PreviewModal` rend **le même HTML** dans une **WebView**. L'envoi JPEG : `src/pageImages.ts`
   compose chaque page en **Skia** (déterministe, hors-ligne — la capture de WebView est peu fiable
   sur iOS) ; plusieurs pages → **ZIP** (`src/albumZip.ts`, `jszip`).
