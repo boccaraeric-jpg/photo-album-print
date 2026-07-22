@@ -51,7 +51,7 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
     } catch {
       Alert.alert(
         'Correcteur indisponible',
-        "La vérification n'a pas pu aboutir (connexion internet requise). Réessaie.",
+        "La vérification n'a pas pu aboutir. Réessaie.",
       );
     } finally {
       setChecking(false);
@@ -99,8 +99,13 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
               }
               placeholderTextColor="#9ca3af"
               multiline
-              autoCorrect={false}
-              spellCheck={false}
+              // Correcteur natif iOS (= celui des SMS) : souligné rouge en
+              // direct, tap-pour-corriger, autocorrection, barre de prédiction.
+              // La langue suit le clavier actif de l'utilisateur (FR si clavier
+              // français). Le bouton « Corriger » ci-dessous ajoute une passe FR
+              // hors-ligne (grammaire/expressions) que le natif ne fait pas.
+              autoCorrect
+              spellCheck
               autoCapitalize="sentences"
               keyboardType="default"
             />
@@ -118,7 +123,7 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
                     !text.trim() && styles.spellTextDisabled,
                   ]}
                 >
-                  ✓ Corriger l'orthographe
+                  ✓ Vérifier orthographe & grammaire
                 </Text>
               )}
             </Pressable>
@@ -131,8 +136,10 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
                   onChangeText={setPlace}
                   placeholder="Lieu de la prise de vue…"
                   placeholderTextColor="#9ca3af"
+                  // Lieu = nom propre : on souligne les fautes (spellCheck) mais
+                  // on n'autocorrige pas (éviter de déformer « Étretat » & co.).
                   autoCorrect={false}
-                  spellCheck={false}
+                  spellCheck
                   autoCapitalize="words"
                 />
               </>

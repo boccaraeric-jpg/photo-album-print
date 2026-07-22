@@ -1,4 +1,6 @@
+import { Image } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 /** Répertoire de stockage persistant des images de l'album. */
 const PHOTOS_DIR = `${FileSystem.documentDirectory}album-photos/`;
@@ -46,9 +48,71 @@ export async function writeBase64Image(
   return dest;
 }
 
-/** Lit une image et la retourne encodée en base64 (pour intégration dans le PDF). */
+/** Lit une image et la retourne encodée en base64 (image brute, non redimensionnée). */
 export async function readBase64(uri: string): Promise<string> {
   return FileSystem.readAsStringAsync(uri, {
     encoding: FileSystem.EncodingType.Base64,
   });
+}
+
+/** Dimensions en pixels d'une image locale. */
+function getPixelSize(uri: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    Image.getSize(uri, (width, height) => resolve({ width, height }), reject);
+  });
+}
+
+// Les data URI d'un même fichier reviennent identiques (aperçu re-rendu, puis
+// PDF) : on mémorise le base64 déjà calculé pour ne pas recompresser à chaque
+// fois. Cache borné : au-delà, on vide (les albums sont petits, la mémoire prime).
+const printCache = new Map<string, string>();
+
+/**
+ * Lit une image et la retourne **redimensionnée + recompressée** en base64 JPEG,
+ * prête à être intégrée (data URI) dans le HTML du PDF / de l'aperçu.
+ *
+ * Motif : les photos de l'iPhone font ~4000 px / plusieurs Mo, alors qu'elles
+ * s'affichent au plus sur une page A4 (595×842 pt). Embarquer l'original brut
+ * multiplié par le nombre de photos produisait des PDF de dizaines/centaines de
+ * Mo (base64 gonfle encore de +33 %), intransmissibles. On plafonne donc le
+ * **côté long** à `maxEdge` px et on recompresse en JPEG `quality`.
+ *
+ * @param maxEdge côté le plus long en pixels (jamais d'agrandissement).
+ * @param quality compression JPEG 0–1.
+ */
+export async function readPrintBase64(
+  uri: string,
+  maxEdge = 1600,
+  quality = 0.72,
+): Promise<string> {
+  const key = `${uri}|${maxEdge}|${quality}`;
+  const cached = printCache.get(key);
+  if (cached !== undefined) return cached;
+
+  let actions: ImageManipulator.Action[] = [];
+  try {
+    const { width, height } = await getPixelSize(uri);
+    const longest = Math.max(width, height);
+    if (longest > maxEdge) {
+      const scale = maxEdge / longest;
+      actions = [
+        { resize: { width: Math.round(width * scale), height: Math.round(height * scale) } },
+      ];
+    }
+  } catch {
+    // Dimensions indisponibles (ex. HEIC parfois) : repli sûr = plafonner la
+    // largeur, l'aspect est préservé automatiquement par le manipulateur.
+    actions = [{ resize: { width: maxEdge } }];
+  }
+
+  const res = await ImageManipulator.manipulateAsync(uri, actions, {
+    compress: quality,
+    format: ImageManipulator.SaveFormat.JPEG,
+    base64: true,
+  });
+  const b64 = res.base64 ?? '';
+
+  if (printCache.size > 60) printCache.clear();
+  printCache.set(key, b64);
+  return b64;
 }

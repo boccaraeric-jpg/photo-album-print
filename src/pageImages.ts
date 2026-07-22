@@ -431,14 +431,6 @@ async function renderCover(
     });
     let ty = 260;
     ty +=
-      drawText(canvas, 'RAPPORT PHOTOGRAPHIQUE', PAD, ty, W - 2 * PAD, {
-        color: '#6b7280',
-        size: 24,
-        bold: true,
-        letterSpacing: 6,
-        maxLines: 1,
-      }) + 16;
-    ty +=
       drawText(canvas, title, PAD, ty, W - 2 * PAD, {
         color: '#111827',
         size: 64,

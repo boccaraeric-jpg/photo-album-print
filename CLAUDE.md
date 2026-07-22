@@ -139,8 +139,19 @@ hors-ligne. Orthographe = **index phonétique précalculé** `src/frenchPhonetic
 généré avec `talisman/phonetics/french/phonetic` + `an-array-of-french-words`) + Levenshtein ;
 grammaire/expressions = **règles regex** (`frenchRules`, ex. « tout le tant » → « tout le temps »,
 élisions). `SpellCheckModal` est une **surcouche `<View>` (pas un `<Modal>`)** : iOS ne présente pas
-deux Modal imbriqués. Le correcteur natif iOS (`spellCheck`/`autoCorrect`) est **désactivé** sur les
-champs pour ne pas parasiter.
+deux Modal imbriqués.
+
+Deux niveaux de correction, complémentaires :
+1. **Correcteur natif iOS** (`spellCheck` + `autoCorrect`, = celui des SMS : souligné rouge en direct,
+   tap-pour-corriger, autocorrection, prédiction) **activé** sur tous les champs texte
+   (`CommentModal` commentaire/page de texte, `NameModal`, titre d'album). Sa langue suit le **clavier
+   actif** de l'utilisateur. Exception : le champ **Lieu** garde `autoCorrect={false}` (nom propre) mais
+   `spellCheck` actif. C'est la réponse au ressenti testeurs « pas de correcteur » — ne **pas** le
+   recouper.
+2. **Passe offline FR** (bouton « ✓ Vérifier orthographe & grammaire » de `CommentModal` →
+   `checkSpelling` → `SpellCheckModal`) : complète le natif avec la **grammaire/expressions** FR
+   qu'Apple ne voit pas (mot valide mais mal employé). **Aucun réseau** — ne jamais faire croire à
+   l'utilisateur qu'une connexion est requise.
 
 **Thème « Chambre Claire »** (`src/theme.ts`) : palette **crème / encre / terre de Sienne** (objet
 `C`) et polices (objet `F`). **Typographie unifiée sur Montserrat** dans **toute** l'interface : les

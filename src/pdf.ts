@@ -2,7 +2,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { ExportOptions, Photo } from './types';
-import { readBase64 } from './photoFiles';
+import { readPrintBase64 } from './photoFiles';
 import { fileDateStamp, formatPhotoDate, photoDate } from './dateFormat';
 import { paginateEntries, PER_PAGE } from './paginate';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
@@ -372,10 +372,18 @@ export async function buildAlbumHtml(
   options: ExportOptions,
   coverPhotoId?: string,
 ): Promise<string> {
+  // Budget adaptatif : plus il y a de photos, plus on réduit chacune pour que le
+  // PDF final reste transmissible (cible ~10 Mo). À 1600 px / q0.72 une photo
+  // pèse ~0,3 Mo, donc ~3 Mo pour 9 photos (contre ~190 Mo en original brut).
+  const count = photos.filter((p) => p.kind !== 'text').length;
+  const maxEdge = count > 30 ? 1024 : count > 15 ? 1280 : 1600;
+  const quality = count > 30 ? 0.68 : 0.72;
+
   const items: Item[] = await Promise.all(
     photos.map(async (photo) => {
+      if (photo.kind === 'text' || !photo.uri) return { photo, src: '' };
       try {
-        const b64 = await readBase64(photo.uri);
+        const b64 = await readPrintBase64(photo.uri, maxEdge, quality);
         return { photo, src: `data:image/jpeg;base64,${b64}` };
       } catch {
         return { photo, src: '' };
@@ -546,7 +554,6 @@ function buildProDocument(
       </head>
       <body>
         <section class="cover">
-          <div class="kicker">RAPPORT PHOTOGRAPHIQUE</div>
           <h1>${escapeHtml(title)}</h1>
           <div class="rule"></div>
           <dl>
@@ -580,6 +587,13 @@ export async function htmlToPdfFile(html: string, title: string): Promise<string
   try {
     await FileSystem.deleteAsync(dest, { idempotent: true });
     await FileSystem.copyAsync({ from: uri, to: dest });
+    const info = await FileSystem.getInfoAsync(dest);
+    if (info.exists && typeof info.size === 'number') {
+      const mo = info.size / (1024 * 1024);
+      if (mo > 10) {
+        console.warn(`[pdf] PDF volumineux : ${mo.toFixed(1)} Mo (> 10 Mo)`);
+      }
+    }
     return dest;
   } catch {
     // En cas d'échec de renommage, on partage au moins le PDF d'origine.
