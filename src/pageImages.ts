@@ -10,6 +10,7 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import type { ExportOptions, Photo } from './types';
 import { formatPhotoDate, photoDate } from './dateFormat';
+import { dict, localeTag, type Lang } from './i18n';
 import { paginateEntries, PER_PAGE } from './paginate';
 import { albumFileBase } from './pdf';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
@@ -229,7 +230,9 @@ async function renderPhotoPage(
   perPage: number,
   pro: boolean,
   startNumber: number,
+  lang: Lang,
 ): Promise<PagePayload | null> {
+  const D = dict(lang).doc;
   const surface = Skia.Surface.Make(W, H);
   if (!surface) return null;
   const canvas = surface.getCanvas();
@@ -266,7 +269,7 @@ async function renderPhotoPage(
       // Rendu professionnel : numéro, photo entière encadrée d'un filet,
       // légende factuelle (date/heure, lieu, description).
       const numH = 34;
-      drawText(canvas, `Photo n° ${startNumber + i + 1}`, cellX, cellY, cellW, {
+      drawText(canvas, D.photoNo(startNumber + i + 1), cellX, cellY, cellW, {
         color: '#111827',
         size: 24,
         bold: true,
@@ -287,23 +290,23 @@ async function renderPhotoPage(
       border.setColor(Skia.Color('#d7dbe0'));
       canvas.drawRRect(rrect(cellX + 1, imgY + 1, cellW - 2, imgH - 2, 6), border);
 
-      const date = formatPhotoDate(photoDate(photo), 'full') || '—';
+      const date = formatPhotoDate(photoDate(photo), 'full', lang) || '—';
       const place = photo.place?.trim() || '—';
       const desc = photo.comment.trim() || '—';
       let ty = imgY + imgH + 14;
       ty +=
-        drawText(canvas, `Lieu : ${place}`, cellX, ty, cellW, {
+        drawText(canvas, `${D.place} : ${place}`, cellX, ty, cellW, {
           color: '#14181f',
           size: 20,
           maxLines: 1,
         }) + 4;
       ty +=
-        drawText(canvas, `Date : ${date}`, cellX, ty, cellW, {
+        drawText(canvas, `${D.date} : ${date}`, cellX, ty, cellW, {
           color: '#14181f',
           size: 20,
           maxLines: 1,
         }) + 4;
-      drawText(canvas, `Description : ${desc}`, cellX, ty, cellW, {
+      drawText(canvas, `${D.description} : ${desc}`, cellX, ty, cellW, {
         color: '#14181f',
         size: 20,
         maxLines: 2,
@@ -329,7 +332,7 @@ async function renderPhotoPage(
 
     const comment = photo.comment.trim();
     const place = photo.place?.trim();
-    const date = formatPhotoDate(photoDate(photo), options.dateFormat);
+    const date = formatPhotoDate(photoDate(photo), options.dateFormat, lang);
     const meta = [place, date].filter(Boolean).join(' · ');
     const captionH = comment || meta ? (perPage === 4 ? 92 : 122) : 0;
 
@@ -409,22 +412,21 @@ async function renderCover(
   options: ExportOptions,
   title: string,
   pro: boolean,
+  lang: Lang,
   coverPhotoId?: string,
 ): Promise<PagePayload | null> {
   const surface = Skia.Surface.Make(W, H);
   if (!surface) return null;
   const canvas = surface.getCanvas();
 
-  const count = photos.length
-    ? `${photos.length} photo${photos.length > 1 ? 's' : ''}`
-    : '';
+  const count = photos.length ? dict(lang).album.photoCount(photos.length) : '';
 
   if (pro) {
     // Couverture sobre de rapport : fond blanc, titre et méta factuelles.
     const bg = Skia.Paint();
     bg.setColor(Skia.Color('#ffffff'));
     canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
-    const today = new Date().toLocaleDateString('fr-FR', {
+    const today = new Date().toLocaleDateString(localeTag(lang), {
       day: 'numeric',
       month: 'long',
       year: 'numeric',
@@ -442,7 +444,7 @@ async function renderCover(
     canvas.drawRect(Skia.XYWHRect(PAD, ty, 130, 4), rule);
     ty += 44;
     ty +=
-      drawText(canvas, `Établi le ${today}`, PAD, ty, W - 2 * PAD, {
+      drawText(canvas, `${dict(lang).doc.establishedOn} ${today}`, PAD, ty, W - 2 * PAD, {
         color: '#14181f',
         size: 26,
         maxLines: 1,
@@ -471,7 +473,7 @@ async function renderCover(
   }
 
   let ty = PAD + 1040 + 60;
-  ty += drawText(canvas, 'ALBUM PHOTO', PAD, ty, W - 2 * PAD, {
+  ty += drawText(canvas, dict(lang).home.kicker, PAD, ty, W - 2 * PAD, {
     color: accent,
     size: 22,
     align: TextAlign.Center,
@@ -618,6 +620,7 @@ export async function buildAlbumImages(
   title: string,
   options: ExportOptions,
   coverPhotoId?: string,
+  lang: Lang = 'fr',
 ): Promise<string[]> {
   const uris: string[] = [];
 
@@ -638,7 +641,7 @@ export async function buildAlbumImages(
   const full = !pro && options.photoSize === 'full';
 
   const photoEntries = photos.filter((p) => p.kind !== 'text');
-  await push(await renderCover(photoEntries, eff, title, pro, coverPhotoId));
+  await push(await renderCover(photoEntries, eff, title, pro, lang, coverPhotoId));
 
   // La photo de couverture ne réapparaît dans les pages que si elle porte un
   // commentaire ; sinon elle n'est visible que sur la couverture.
@@ -663,7 +666,7 @@ export async function buildAlbumImages(
       continue;
     }
     await push(
-      await renderPhotoPage(page.items, eff, title, i + 1, perPage, pro, numbered),
+      await renderPhotoPage(page.items, eff, title, i + 1, perPage, pro, numbered, lang),
     );
     numbered += page.items.length;
   }

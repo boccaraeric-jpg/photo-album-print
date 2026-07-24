@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -25,10 +25,21 @@ import {
   comparePhotos,
   loadData,
   loadExportOptions,
+  loadLang,
   saveAlbums,
   saveExportOptions,
+  saveLang,
   savePhotos,
 } from './src/storage';
+import {
+  DEFAULT_LANG,
+  detectDeviceLang,
+  dict,
+  LangContext,
+  SUPPORTED,
+  useLang,
+  type Lang,
+} from './src/i18n';
 import { newId } from './src/id';
 import { extractTakenAt } from './src/exif';
 import { getCurrentCoords, resolveCoords } from './src/photoLocation';
@@ -65,12 +76,40 @@ export default function App() {
   }
   return (
     <SafeAreaProvider>
-      <Root />
+      <LangProvider>
+        <Root />
+      </LangProvider>
     </SafeAreaProvider>
   );
 }
 
+/**
+ * Fournit la langue courante à toute l'app. Au 1er lancement : langue forcée
+ * persistée si elle existe, sinon langue de l'iPhone (repli français). Toute
+ * bascule est mémorisée. Les composants sous ce provider se re-rendent quand la
+ * langue change (le dictionnaire `L` change d'identité).
+ */
+function LangProvider({ children }: { children: ReactNode }) {
+  const [lang, setLangState] = useState<Lang>(DEFAULT_LANG);
+  useEffect(() => {
+    (async () => {
+      const saved = await loadLang();
+      setLangState(saved ?? detectDeviceLang());
+    })();
+  }, []);
+  const setLang = useCallback((next: Lang) => {
+    setLangState(next);
+    saveLang(next);
+  }, []);
+  const value = useMemo(
+    () => ({ lang, setLang, L: dict(lang) }),
+    [lang, setLang],
+  );
+  return <LangContext.Provider value={value}>{children}</LangContext.Provider>;
+}
+
 function Root() {
+  const { L } = useLang();
   const [albums, setAlbums] = useState<Album[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,12 +153,12 @@ function Root() {
   const deleteAlbum = useCallback(
     (album: Album) => {
       Alert.alert(
-        `Supprimer « ${album.name.trim() || 'Sans nom'} » ?`,
-        'Les photos de ce dossier seront retirées de l’app (mais pas de votre photothèque).',
+        L.alert.deleteAlbumTitle(album.name.trim() || L.album.noName),
+        L.alert.deleteAlbumBody,
         [
-          { text: 'Annuler', style: 'cancel' },
+          { text: L.common.cancel, style: 'cancel' },
           {
-            text: 'Supprimer',
+            text: L.common.delete,
             style: 'destructive',
             onPress: () => {
               for (const p of photos) {
@@ -136,7 +175,7 @@ function Root() {
         ],
       );
     },
-    [photos],
+    [photos, L],
   );
 
   const openAlbum = albums.find((a) => a.id === openAlbumId) ?? null;
@@ -195,6 +234,7 @@ function HomeScreen({
   onRename,
   onDelete,
 }: HomeProps) {
+  const { L, lang, setLang } = useLang();
   const insets = useSafeAreaInsets();
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<Album | null>(null);
@@ -204,11 +244,25 @@ function HomeScreen({
       <StatusBar style="dark" />
 
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Text style={styles.kicker}>ALBUM PHOTO</Text>
-        <Text style={styles.homeTitle}>Mes dossiers</Text>
-        <Text style={styles.count}>
-          {albums.length} dossier{albums.length > 1 ? 's' : ''}
-        </Text>
+        <View style={styles.langRow}>
+          {SUPPORTED.map((code) => (
+            <Pressable
+              key={code}
+              hitSlop={8}
+              onPress={() => setLang(code)}
+              style={[styles.langChip, lang === code && styles.langChipOn]}
+            >
+              <Text
+                style={[styles.langText, lang === code && styles.langTextOn]}
+              >
+                {code.toUpperCase()}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={styles.kicker}>{L.home.kicker}</Text>
+        <Text style={styles.homeTitle}>{L.home.title}</Text>
+        <Text style={styles.count}>{L.home.folderCount(albums.length)}</Text>
       </View>
 
       <FlatList
@@ -234,11 +288,8 @@ function HomeScreen({
         }}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Aucun dossier</Text>
-            <Text style={styles.emptyText}>
-              Crée un dossier pour classer tes photos, puis exporte chaque
-              dossier en PDF à imprimer.
-            </Text>
+            <Text style={styles.emptyTitle}>{L.home.emptyTitle}</Text>
+            <Text style={styles.emptyText}>{L.home.emptyText}</Text>
           </View>
         }
       />
@@ -248,15 +299,15 @@ function HomeScreen({
           style={[styles.btn, styles.btnPrimary]}
           onPress={() => setCreating(true)}
         >
-          <Text style={styles.btnPrimaryText}>＋  Nouveau dossier</Text>
+          <Text style={styles.btnPrimaryText}>{L.home.newFolder}</Text>
         </Pressable>
       </View>
 
       <NameModal
         visible={creating}
-        title="Nouveau dossier"
+        title={L.home.createTitle}
         initialValue=""
-        submitLabel="Créer"
+        submitLabel={L.home.createSubmit}
         onSubmit={(name) => {
           setCreating(false);
           onCreate(name);
@@ -266,9 +317,9 @@ function HomeScreen({
 
       <NameModal
         visible={renaming !== null}
-        title="Renommer le dossier"
+        title={L.home.renameTitle}
         initialValue={renaming?.name ?? ''}
-        submitLabel="Renommer"
+        submitLabel={L.home.renameSubmit}
         onSubmit={(name) => {
           if (renaming) onRename(renaming.id, name);
           setRenaming(null);
@@ -298,6 +349,7 @@ function AlbumScreen({
   onSetCover,
   onBack,
 }: AlbumProps) {
+  const { L, lang } = useLang();
   const insets = useSafeAreaInsets();
   const [editing, setEditing] = useState<Photo | null>(null);
   const [adjusting, setAdjusting] = useState<Photo | null>(null);
@@ -390,7 +442,7 @@ function AlbumScreen({
           });
         }
       } catch {
-        Alert.alert('Erreur', "Impossible d'enregistrer la photo.");
+        Alert.alert(L.common.error, L.alert.savePhotoFail);
       }
     },
     [album.id, setPhotos],
@@ -399,10 +451,7 @@ function AlbumScreen({
   const takePhoto = useCallback(async () => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert(
-        'Permission requise',
-        "Autorise l'accès à l'appareil photo dans les réglages pour prendre des photos.",
-      );
+      Alert.alert(L.alert.permTitle, L.alert.permCameraBody);
       return;
     }
     const res = await ImagePicker.launchCameraAsync({ quality: 0.8, exif: true });
@@ -413,10 +462,7 @@ function AlbumScreen({
       try {
         const saved = await saveToPhotoLibrary(asset.uri);
         if (!saved) {
-          Alert.alert(
-            'Photo non ajoutée à Photos',
-            "La photo est bien dans l'album, mais autorise l'ajout à la photothèque dans les réglages pour la conserver aussi dans Photos.",
-          );
+          Alert.alert(L.alert.photoNotAddedTitle, L.alert.photoNotAddedBody);
         }
       } catch {
         // L'échec d'enregistrement dans Photos ne doit pas bloquer l'album.
@@ -430,10 +476,7 @@ function AlbumScreen({
   const pickFromLibrary = useCallback(async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert(
-        'Permission requise',
-        "Autorise l'accès à la galerie dans les réglages pour importer des photos.",
-      );
+      Alert.alert(L.alert.permTitle, L.alert.permLibraryBody);
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -490,7 +533,7 @@ function AlbumScreen({
           }),
         );
       } catch {
-        Alert.alert('Erreur', "Impossible d'enregistrer le recadrage.");
+        Alert.alert(L.common.error, L.alert.saveCropFail);
       } finally {
         setCropping(null);
       }
@@ -534,7 +577,7 @@ function AlbumScreen({
         );
         setAdjusting(null);
       } catch {
-        Alert.alert('Erreur', "Impossible d'appliquer les réglages.");
+        Alert.alert(L.common.error, L.alert.applyAdjustFail);
       }
     },
     [setPhotos],
@@ -542,10 +585,10 @@ function AlbumScreen({
 
   const removePhoto = useCallback(
     (photo: Photo) => {
-      Alert.alert('Supprimer cette photo ?', undefined, [
-        { text: 'Annuler', style: 'cancel' },
+      Alert.alert(L.alert.deletePhotoTitle, undefined, [
+        { text: L.common.cancel, style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: L.common.delete,
           style: 'destructive',
           onPress: () => {
             setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
@@ -560,7 +603,7 @@ function AlbumScreen({
     [setPhotos],
   );
 
-  const albumTitle = album.name.trim() || 'Mon album';
+  const albumTitle = album.name.trim() || L.albumScreen.defaultTitle;
 
   // Étape 1 : prépare l'aperçu (même HTML que le PDF) à partir des options.
   const openPreview = useCallback(
@@ -575,12 +618,13 @@ function AlbumScreen({
           albumTitle,
           options,
           defaultCoverId,
+          lang,
         );
         setPreviewHtml(html);
         setExportVisible(false);
         setPreviewVisible(true);
       } catch {
-        Alert.alert('Erreur', "La préparation de l'aperçu a échoué.");
+        Alert.alert(L.common.error, L.alert.previewFail);
       } finally {
         setPreparing(false);
       }
@@ -599,12 +643,13 @@ function AlbumScreen({
         albumTitle,
         exportOptions,
         defaultCoverId,
+        lang,
       );
       const uri = await htmlToPdfFile(html, albumTitle);
       await shareFile(uri, albumTitle, 'application/pdf', 'com.adobe.pdf');
       setPreviewVisible(false);
     } catch {
-      Alert.alert('Erreur', 'La génération du PDF a échoué.');
+      Alert.alert(L.common.error, L.alert.pdfFail);
     } finally {
       setSending(false);
     }
@@ -621,6 +666,7 @@ function AlbumScreen({
         albumTitle,
         exportOptions,
         defaultCoverId,
+        lang,
       );
       if (uris.length === 0) throw new Error('aucune page générée');
       if (uris.length === 1) {
@@ -631,7 +677,7 @@ function AlbumScreen({
       }
       setPreviewVisible(false);
     } catch {
-      Alert.alert('Erreur', 'La génération des images a échoué.');
+      Alert.alert(L.common.error, L.alert.imagesFail);
     } finally {
       setSending(false);
     }
@@ -645,14 +691,14 @@ function AlbumScreen({
     try {
       const images = orderedPhotos.filter((p) => p.kind !== 'text');
       if (images.length === 0) {
-        Alert.alert('Aucune photo', "Cet album ne contient pas de photo à envoyer.");
+        Alert.alert(L.alert.noPhotoTitle, L.alert.noPhotoBody);
         return;
       }
-      const zip = await zipPhotos(orderedPhotos, albumTitle);
+      const zip = await zipPhotos(orderedPhotos, albumTitle, lang);
       await shareFile(zip, albumTitle, 'application/zip', 'public.zip-archive');
       setPreviewVisible(false);
     } catch {
-      Alert.alert('Erreur', 'La préparation des photos a échoué.');
+      Alert.alert(L.common.error, L.alert.photosPrepFail);
     } finally {
       setSending(false);
     }
@@ -662,11 +708,11 @@ function AlbumScreen({
   // partage native (Messenger, Mail, AirDrop… y figurent selon le contenu).
   const chooseFormat = useCallback(() => {
     if (photos.length === 0) return;
-    Alert.alert('Envoyer le mini album', 'Choisis le format', [
-      { text: 'PDF', onPress: sendPdf },
-      { text: "Images de l'album", onPress: sendImages },
-      { text: 'Photos (à réutiliser)', onPress: sendReusablePhotos },
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert(L.format.title, L.format.subtitle, [
+      { text: L.format.pdf, onPress: sendPdf },
+      { text: L.format.albumImages, onPress: sendImages },
+      { text: L.format.reusablePhotos, onPress: sendReusablePhotos },
+      { text: L.common.cancel, style: 'cancel' },
     ]);
   }, [photos.length, sendPdf, sendImages, sendReusablePhotos]);
 
@@ -689,7 +735,10 @@ function AlbumScreen({
     setExportVisible(true);
   }, [photos.length, exportOptions]);
 
-  const sendLabel = exportOptions.style === 'pro' ? 'Envoyer' : "Partager l'album";
+  const sendLabel =
+    exportOptions.style === 'pro'
+      ? L.albumScreen.sendLabelPro
+      : L.albumScreen.sendLabelFamily;
 
   return (
     <View style={styles.screen}>
@@ -698,38 +747,36 @@ function AlbumScreen({
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable hitSlop={14} onPress={onBack} style={styles.backBtn}>
           <Text style={styles.backLink}>
-            <Text style={styles.backChevron}>‹ </Text>Dossiers
+            <Text style={styles.backChevron}>‹ </Text>{L.albumScreen.back}
           </Text>
         </Pressable>
         <TextInput
           style={styles.titleInput}
           value={album.name}
           onChangeText={onRename}
-          placeholder="Nom du dossier"
+          placeholder={L.nameModal.folderPlaceholder}
           placeholderTextColor="#9ca3af"
           autoCorrect
           spellCheck
           autoCapitalize="sentences"
         />
-        <Text style={styles.count}>
-          {photos.length} photo{photos.length > 1 ? 's' : ''}
-        </Text>
+        <Text style={styles.count}>{L.album.photoCount(photos.length)}</Text>
         <View style={styles.topActions}>
           <Pressable
             style={[styles.topBtn, styles.btnLight]}
             onPress={takePhoto}
           >
-            <Text style={styles.btnLightText}>＋  Nouvelle photo</Text>
+            <Text style={styles.btnLightText}>{L.albumScreen.newPhoto}</Text>
           </Pressable>
           <Pressable
             style={[styles.topBtn, styles.btnLight]}
             onPress={pickFromLibrary}
           >
-            <Text style={styles.btnLightText}>🖼  Galerie photos</Text>
+            <Text style={styles.btnLightText}>{L.albumScreen.gallery}</Text>
           </Pressable>
         </View>
         <Pressable style={styles.textPageBtn} onPress={addTextPage}>
-          <Text style={styles.textPageBtnText}>＋ Page de texte</Text>
+          <Text style={styles.textPageBtnText}>{L.albumScreen.textPage}</Text>
         </Pressable>
       </View>
 
@@ -755,24 +802,19 @@ function AlbumScreen({
         )}
         ListHeaderComponent={
           photos.length > 1 ? (
-            <Text style={styles.reorderHint}>
-              Utilisez ▲▼ pour réordonner les photos
-            </Text>
+            <Text style={styles.reorderHint}>{L.albumScreen.reorderHint}</Text>
           ) : null
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Aucune photo</Text>
-            <Text style={styles.emptyText}>
-              Prenez une photo ou importez-en une depuis votre galerie photo de
-              votre portable, puis ajoutez un commentaire si vous le souhaitez.
-            </Text>
+            <Text style={styles.emptyTitle}>{L.albumScreen.emptyTitle}</Text>
+            <Text style={styles.emptyText}>{L.albumScreen.emptyText}</Text>
           </View>
         }
       />
 
       <View style={[styles.toolbar, { paddingBottom: insets.bottom + 12 }]}>
-        <Text style={styles.renduLabel}>CRÉEZ VOTRE ALBUM EN MODE</Text>
+        <Text style={styles.renduLabel}>{L.albumScreen.modeLabel}</Text>
         {preparing ? (
           <View style={[styles.btn, styles.btnFamilial]}>
             <ActivityIndicator color={C.paper} />
@@ -789,9 +831,9 @@ function AlbumScreen({
               disabled={photos.length === 0}
               onPress={openFamilial}
             >
-              <Text style={styles.btnActionText}>Privé</Text>
+              <Text style={styles.btnActionText}>{L.albumScreen.private}</Text>
             </Pressable>
-            <Text style={styles.orText}>ou</Text>
+            <Text style={styles.orText}>{L.albumScreen.or}</Text>
             <Pressable
               style={[
                 styles.btn,
@@ -802,7 +844,7 @@ function AlbumScreen({
               disabled={photos.length === 0}
               onPress={openPro}
             >
-              <Text style={styles.btnActionText}>Professionnel</Text>
+              <Text style={styles.btnActionText}>{L.albumScreen.professional}</Text>
             </Pressable>
           </View>
         )}
@@ -875,6 +917,26 @@ const styles = StyleSheet.create({
     color: C.sienna,
     letterSpacing: 3,
   },
+  langRow: {
+    flexDirection: 'row',
+    alignSelf: 'flex-end',
+    gap: 6,
+    marginBottom: 6,
+  },
+  langChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: C.tan,
+  },
+  langChipOn: { backgroundColor: C.sienna },
+  langText: {
+    fontFamily: F.monoBold,
+    fontSize: 12,
+    color: C.inkSoft,
+    letterSpacing: 1,
+  },
+  langTextOn: { color: C.paper },
   backBtn: { alignSelf: 'flex-start', paddingVertical: 4, marginBottom: 4 },
   backLink: {
     fontFamily: F.monoBold,

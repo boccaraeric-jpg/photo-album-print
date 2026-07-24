@@ -4,6 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import type { ExportOptions, Photo } from './types';
 import { readPrintBase64 } from './photoFiles';
 import { fileDateStamp, formatPhotoDate, photoDate } from './dateFormat';
+import { dict, localeTag, type Lang } from './i18n';
 import { paginateEntries, PER_PAGE } from './paginate';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 
@@ -43,12 +44,12 @@ function escapeHtml(input: string): string {
 }
 
 /** Période couverte par l'album (ex. « mai – juin 2026 »), pour la couverture. */
-function formatRange(photos: Photo[]): string {
+function formatRange(photos: Photo[], lang: Lang): string {
   const times = photos.map(photoDate);
   const first = new Date(Math.min(...times));
   const last = new Date(Math.max(...times));
   const monthYear = (d: Date) =>
-    d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    d.toLocaleDateString(localeTag(lang), { month: 'long', year: 'numeric' });
   return monthYear(first) === monthYear(last)
     ? monthYear(first)
     : `${monthYear(first)} – ${monthYear(last)}`;
@@ -82,14 +83,15 @@ function figureHtml(
   item: Item,
   variant: '' | 'solo' | 'large',
   dateFormat: ExportOptions['dateFormat'],
+  lang: Lang,
 ): string {
   const { photo, src } = item;
   const comment = photo.comment.trim();
   const place = photo.place?.trim();
-  const date = formatPhotoDate(photoDate(photo), dateFormat);
+  const date = formatPhotoDate(photoDate(photo), dateFormat, lang);
   const img = src
     ? `<img src="${src}" />`
-    : '<span class="missing">Image indisponible</span>';
+    : `<span class="missing">${dict(lang).doc.imageUnavailable}</span>`;
   const meta = [place, date].filter(Boolean).join(' · ');
   const caption =
     comment || meta
@@ -111,12 +113,13 @@ function pageHtml(
   title: string,
   pageNo: number,
   dateFormat: ExportOptions['dateFormat'],
+  lang: Lang,
 ): string {
   // Page d'une seule photo : « large » si c'est la taille choisie,
   // « solo » si c'est une exception (commentaire long ou photo restante).
   const variant = group.length > 1 ? '' : perPage === 1 ? 'large' : 'solo';
   const figures = group
-    .map((item) => figureHtml(item, variant, dateFormat))
+    .map((item) => figureHtml(item, variant, dateFormat, lang))
     .join('');
   // En taille « petite », les photos s'organisent en grille 2 colonnes.
   const body =
@@ -131,12 +134,12 @@ function pageHtml(
 }
 
 /** Photo pleine page (bord à bord) + légende courte (≤ 15 mots) en pied. */
-function fullPageHtml(item: Item): string {
+function fullPageHtml(item: Item, lang: Lang): string {
   const { photo, src } = item;
   const comment = limitWords(photo.comment, 15);
   const img = src
     ? `<img src="${src}" />`
-    : '<span class="missing">Image indisponible</span>';
+    : `<span class="missing">${dict(lang).doc.imageUnavailable}</span>`;
   return `
     <section class="sheet full-sheet">
       <div class="full-img">${img}</div>
@@ -371,6 +374,7 @@ export async function buildAlbumHtml(
   title: string,
   options: ExportOptions,
   coverPhotoId?: string,
+  lang: Lang = 'fr',
 ): Promise<string> {
   // Budget adaptatif : plus il y a de photos, plus on réduit chacune pour que le
   // PDF final reste transmissible (cible ~10 Mo). À 1600 px / q0.72 une photo
@@ -394,12 +398,12 @@ export async function buildAlbumHtml(
   // Rendu professionnel : gabarit sobre imposé (fond blanc, photos numérotées,
   // date/heure + lieu + description), indépendant des réglages familiaux.
   if (options.style === 'pro') {
-    return buildProDocument(items, title, options.textAlign);
+    return buildProDocument(items, title, options.textAlign, lang);
   }
 
   // Les pages de texte ne comptent pas comme des photos (couverture, année).
   const photoEntries = photos.filter((p) => p.kind !== 'text');
-  const range = photoEntries.length ? formatRange(photoEntries) : '';
+  const range = photoEntries.length ? formatRange(photoEntries, lang) : '';
   // Mode familial : on n'affiche pas le nombre total de photos (juste la période).
   const subtitle = range;
   // Photo de couverture : celle choisie par l'utilisateur (étoile),
@@ -425,13 +429,13 @@ export async function buildAlbumHtml(
       const groupItems = page.items.map(
         (p) => items.find((it) => it.photo.id === p.id)!,
       );
-      if (options.photoSize === 'full') return fullPageHtml(groupItems[0]);
-      return pageHtml(groupItems, perPage, title, no, options.dateFormat);
+      if (options.photoSize === 'full') return fullPageHtml(groupItems[0], lang);
+      return pageHtml(groupItems, perPage, title, no, options.dateFormat, lang);
     })
     .join('');
 
   return `<!DOCTYPE html>
-    <html lang="fr">
+    <html lang="${lang}">
       <head>
         <meta charset="utf-8" />
         <!-- width = largeur de page A4 en points : l'aperçu WebView met la page
@@ -465,22 +469,23 @@ function proMeta(label: string, value: string): string {
   return `<div class="row"><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`;
 }
 
-function proEntryHtml(item: Item, number: number): string {
+function proEntryHtml(item: Item, number: number, lang: Lang): string {
   const { photo, src } = item;
-  const date = formatPhotoDate(photoDate(photo), 'full') || '—';
+  const D = dict(lang).doc;
+  const date = formatPhotoDate(photoDate(photo), 'full', lang) || '—';
   const place = photo.place?.trim() || '—';
   const desc = photo.comment.trim() || '—';
   const img = src
     ? `<img src="${src}" />`
-    : '<span class="missing">Image indisponible</span>';
+    : `<span class="missing">${D.imageUnavailable}</span>`;
   return `
     <article class="entry">
-      <div class="num">Photo n° ${number}</div>
+      <div class="num">${D.photoNo(number)}</div>
       <div class="frame">${img}</div>
       <dl class="meta">
-        ${proMeta('Lieu', place)}
-        ${proMeta('Date', date)}
-        ${proMeta('Description', desc)}
+        ${proMeta(D.place, place)}
+        ${proMeta(D.date, date)}
+        ${proMeta(D.description, desc)}
       </dl>
     </article>`;
 }
@@ -500,6 +505,7 @@ function buildProDocument(
   items: Item[],
   title: string,
   textAlign: ExportOptions['textAlign'],
+  lang: Lang,
 ): string {
   // Les photos sont numérotées ; les pages de texte s'intercalent en pleine page.
   let photoNo = 0;
@@ -507,10 +513,10 @@ function buildProDocument(
     .map((it) =>
       it.photo.kind === 'text'
         ? proTextPageHtml(it.photo)
-        : proEntryHtml(it, ++photoNo),
+        : proEntryHtml(it, ++photoNo, lang),
     )
     .join('');
-  const today = new Date().toLocaleDateString('fr-FR', {
+  const today = new Date().toLocaleDateString(localeTag(lang), {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -545,8 +551,9 @@ function buildProDocument(
       padding: 64px 56px 0; text-align: ${textAlign}; white-space: pre-wrap;
       font-size: 20px; line-height: 1.7; color: #14181f; }`;
 
+  const D = dict(lang).doc;
   return `<!DOCTYPE html>
-    <html lang="fr">
+    <html lang="${lang}">
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=${PAGE_WIDTH}, initial-scale=1" />
@@ -557,8 +564,8 @@ function buildProDocument(
           <h1>${escapeHtml(title)}</h1>
           <div class="rule"></div>
           <dl>
-            ${proMeta('Établi le', today)}
-            ${proMeta('Nombre de photos', String(items.length))}
+            ${proMeta(D.establishedOn, today)}
+            ${proMeta(D.photoCountLabel, String(items.length))}
           </dl>
         </section>
         <main class="pages">${entries}</main>

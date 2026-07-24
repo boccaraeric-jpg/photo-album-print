@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { F } from '../theme';
+import { useLang } from '../i18n';
 import type { Photo } from '../types';
 import { checkSpelling, type SpellMatch } from '../spellcheck';
 import { SpellCheckModal } from './SpellCheckModal';
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export function CommentModal({ photo, onSave, onClose }: Props) {
+  const { L, lang } = useLang();
   const [text, setText] = useState('');
   const [place, setPlace] = useState('');
   const [checking, setChecking] = useState(false);
@@ -43,15 +45,15 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
     try {
       const found = await checkSpelling(text);
       if (found.length === 0) {
-        Alert.alert('Orthographe', 'Aucune faute détectée.');
+        Alert.alert(L.comment.spellTitle, L.comment.spellNone);
       } else {
         setMatches(found);
         setSpellVisible(true);
       }
     } catch {
       Alert.alert(
-        'Correcteur indisponible',
-        "La vérification n'a pas pu aboutir. Réessaie.",
+        L.comment.spellUnavailableTitle,
+        L.comment.spellUnavailableBody,
       );
     } finally {
       setChecking(false);
@@ -88,14 +90,14 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
               />
             )}
             <Text style={styles.label}>
-              {isText ? 'Texte de la page' : 'Commentaire'}
+              {isText ? L.comment.textLabel : L.comment.commentLabel}
             </Text>
             <TextInput
               style={[styles.input, isText && styles.inputText]}
               value={text}
               onChangeText={setText}
               placeholder={
-                isText ? 'Écrivez le texte de cette page…' : 'Commentez ce moment…'
+                isText ? L.comment.textPlaceholder : L.comment.commentPlaceholder
               }
               placeholderTextColor="#9ca3af"
               multiline
@@ -109,32 +111,36 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
               autoCapitalize="sentences"
               keyboardType="default"
             />
-            <Pressable
-              style={styles.spellBtn}
-              onPress={runSpellCheck}
-              disabled={checking || !text.trim()}
-            >
-              {checking ? (
-                <ActivityIndicator color="#A64B24" size="small" />
-              ) : (
-                <Text
-                  style={[
-                    styles.spellText,
-                    !text.trim() && styles.spellTextDisabled,
-                  ]}
-                >
-                  ✓ Vérifier orthographe & grammaire
-                </Text>
-              )}
-            </Pressable>
+            {/* Passe offline = index phonétique FR : proposée seulement en
+                français. En anglais, le correcteur natif iOS suffit. */}
+            {lang === 'fr' && (
+              <Pressable
+                style={styles.spellBtn}
+                onPress={runSpellCheck}
+                disabled={checking || !text.trim()}
+              >
+                {checking ? (
+                  <ActivityIndicator color="#A64B24" size="small" />
+                ) : (
+                  <Text
+                    style={[
+                      styles.spellText,
+                      !text.trim() && styles.spellTextDisabled,
+                    ]}
+                  >
+                    {L.comment.checkButton}
+                  </Text>
+                )}
+              </Pressable>
+            )}
             {!isText && (
               <>
-                <Text style={styles.label}>Lieu</Text>
+                <Text style={styles.label}>{L.comment.placeLabel}</Text>
                 <TextInput
                   style={styles.inputLine}
                   value={place}
                   onChangeText={setPlace}
-                  placeholder="Lieu de la prise de vue…"
+                  placeholder={L.comment.placePlaceholder}
                   placeholderTextColor="#9ca3af"
                   // Lieu = nom propre : on souligne les fautes (spellCheck) mais
                   // on n'autocorrige pas (éviter de déformer « Étretat » & co.).
@@ -147,13 +153,13 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
           </ScrollView>
           <View style={styles.actions}>
             <Pressable style={[styles.btn, styles.btnGhost]} onPress={onClose}>
-              <Text style={styles.btnGhostText}>Annuler</Text>
+              <Text style={styles.btnGhostText}>{L.common.cancel}</Text>
             </Pressable>
             <Pressable
               style={[styles.btn, styles.btnPrimary]}
               onPress={() => photo && onSave(photo.id, text.trim(), place.trim())}
             >
-              <Text style={styles.btnPrimaryText}>Enregistrer</Text>
+              <Text style={styles.btnPrimaryText}>{L.common.save}</Text>
             </Pressable>
           </View>
         </View>

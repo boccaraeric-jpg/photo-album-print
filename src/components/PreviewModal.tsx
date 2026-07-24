@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 
 import { F } from '../theme';
+import { useLang } from '../i18n';
 
 interface Props {
   visible: boolean;
@@ -42,6 +43,7 @@ export function PreviewModal({
   onEditLayout,
   onSend,
 }: Props) {
+  const { L } = useLang();
   const insets = useSafeAreaInsets();
 
   return (
@@ -49,12 +51,10 @@ export function PreviewModal({
       <View style={styles.screen}>
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
           <Pressable hitSlop={10} onPress={onBackToAlbum} disabled={sending}>
-            <Text style={styles.backLink}>‹ Modifier l'album</Text>
+            <Text style={styles.backLink}>{L.preview.editAlbum}</Text>
           </Pressable>
-          <Text style={styles.title}>Aperçu avant envoi</Text>
-          <Text style={styles.subtitle}>
-            Faites défiler pour vérifier chaque page
-          </Text>
+          <Text style={styles.title}>{L.preview.title}</Text>
+          <Text style={styles.subtitle}>{L.preview.subtitle}</Text>
         </View>
 
         <View style={styles.webWrap}>
@@ -79,7 +79,7 @@ export function PreviewModal({
             onPress={onEditLayout}
             disabled={sending}
           >
-            <Text style={styles.btnGhostText}>Mise en page</Text>
+            <Text style={styles.btnGhostText}>{L.preview.layout}</Text>
           </Pressable>
           <Pressable
             style={[styles.btn, styles.btnPrimary, sending && styles.btnDisabled]}

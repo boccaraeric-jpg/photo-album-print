@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImageManipulator from 'expo-image-manipulator';
 import type { Photo } from '../types';
 import { C, F } from '../theme';
+import { useLang } from '../i18n';
 
 interface Props {
   /** Photo à recadrer, ou null si fermé. */
@@ -62,6 +63,7 @@ function computeCrop(
  * indiquant la zone gardée ; application via expo-image-manipulator.
  */
 export function CropModal({ photo, onSave, onClose }: Props) {
+  const { L } = useLang();
   const insets = useSafeAreaInsets();
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [ratioIdx, setRatioIdx] = useState(0);
@@ -118,7 +120,7 @@ export function CropModal({ photo, onSave, onClose }: Props) {
       );
       onSave(photo.id, res.uri);
     } catch {
-      Alert.alert('Erreur', 'Le recadrage a échoué.');
+      Alert.alert(L.common.error, L.crop.failed);
     } finally {
       setApplying(false);
     }
@@ -137,7 +139,7 @@ export function CropModal({ photo, onSave, onClose }: Props) {
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View style={[styles.screen, { paddingTop: insets.top + 12 }]}>
-        <Text style={styles.title}>Recadrer</Text>
+        <Text style={styles.title}>{L.crop.title}</Text>
 
         <View style={styles.box}>
           <Image
@@ -165,24 +167,34 @@ export function CropModal({ photo, onSave, onClose }: Props) {
           )}
         </View>
 
-        <Text style={styles.label}>Format</Text>
+        <Text style={styles.label}>{L.crop.format}</Text>
         <View style={styles.row}>
-          {RATIOS.map((ro, i) => chip(ro.label, ratioIdx === i, () => setRatioIdx(i)))}
+          {RATIOS.map((ro, i) =>
+            chip(
+              ro.value === 'original'
+                ? L.crop.ratioOriginal
+                : ro.value === 'square'
+                  ? L.crop.ratioSquare
+                  : ro.label,
+              ratioIdx === i,
+              () => setRatioIdx(i),
+            ),
+          )}
         </View>
 
         {r != null && (
           <>
-            <Text style={styles.label}>Position horizontale</Text>
+            <Text style={styles.label}>{L.crop.hPosition}</Text>
             <View style={styles.row}>
-              {chip('Gauche', ax === 'left', () => setAx('left'))}
-              {chip('Centre', ax === 'center', () => setAx('center'))}
-              {chip('Droite', ax === 'right', () => setAx('right'))}
+              {chip(L.crop.left, ax === 'left', () => setAx('left'))}
+              {chip(L.crop.center, ax === 'center', () => setAx('center'))}
+              {chip(L.crop.right, ax === 'right', () => setAx('right'))}
             </View>
-            <Text style={styles.label}>Position verticale</Text>
+            <Text style={styles.label}>{L.crop.vPosition}</Text>
             <View style={styles.row}>
-              {chip('Haut', ay === 'top', () => setAy('top'))}
-              {chip('Centre', ay === 'center', () => setAy('center'))}
-              {chip('Bas', ay === 'bottom', () => setAy('bottom'))}
+              {chip(L.crop.top, ay === 'top', () => setAy('top'))}
+              {chip(L.crop.center, ay === 'center', () => setAy('center'))}
+              {chip(L.crop.bottom, ay === 'bottom', () => setAy('bottom'))}
             </View>
           </>
         )}
@@ -193,7 +205,7 @@ export function CropModal({ photo, onSave, onClose }: Props) {
             onPress={onClose}
             disabled={applying}
           >
-            <Text style={styles.btnGhostText}>Annuler</Text>
+            <Text style={styles.btnGhostText}>{L.common.cancel}</Text>
           </Pressable>
           <Pressable
             style={[styles.btn, styles.btnPrimary, applying && styles.disabled]}
@@ -203,7 +215,7 @@ export function CropModal({ photo, onSave, onClose }: Props) {
             {applying ? (
               <ActivityIndicator color={C.paper} />
             ) : (
-              <Text style={styles.btnPrimaryText}>Appliquer</Text>
+              <Text style={styles.btnPrimaryText}>{L.crop.apply}</Text>
             )}
           </Pressable>
         </View>

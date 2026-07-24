@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { SpellMatch } from '../spellcheck';
 import { F } from '../theme';
+import { useLang } from '../i18n';
 
 interface Props {
   visible: boolean;
@@ -29,6 +30,7 @@ export function SpellCheckModal({
   onApply,
   onClose,
 }: Props) {
+  const { L } = useLang();
   const [index, setIndex] = useState(0);
   const [workText, setWorkText] = useState(text);
   const [items, setItems] = useState<SpellMatch[]>(matches);
@@ -84,7 +86,7 @@ export function SpellCheckModal({
     <View style={styles.overlay}>
       <View style={styles.card}>
           <Text style={styles.progress}>
-            Faute {index + 1} sur {items.length}
+            {L.spell.progress(index + 1, items.length)}
           </Text>
 
           <Text style={styles.context}>
@@ -97,7 +99,7 @@ export function SpellCheckModal({
 
           {match.suggestions.length > 0 ? (
             <>
-              <Text style={styles.label}>Remplacer par :</Text>
+              <Text style={styles.label}>{L.spell.replaceWith}</Text>
               <ScrollView
                 style={styles.suggScroll}
                 keyboardShouldPersistTaps="handled"
@@ -114,15 +116,15 @@ export function SpellCheckModal({
               </ScrollView>
             </>
           ) : (
-            <Text style={styles.noSugg}>Aucune suggestion proposée.</Text>
+            <Text style={styles.noSugg}>{L.spell.noSuggestion}</Text>
           )}
 
           <View style={styles.actions}>
             <Pressable style={[styles.btn, styles.btnGhost]} onPress={onClose}>
-              <Text style={styles.btnGhostText}>Fermer</Text>
+              <Text style={styles.btnGhostText}>{L.common.close}</Text>
             </Pressable>
             <Pressable style={[styles.btn, styles.btnLight]} onPress={goNext}>
-              <Text style={styles.btnLightText}>Ignorer</Text>
+              <Text style={styles.btnLightText}>{L.spell.ignore}</Text>
             </Pressable>
           </View>
         </View>

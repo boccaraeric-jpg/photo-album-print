@@ -16,6 +16,7 @@ import {
   vec,
 } from '@shopify/react-native-skia';
 import { C, F } from '../theme';
+import { useLang } from '../i18n';
 
 interface Props {
   /** L'utilisateur entre dans l'app (bouton « Commencer »). */
@@ -25,6 +26,7 @@ interface Props {
 /** Écran d'accueil « Chambre Claire » : halo + reflet symétrique (Skia), logo,
  *  titre CLICMEMO et bouton d'entrée. */
 export function WelcomeScreen({ onEnter }: Props) {
+  const { L } = useLang();
   const insets = useSafeAreaInsets();
   const { width: W, height: H } = useWindowDimensions();
 
@@ -78,13 +80,11 @@ export function WelcomeScreen({ onEnter }: Props) {
             />
           </View>
           <Text style={styles.title}>ComClic</Text>
-          <Text style={styles.kicker}>
-            Commentez vos photos, sauvegardez ou partagez-les
-          </Text>
+          <Text style={styles.kicker}>{L.welcome.kicker}</Text>
         </View>
 
         <Pressable style={styles.cta} onPress={onEnter}>
-          <Text style={styles.ctaText}>Commencer</Text>
+          <Text style={styles.ctaText}>{L.welcome.start}</Text>
         </Pressable>
       </View>
     </View>

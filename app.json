@@ -12,7 +12,10 @@
       "infoPlist": {
         "CFBundleDevelopmentRegion": "fr",
         "CFBundleAllowMixedLocalizations": true,
-        "CFBundleLocalizations": ["fr", "en"],
+        "CFBundleLocalizations": [
+          "fr",
+          "en"
+        ],
         "NSCameraUsageDescription": "L'app utilise l'appareil photo pour prendre les photos de votre album.",
         "NSPhotoLibraryUsageDescription": "L'app accède à votre galerie pour importer des photos dans votre album.",
         "NSLocationWhenInUseUsageDescription": "L'app utilise la localisation des photos pour indiquer le lieu de prise de vue sous chacune."
@@ -54,7 +57,8 @@
           "savePhotosPermission": "L'app enregistre les photos prises dans votre photothèque."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-localization"
     ],
     "extra": {
       "eas": {

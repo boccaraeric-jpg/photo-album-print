@@ -1,6 +1,7 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Album } from '../types';
 import { C, F } from '../theme';
+import { localeTag, useLang } from '../i18n';
 
 interface Props {
   album: Album;
@@ -21,6 +22,7 @@ export function AlbumCard({
   onRename,
   onDelete,
 }: Props) {
+  const { L, lang } = useLang();
   return (
     <Pressable style={styles.card} onPress={() => onOpen(album)}>
       {thumbUri ? (
@@ -32,18 +34,17 @@ export function AlbumCard({
       )}
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={2}>
-          {album.name.trim() || 'Sans nom'}
+          {album.name.trim() || L.album.noName}
         </Text>
-        <Text style={styles.count}>
-          {count} photo{count > 1 ? 's' : ''}
-        </Text>
+        <Text style={styles.count}>{L.album.photoCount(count)}</Text>
         <Text style={styles.created}>
-          Créé le{' '}
-          {new Date(album.createdAt).toLocaleDateString('fr-FR', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-          })}
+          {L.album.createdOn(
+            new Date(album.createdAt).toLocaleDateString(localeTag(lang), {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+            }),
+          )}
         </Text>
       </View>
       <View style={styles.actions}>

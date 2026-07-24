@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { F } from '../theme';
+import { useLang } from '../i18n';
 import type { DateFormat, ExportOptions, FrameStyle, PhotoSize } from '../types';
 
 interface Props {
@@ -21,33 +22,11 @@ interface Props {
   onClose: () => void;
 }
 
-const SIZES: { value: PhotoSize; label: string; hint: string }[] = [
-  { value: 'small', label: 'Petite', hint: '4 / page' },
-  { value: 'medium', label: 'Moyenne', hint: '2 / page' },
-  { value: 'large', label: 'Grande', hint: '1 / page' },
-  { value: 'full', label: 'Pleine page', hint: 'bord à bord' },
-];
-
-const FRAMES: { value: FrameStyle; label: string }[] = [
-  { value: 'card', label: 'Cadre' },
-  { value: 'border', label: 'Bordure' },
-  { value: 'polaroid', label: 'Polaroïd' },
-  { value: 'none', label: 'Sans cadre' },
-];
-
-const DATE_ALIGNS: { value: 'left' | 'center' | 'right'; label: string }[] = [
-  { value: 'left', label: 'Gauche' },
-  { value: 'center', label: 'Centre' },
-  { value: 'right', label: 'Droite' },
-];
-
-const DATE_FORMATS: { value: DateFormat; label: string; hint: string }[] = [
-  { value: 'short', label: 'Simple', hint: '08/07/2026' },
-  { value: 'shortTime', label: 'Simple + heure', hint: '08/07/2026 à 19h37' },
-  { value: 'long', label: 'Détaillée', hint: 'mercredi 8 juillet 2026' },
-  { value: 'full', label: 'Complète', hint: '… à 19h37' },
-  { value: 'none', label: 'Aucune', hint: 'sans date' },
-];
+// Ordres d'affichage (les libellés viennent du dictionnaire, cf. `L.export.*`).
+const SIZE_KEYS: PhotoSize[] = ['small', 'medium', 'large', 'full'];
+const FRAME_KEYS: FrameStyle[] = ['card', 'border', 'polaroid', 'none'];
+const ALIGN_KEYS: ('left' | 'center' | 'right')[] = ['left', 'center', 'right'];
+const DATE_FORMAT_KEYS: DateFormat[] = ['short', 'shortTime', 'long', 'full', 'none'];
 
 const BACKGROUNDS = [
   '#f6f1e9', // crème
@@ -69,6 +48,7 @@ export function ExportModal({
   onPreview,
   onClose,
 }: Props) {
+  const { L } = useLang();
   const [options, setOptions] = useState<ExportOptions>(initial);
 
   // Repart des dernières options à chaque ouverture.
@@ -86,18 +66,15 @@ export function ExportModal({
       <View style={styles.backdrop}>
         <View style={styles.sheet}>
           <View style={styles.handle} />
-          <Text style={styles.title}>Mise en page</Text>
+          <Text style={styles.title}>{L.export.title}</Text>
 
           {options.style === 'pro' ? (
-            <Text style={styles.proNote}>
-              Mise en page sobre imposée : fond blanc, photos numérotées, avec
-              date/heure, lieu et description sous chacune.
-            </Text>
+            <Text style={styles.proNote}>{L.export.proNote}</Text>
           ) : (
             <>
-          <Text style={styles.label}>Taille des photos</Text>
+          <Text style={styles.label}>{L.export.sizeLabel}</Text>
           <View style={styles.chips}>
-            {SIZES.map(({ value, label, hint }) => {
+            {SIZE_KEYS.map((value) => {
               const selected = options.photoSize === value;
               return (
                 <Pressable
@@ -108,19 +85,19 @@ export function ExportModal({
                   <Text
                     style={[styles.chipText, selected && styles.chipTextSelected]}
                   >
-                    {label}
+                    {L.export.sizes[value]}
                   </Text>
                   <Text
                     style={[styles.chipHint, selected && styles.chipHintSelected]}
                   >
-                    {hint}
+                    {L.export.sizeHints[value]}
                   </Text>
                 </Pressable>
               );
             })}
           </View>
 
-          <Text style={styles.label}>Couleur du fond</Text>
+          <Text style={styles.label}>{L.export.bgLabel}</Text>
           <View style={styles.chips}>
             {BACKGROUNDS.map((color) => {
               const selected = options.background === color;
@@ -138,9 +115,9 @@ export function ExportModal({
             })}
           </View>
 
-          <Text style={styles.label}>Encadrement</Text>
+          <Text style={styles.label}>{L.export.frameLabel}</Text>
           <View style={styles.chips}>
-            {FRAMES.map(({ value, label }) => {
+            {FRAME_KEYS.map((value) => {
               const selected = options.frame === value;
               return (
                 <Pressable
@@ -151,39 +128,36 @@ export function ExportModal({
                   <Text
                     style={[styles.chipText, selected && styles.chipTextSelected]}
                   >
-                    {label}
+                    {L.export.frames[value]}
                   </Text>
                 </Pressable>
               );
             })}
           </View>
 
-          <Text style={styles.label}>Liseré autour de la photo</Text>
+          <Text style={styles.label}>{L.export.liseretLabel}</Text>
           <View style={styles.chips}>
-            {[
-              { value: true, label: 'Oui' },
-              { value: false, label: 'Non' },
-            ].map(({ value, label }) => {
+            {([true, false] as const).map((value) => {
               const selected = options.liseret === value;
               return (
                 <Pressable
-                  key={label}
+                  key={String(value)}
                   style={[styles.chip, selected && styles.chipSelected]}
                   onPress={() => setOptions((o) => ({ ...o, liseret: value }))}
                 >
                   <Text
                     style={[styles.chipText, selected && styles.chipTextSelected]}
                   >
-                    {label}
+                    {value ? L.export.yes : L.export.no}
                   </Text>
                 </Pressable>
               );
             })}
           </View>
 
-          <Text style={styles.label}>Date sous les photos</Text>
+          <Text style={styles.label}>{L.export.dateLabel}</Text>
           <View style={styles.chips}>
-            {DATE_FORMATS.map(({ value, label, hint }) => {
+            {DATE_FORMAT_KEYS.map((value) => {
               const selected = options.dateFormat === value;
               return (
                 <Pressable
@@ -194,12 +168,12 @@ export function ExportModal({
                   <Text
                     style={[styles.chipText, selected && styles.chipTextSelected]}
                   >
-                    {label}
+                    {L.export.dateFormats[value]}
                   </Text>
                   <Text
                     style={[styles.chipHint, selected && styles.chipHintSelected]}
                   >
-                    {hint}
+                    {L.export.dateHints[value]}
                   </Text>
                 </Pressable>
               );
@@ -208,9 +182,9 @@ export function ExportModal({
 
           {options.dateFormat !== 'none' && (
             <>
-              <Text style={styles.label}>Position de la date</Text>
+              <Text style={styles.label}>{L.export.datePosLabel}</Text>
               <View style={styles.chips}>
-                {DATE_ALIGNS.map(({ value, label }) => {
+                {ALIGN_KEYS.map((value) => {
                   const selected = options.dateAlign === value;
                   return (
                     <Pressable
@@ -226,7 +200,7 @@ export function ExportModal({
                           selected && styles.chipTextSelected,
                         ]}
                       >
-                        {label}
+                        {L.export.aligns[value]}
                       </Text>
                     </Pressable>
                   );
@@ -237,9 +211,9 @@ export function ExportModal({
             </>
           )}
 
-          <Text style={styles.label}>Alignement du texte (pages de texte)</Text>
+          <Text style={styles.label}>{L.export.textAlignLabel}</Text>
           <View style={styles.chips}>
-            {DATE_ALIGNS.map(({ value, label }) => {
+            {ALIGN_KEYS.map((value) => {
               const selected = options.textAlign === value;
               return (
                 <Pressable
@@ -250,7 +224,7 @@ export function ExportModal({
                   <Text
                     style={[styles.chipText, selected && styles.chipTextSelected]}
                   >
-                    {label}
+                    {L.export.aligns[value]}
                   </Text>
                 </Pressable>
               );
@@ -263,7 +237,7 @@ export function ExportModal({
               onPress={onClose}
               disabled={preparing}
             >
-              <Text style={styles.btnGhostText}>Annuler</Text>
+              <Text style={styles.btnGhostText}>{L.common.cancel}</Text>
             </Pressable>
             <Pressable
               style={[styles.btn, styles.btnPrimary, preparing && styles.btnDisabled]}
@@ -273,7 +247,7 @@ export function ExportModal({
               {preparing ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.btnPrimaryText}>Aperçu →</Text>
+                <Text style={styles.btnPrimaryText}>{L.export.previewBtn} →</Text>
               )}
             </Pressable>
           </View>

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { F } from '../theme';
+import { useLang } from '../i18n';
 
 interface Props {
   visible: boolean;
@@ -32,6 +33,7 @@ export function NameModal({
   onSubmit,
   onClose,
 }: Props) {
+  const { L } = useLang();
   const [text, setText] = useState(initialValue);
 
   // Réinitialise le champ à chaque ouverture.
@@ -59,7 +61,7 @@ export function NameModal({
             style={styles.input}
             value={text}
             onChangeText={setText}
-            placeholder="Nom du dossier"
+            placeholder={L.nameModal.folderPlaceholder}
             placeholderTextColor="#9ca3af"
             autoFocus
             autoCorrect
@@ -70,7 +72,7 @@ export function NameModal({
           />
           <View style={styles.actions}>
             <Pressable style={[styles.btn, styles.btnGhost]} onPress={onClose}>
-              <Text style={styles.btnGhostText}>Annuler</Text>
+              <Text style={styles.btnGhostText}>{L.common.cancel}</Text>
             </Pressable>
             <Pressable
               style={[styles.btn, styles.btnPrimary, !name && styles.btnDisabled]}

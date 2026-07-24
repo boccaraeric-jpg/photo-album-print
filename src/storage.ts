@@ -1,10 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Album, ExportOptions, Photo } from './types';
 import { newId } from './id';
+import { SUPPORTED, type Lang } from './i18n';
 
 const ALBUMS_KEY = 'album.albums.v1';
 const PHOTOS_KEY = 'album.photos.v1';
 const EXPORT_OPTIONS_KEY = 'album.exportOptions.v1';
+const LANG_KEY = 'album.lang.v1';
 /** Clé du titre unique d'avant les dossiers (utilisée seulement pour la migration). */
 const LEGACY_TITLE_KEY = 'album.title.v1';
 
@@ -118,4 +120,15 @@ export async function loadExportOptions(): Promise<ExportOptions | null> {
 /** Persiste les options d'export pour les prochains albums. */
 export async function saveExportOptions(options: ExportOptions): Promise<void> {
   await AsyncStorage.setItem(EXPORT_OPTIONS_KEY, JSON.stringify(options));
+}
+
+/** Langue choisie et persistée, ou null si l'utilisateur n'a jamais forcé. */
+export async function loadLang(): Promise<Lang | null> {
+  const raw = await AsyncStorage.getItem(LANG_KEY);
+  return raw && (SUPPORTED as string[]).includes(raw) ? (raw as Lang) : null;
+}
+
+/** Persiste la langue forcée par l'utilisateur. */
+export async function saveLang(lang: Lang): Promise<void> {
+  await AsyncStorage.setItem(LANG_KEY, lang);
 }

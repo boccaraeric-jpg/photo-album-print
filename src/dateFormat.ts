@@ -1,3 +1,4 @@
+import { localeTag, type Lang } from './i18n';
 import type { DateFormat, Photo } from './types';
 
 /** Date à afficher pour une photo : prise de vue réelle si connue, sinon date d'ajout. */
@@ -17,30 +18,43 @@ function cap(s: string): string {
  * - `full`  → « Mercredi 8 juillet 2026 à 19h37 »
  * - `none`  → chaîne vide
  */
-export function formatPhotoDate(ts: number, format: DateFormat): string {
+export function formatPhotoDate(
+  ts: number,
+  format: DateFormat,
+  lang: Lang = 'fr',
+): string {
   const d = new Date(ts);
+  const tag = localeTag(lang);
+  // Heure localisée : « 19h37 » en français, « 7:37 PM » en anglais.
+  const time = () => {
+    if (lang === 'en') {
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}h${mm}`;
+  };
+  const at = lang === 'en' ? 'at' : 'à';
   switch (format) {
     case 'none':
       return '';
     case 'short':
-      return d.toLocaleDateString('fr-FR', {
+      return d.toLocaleDateString(tag, {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
       });
     case 'shortTime': {
-      const day = d.toLocaleDateString('fr-FR', {
+      const day = d.toLocaleDateString(tag, {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
       });
-      const hh = String(d.getHours()).padStart(2, '0');
-      const mm = String(d.getMinutes()).padStart(2, '0');
-      return `${day} à ${hh}h${mm}`;
+      return `${day} ${at} ${time()}`;
     }
     case 'long':
       return cap(
-        d.toLocaleDateString('fr-FR', {
+        d.toLocaleDateString(tag, {
           weekday: 'long',
           day: 'numeric',
           month: 'long',
@@ -49,16 +63,14 @@ export function formatPhotoDate(ts: number, format: DateFormat): string {
       );
     case 'full': {
       const day = cap(
-        d.toLocaleDateString('fr-FR', {
+        d.toLocaleDateString(tag, {
           weekday: 'long',
           day: 'numeric',
           month: 'long',
           year: 'numeric',
         }),
       );
-      const hh = String(d.getHours()).padStart(2, '0');
-      const mm = String(d.getMinutes()).padStart(2, '0');
-      return `${day} à ${hh}h${mm}`;
+      return `${day} ${at} ${time()}`;
     }
   }
 }

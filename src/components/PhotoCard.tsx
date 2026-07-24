@@ -2,6 +2,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Photo } from '../types';
 import { C, F } from '../theme';
+import { useLang } from '../i18n';
 
 interface Props {
   photo: Photo;
@@ -32,6 +33,7 @@ export function PhotoCard({
   isFirst,
   isLast,
 }: Props) {
+  const { L } = useLang();
   const isText = photo.kind === 'text';
   const hasComment = photo.comment.trim().length > 0;
 
@@ -70,10 +72,12 @@ export function PhotoCard({
           {hasComment
             ? photo.comment
             : isText
-              ? 'Toucher pour écrire le texte de la page'
-              : 'Toucher pour ajouter un commentaire'}
+              ? L.photoCard.tapWriteText
+              : L.photoCard.tapAddComment}
         </Text>
-        <Text style={styles.hint}>{isText ? 'PAGE DE TEXTE' : 'Modifier'}</Text>
+        <Text style={styles.hint}>
+          {isText ? L.photoCard.textPage : L.photoCard.edit}
+        </Text>
       </View>
       <View style={styles.actions}>
         {isText ? (

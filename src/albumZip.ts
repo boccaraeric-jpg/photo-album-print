@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { albumFileBase } from './pdf';
 import type { Photo } from './types';
 import { formatPhotoDate, photoDate } from './dateFormat';
+import { dict, type Lang } from './i18n';
 
 /**
  * Regroupe des images (pages JPEG du mini album) dans une archive ZIP unique,
@@ -51,14 +52,16 @@ function safeSnippet(text: string): string {
 export async function zipPhotos(
   entries: Photo[],
   title: string,
+  lang: Lang = 'fr',
 ): Promise<string> {
+  const D = dict(lang).doc;
   const zip = new JSZip();
   const lines: string[] = [title, '='.repeat(Math.max(title.length, 3)), ''];
 
   let n = 0;
   for (const p of entries) {
     if (p.kind === 'text') {
-      lines.push('— Page de texte —');
+      lines.push(D.textPageMarker);
       if (p.comment.trim()) lines.push(p.comment.trim());
       lines.push('');
       continue;
@@ -76,14 +79,14 @@ export async function zipPhotos(
       // Fichier illisible : on garde quand même le contexte.
     }
     lines.push(`Photo ${num} : ${fname}`);
-    const date = formatPhotoDate(photoDate(p), 'full');
-    if (date) lines.push(`  Date : ${date}`);
-    if (p.place?.trim()) lines.push(`  Lieu : ${p.place.trim()}`);
-    if (p.comment.trim()) lines.push(`  Commentaire : ${p.comment.trim()}`);
+    const date = formatPhotoDate(photoDate(p), 'full', lang);
+    if (date) lines.push(`  ${D.date} : ${date}`);
+    if (p.place?.trim()) lines.push(`  ${D.place} : ${p.place.trim()}`);
+    if (p.comment.trim()) lines.push(`  ${D.comment} : ${p.comment.trim()}`);
     lines.push('');
   }
 
-  zip.file('contexte.txt', lines.join('\n'));
+  zip.file(D.contextFile, lines.join('\n'));
 
   const content = await zip.generateAsync({ type: 'base64' });
   const dest = `${FileSystem.cacheDirectory}${albumFileBase(title)} - photos.zip`;

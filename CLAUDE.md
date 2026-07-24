@@ -178,6 +178,22 @@ graisses **500** corps / **800** titres) : le PDF via `@font-face` (data URI), l
 (`Skia.Typeface.MakeFreeTypeFaceFromData(Skia.Data.fromBase64(...))`). Interface et rendu album
 partagent donc maintenant la même famille (500/800). Georgia reste en police de secours CSS uniquement.
 
+**Internationalisation** (`src/i18n.ts`) : **FR + EN** (Phase 1), sans lib externe. Un dictionnaire
+`{ fr, en }` typé `Dict = typeof fr` — l'anglais **doit** couvrir exactement les mêmes clés (erreur
+de compilation sinon). Valeurs = chaînes **ou fonctions** (pluriel/interpolation, ex.
+`album.photoCount(n)`, `alert.deleteAlbumTitle(name)`). Détection au 1er lancement via
+**`expo-localization`** (langue de l'iPhone), sinon langue forcée persistée (`storage.loadLang`).
+- **Dans React** : `const { L, lang, setLang } = useLang()` (Context → re-render à la bascule). Texte
+  = `L.section.key`. Bascule FR/EN = sélecteur dans l'en-tête `HomeScreen` (`setLang`).
+- **Hors React** (`pdf.ts`, `pageImages.ts`, `dateFormat.ts`, `albumZip.ts`) : `lang: Lang` passé en
+  **paramètre** ; libellés via `dict(lang).…`, dates via `localeTag(lang)`. `buildAlbumHtml` /
+  `buildAlbumImages` / `zipPhotos` prennent `lang` en dernier argument (défaut `'fr'`).
+- Le **correcteur offline FR** (`checkSpelling`, index phonétique FR) n'a pas d'équivalent EN : son
+  bouton est **masqué hors français** dans `CommentModal` (le natif iOS gère l'anglais).
+- **Ajouter une langue (Phase 2 : DE/IT/ES/PT)** = ajouter la clé dans `SUPPORTED`, un objet complet
+  dans `DICT`, et `localeTag`. **Aucun code composant à toucher.** ⚠️ Le **japonais est exclu** : les
+  rendus album embarquent **Montserrat** (sans glyphes CJK) → il faudrait une police CJK dédiée.
+
 ## Dépendances & assets à connaître
 - Ajouts : `react-native-webview` (aperçu), `expo-location` (lieu), `jszip` (export multi-images),
   `talisman` (phonétique FR), `@expo/vector-icons` (icônes), `expo-font` (polices du thème),

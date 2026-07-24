@@ -20,6 +20,7 @@ import {
 import type { Adjustments, Photo } from '../types';
 import { buildColorMatrix, DEFAULT_ADJUSTMENTS } from '../adjustments';
 import { F } from '../theme';
+import { useLang } from '../i18n';
 
 interface Props {
   /** Photo en cours de réglage, ou null si le modal est fermé. */
@@ -29,15 +30,16 @@ interface Props {
   onClose: () => void;
 }
 
-const SLIDERS: { key: keyof Omit<Adjustments, 'rotation'>; label: string }[] = [
-  { key: 'exposure', label: 'Exposition' },
-  { key: 'brightness', label: 'Luminosité' },
-  { key: 'contrast', label: 'Contraste' },
-  { key: 'saturation', label: 'Saturation' },
-  { key: 'warmth', label: 'Chaleur' },
+const SLIDER_KEYS: (keyof Omit<Adjustments, 'rotation'>)[] = [
+  'exposure',
+  'brightness',
+  'contrast',
+  'saturation',
+  'warmth',
 ];
 
 export function AdjustModal({ photo, onSave, onClose }: Props) {
+  const { L } = useLang();
   const [adj, setAdj] = useState<Adjustments>(DEFAULT_ADJUSTMENTS);
   const [saving, setSaving] = useState(false);
 
@@ -66,14 +68,14 @@ export function AdjustModal({ photo, onSave, onClose }: Props) {
       <View style={styles.screen}>
         <View style={styles.topBar}>
           <Pressable hitSlop={10} onPress={onClose} disabled={saving}>
-            <Text style={styles.topBtn}>Annuler</Text>
+            <Text style={styles.topBtn}>{L.common.cancel}</Text>
           </Pressable>
-          <Text style={styles.topTitle}>Réglages</Text>
+          <Text style={styles.topTitle}>{L.adjust.title}</Text>
           <Pressable hitSlop={10} onPress={save} disabled={saving}>
             {saving ? (
               <ActivityIndicator color="#fbbf24" />
             ) : (
-              <Text style={[styles.topBtn, styles.topBtnSave]}>OK</Text>
+              <Text style={[styles.topBtn, styles.topBtnSave]}>{L.common.ok}</Text>
             )}
           </Pressable>
         </View>
@@ -88,21 +90,21 @@ export function AdjustModal({ photo, onSave, onClose }: Props) {
                 setAdj((a) => ({ ...a, rotation: (a.rotation + 90) % 360 }))
               }
             >
-              <Text style={styles.rotateText}>⟳  Pivoter 90°</Text>
+              <Text style={styles.rotateText}>{L.adjust.rotate}</Text>
             </Pressable>
             <Pressable
               style={styles.rotateBtn}
               onPress={() => setAdj(DEFAULT_ADJUSTMENTS)}
             >
-              <Text style={styles.rotateText}>Réinitialiser</Text>
+              <Text style={styles.rotateText}>{L.adjust.reset}</Text>
             </Pressable>
           </View>
 
           <ScrollView bounces={false}>
-            {SLIDERS.map(({ key, label }) => (
+            {SLIDER_KEYS.map((key) => (
               <View key={key} style={styles.sliderRow}>
                 <View style={styles.sliderHeader}>
-                  <Text style={styles.sliderLabel}>{label}</Text>
+                  <Text style={styles.sliderLabel}>{L.adjust[key]}</Text>
                   <Text style={styles.sliderValue}>
                     {adj[key] > 0 ? `+${adj[key]}` : adj[key]}
                   </Text>
