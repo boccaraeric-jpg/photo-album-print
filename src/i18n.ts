@@ -79,6 +79,11 @@ const fr = {
     spellNone: 'Aucune faute détectée.',
     spellUnavailableTitle: 'Correcteur indisponible',
     spellUnavailableBody: "La vérification n'a pas pu aboutir. Réessaie.",
+    dictate: 'Dicter',
+    listening: 'À l’écoute…',
+    micDeniedTitle: 'Micro non autorisé',
+    micDeniedBody:
+      'Autorise le micro et la reconnaissance vocale dans les réglages pour dicter tes commentaires.',
   },
   spell: {
     progress: (i: number, n: number) => `Faute ${i} sur ${n}`,
@@ -271,6 +276,11 @@ const en: Dict = {
     spellNone: 'No mistakes found.',
     spellUnavailableTitle: 'Checker unavailable',
     spellUnavailableBody: 'The check could not complete. Try again.',
+    dictate: 'Dictate',
+    listening: 'Listening…',
+    micDeniedTitle: 'Microphone not allowed',
+    micDeniedBody:
+      'Allow the microphone and speech recognition in Settings to dictate your captions.',
   },
   spell: {
     progress: (i: number, n: number) => `Mistake ${i} of ${n}`,

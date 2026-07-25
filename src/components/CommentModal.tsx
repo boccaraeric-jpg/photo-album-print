@@ -13,11 +13,31 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { type ComponentType } from 'react';
 import { F } from '../theme';
 import { useLang } from '../i18n';
 import type { Photo } from '../types';
 import { checkSpelling, type SpellMatch } from '../spellcheck';
 import { SpellCheckModal } from './SpellCheckModal';
+
+// Reconnaissance vocale = module natif, **absent d'Expo Go**. On ne charge le
+// bouton (et donc le module) que si le natif répond « disponible ». Tout est en
+// `require` protégé : un import statique de `./VoiceCommentButton` exécuterait
+// `import 'expo-speech-recognition'` au chargement et planterait Expo Go. Ici, en
+// Expo Go, le require échoue ou `isRecognitionAvailable()` est faux → bouton non
+// chargé, app stable. Sur un build EAS/TestFlight, le bouton apparaît.
+let VoiceButton: ComponentType<{
+  value: string;
+  onChangeText: (t: string) => void;
+}> | null = null;
+try {
+  const mod = require('expo-speech-recognition');
+  if (mod.ExpoSpeechRecognitionModule?.isRecognitionAvailable?.()) {
+    VoiceButton = require('./VoiceCommentButton').VoiceCommentButton;
+  }
+} catch {
+  VoiceButton = null;
+}
 
 interface Props {
   /** Photo en cours d'édition, ou null si le modal est fermé. */
@@ -120,6 +140,9 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
               autoCapitalize="sentences"
               keyboardType="default"
             />
+            {VoiceButton && (
+              <VoiceButton value={text} onChangeText={setText} />
+            )}
             {/* Passe offline = index phonétique FR : proposée seulement en
                 français. En anglais, le correcteur natif iOS suffit. */}
             {lang === 'fr' && (

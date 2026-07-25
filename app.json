@@ -58,7 +58,14 @@
         }
       ],
       "expo-font",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "L'app utilise le micro pour dicter vos commentaires de photo.",
+          "speechRecognitionPermission": "L'app transcrit votre voix en texte pour commenter vos photos."
+        }
+      ]
     ],
     "extra": {
       "eas": {
