@@ -71,10 +71,11 @@
         "expo-share-intent",
         {
           "iosActivationRules": {
-            "NSExtensionActivationSupportsImageWithMaxCount": 10
+            "NSExtensionActivationSupportsImageWithMaxCount": 10,
+            "NSExtensionActivationSupportsFileWithMaxCount": 1
           },
           "iosAppGroupIdentifier": "group.com.boccarasteam.comclic",
-          "androidIntentFilters": ["image/*"],
+          "androidIntentFilters": ["image/*", "application/zip"],
           "androidMultiIntentFilters": ["image/*"]
         }
       ]

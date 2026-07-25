@@ -196,6 +196,7 @@ const fr = {
     pdf: 'PDF',
     albumImages: "Images de l'album",
     reusablePhotos: 'Photos (à réutiliser)',
+    comclicAlbum: 'Album ComClic (pour un ami)',
   },
   alert: {
     deleteAlbumTitle: (name: string) => `Supprimer « ${name} » ?`,
@@ -398,6 +399,7 @@ const en: Dict = {
     pdf: 'PDF',
     albumImages: 'Album images',
     reusablePhotos: 'Photos (reusable)',
+    comclicAlbum: 'ComClic album (for a friend)',
   },
   alert: {
     deleteAlbumTitle: (name: string) => `Delete “${name}”?`,

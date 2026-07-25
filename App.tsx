@@ -47,6 +47,12 @@ import { reverseGeocode } from './src/geocode';
 import { deleteImage, persistImage } from './src/photoFiles';
 import { saveToPhotoLibrary } from './src/mediaLibrary';
 import { zipImages, zipPhotos } from './src/albumZip';
+import {
+  buildAlbumBundle,
+  looksLikeBundle,
+  parseAlbumBundle,
+  type ImportedEntry,
+} from './src/albumBundle';
 import { bakeAdjustedImage, isNeutral } from './src/adjustments';
 import {
   buildAlbumHtml,
@@ -127,8 +133,14 @@ function Root() {
   const [loading, setLoading] = useState(true);
   const [openAlbumId, setOpenAlbumId] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState(true);
-  // Chemins des images reçues par partage système, en attente du choix de dossier.
-  const [pendingShare, setPendingShare] = useState<string[] | null>(null);
+  // Import en attente (photos partagées OU album ComClic reçu d'un ami) :
+  // nombre d'éléments, nom de dossier suggéré, et l'action d'import une fois le
+  // dossier choisi. `null` tant qu'aucun partage n'est en cours.
+  const [pendingImport, setPendingImport] = useState<{
+    count: number;
+    defaultName: string | null;
+    run: (albumId: string) => void;
+  } | null>(null);
   // Photo à ouvrir en édition à l'arrivée dans un album (import d'une seule photo).
   const [editOnOpen, setEditOnOpen] = useState<string | null>(null);
 
@@ -194,22 +206,20 @@ function Root() {
     [photos, L],
   );
 
-  // Photos reçues via le partage système → en attente du choix de dossier.
-  // (En Expo Go, `hasShareIntent` reste faux : module natif absent.)
-  useEffect(() => {
-    if (!hasShareIntent) return;
-    const paths = (shareIntent?.files ?? [])
-      .filter((f) => f.mimeType?.startsWith('image/'))
-      .map((f) => f.path)
-      .filter((p): p is string => !!p);
-    if (paths.length > 0) {
-      setShowWelcome(false); // arrivée par partage : on saute l'accueil
-      setPendingShare(paths);
-    }
-  }, [hasShareIntent, shareIntent]);
+  // Finalise un import : ferme le sélecteur, réinitialise le partage, ouvre le
+  // dossier cible (et éventuellement l'éditeur d'une photo).
+  const finishImport = useCallback(
+    (albumId: string, editId: string | null) => {
+      setPendingImport(null);
+      resetShareIntent();
+      setOpenAlbumId(albumId);
+      setEditOnOpen(editId);
+    },
+    [resetShareIntent],
+  );
 
-  // Importe les images partagées dans le dossier choisi, puis y navigue.
-  const importShared = useCallback(
+  // Import d'images brutes (partage de photos) dans le dossier choisi.
+  const runImageImport = useCallback(
     async (paths: string[], albumId: string) => {
       const created: Photo[] = [];
       for (const path of paths) {
@@ -228,30 +238,113 @@ function Root() {
         }
       }
       if (created.length) setPhotos((prev) => [...prev, ...created]);
-      setPendingShare(null);
-      resetShareIntent();
-      setOpenAlbumId(albumId);
       // Une seule photo → ouvrir son éditeur en arrivant dans le dossier.
-      setEditOnOpen(created.length === 1 ? created[0].id : null);
+      finishImport(albumId, created.length === 1 ? created[0].id : null);
     },
-    [resetShareIntent],
+    [finishImport],
   );
+
+  // Import d'un album ComClic reçu : reconstruit chaque entrée avec ses méta
+  // (commentaire, lieu, date, page de texte) et la couverture éventuelle.
+  const runAlbumImport = useCallback(
+    (entries: ImportedEntry[], albumId: string) => {
+      const created: Photo[] = [];
+      let coverId: string | undefined;
+      const base = Date.now();
+      entries.forEach((e, i) => {
+        const id = newId();
+        if (e.kind === 'text') {
+          created.push({
+            id,
+            kind: 'text',
+            albumId,
+            uri: '',
+            comment: e.comment,
+            createdAt: base + i, // conserve l'ordre reçu
+          });
+        } else if (e.uri) {
+          created.push({
+            id,
+            albumId,
+            uri: e.uri,
+            comment: e.comment,
+            place: e.place,
+            takenAt: e.takenAt,
+            createdAt: base + i,
+          });
+          if (e.cover) coverId = id;
+        }
+      });
+      if (created.length) setPhotos((prev) => [...prev, ...created]);
+      if (coverId) {
+        setAlbums((prev) =>
+          prev.map((a) => (a.id === albumId ? { ...a, coverPhotoId: coverId } : a)),
+        );
+      }
+      finishImport(albumId, null);
+    },
+    [finishImport],
+  );
+
+  // Partage système entrant → album ComClic (prioritaire) sinon images.
+  // (En Expo Go, `hasShareIntent` reste faux : module natif absent.)
+  useEffect(() => {
+    if (!hasShareIntent) return;
+    let cancelled = false;
+    (async () => {
+      const files = shareIntent?.files ?? [];
+      // 1) Fichier album ComClic (.comclic / .zip contenant un manifeste) ?
+      const bundle = files.find(
+        (f) => looksLikeBundle(f.path) || looksLikeBundle(f.fileName ?? ''),
+      );
+      if (bundle) {
+        const parsed = await parseAlbumBundle(bundle.path);
+        if (parsed && !cancelled) {
+          const photoCount = parsed.entries.filter((e) => e.kind === 'photo').length;
+          setShowWelcome(false);
+          setPendingImport({
+            count: photoCount,
+            defaultName: parsed.name || null,
+            run: (albumId) => runAlbumImport(parsed.entries, albumId),
+          });
+          return;
+        }
+      }
+      // 2) Sinon : images brutes partagées.
+      const paths = files
+        .filter((f) => f.mimeType?.startsWith('image/'))
+        .map((f) => f.path)
+        .filter((p): p is string => !!p);
+      if (paths.length > 0 && !cancelled) {
+        setShowWelcome(false);
+        setPendingImport({
+          count: paths.length,
+          defaultName: null,
+          run: (albumId) => runImageImport(paths, albumId),
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hasShareIntent, shareIntent, runAlbumImport, runImageImport]);
 
   const openAlbum = albums.find((a) => a.id === openAlbumId) ?? null;
 
-  const shareModal = pendingShare && !loading && (
+  const shareModal = pendingImport && !loading && (
     <ShareImportModal
-      count={pendingShare.length}
+      count={pendingImport.count}
       albums={albums}
       photoCountOf={(id) => photos.filter((p) => p.albumId === id).length}
-      onPick={(albumId) => importShared(pendingShare, albumId)}
+      defaultName={pendingImport.defaultName ?? undefined}
+      onPick={(albumId) => pendingImport.run(albumId)}
       onCreate={(name) => {
         const album: Album = { id: newId(), name, createdAt: Date.now() };
         setAlbums((prev) => [...prev, album]);
-        importShared(pendingShare, album.id);
+        pendingImport.run(album.id);
       }}
       onCancel={() => {
-        setPendingShare(null);
+        setPendingImport(null);
         resetShareIntent();
       }}
     />
@@ -807,6 +900,22 @@ function AlbumScreen({
     }
   }, [orderedPhotos, albumTitle]);
 
+  // Étape 2d : album ComClic (.comclic) = images pleine réso + manifeste
+  // (commentaires, lieux, dates, ordre, couverture, textes). Destiné à un ami
+  // qui a ComClic : il le reçoit via le partage système et l'app le reconstruit.
+  const sendComclicAlbum = useCallback(async () => {
+    setSending(true);
+    try {
+      const uri = await buildAlbumBundle(orderedPhotos, albumTitle, defaultCoverId);
+      await shareFile(uri, albumTitle, 'application/zip', 'public.zip-archive');
+      setPreviewVisible(false);
+    } catch {
+      Alert.alert(L.common.error, L.alert.photosPrepFail);
+    } finally {
+      setSending(false);
+    }
+  }, [orderedPhotos, albumTitle, defaultCoverId]);
+
   // Choix du format au moment de l'envoi. Chaque option ouvre la feuille de
   // partage native (Messenger, Mail, AirDrop… y figurent selon le contenu).
   const chooseFormat = useCallback(() => {
@@ -815,9 +924,10 @@ function AlbumScreen({
       { text: L.format.pdf, onPress: sendPdf },
       { text: L.format.albumImages, onPress: sendImages },
       { text: L.format.reusablePhotos, onPress: sendReusablePhotos },
+      { text: L.format.comclicAlbum, onPress: sendComclicAlbum },
       { text: L.common.cancel, style: 'cancel' },
     ]);
-  }, [photos.length, sendPdf, sendImages, sendReusablePhotos]);
+  }, [photos.length, sendPdf, sendImages, sendReusablePhotos, sendComclicAlbum]);
 
   // Les deux boutons de rendu (barre du bas) sont les points d'entrée de l'export :
   // « Familial » ouvre d'abord la mise en page ; « Professionnel » va directement

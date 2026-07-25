@@ -20,6 +20,8 @@ interface Props {
   albums: Album[];
   /** Compte de photos par dossier (pour l'aperçu). */
   photoCountOf: (albumId: string) => number;
+  /** Nom pré-rempli du nouveau dossier (ex. nom de l'album reçu d'un ami). */
+  defaultName?: string;
   /** Importer dans un dossier existant. */
   onPick: (albumId: string) => void;
   /** Créer un dossier puis y importer. */
@@ -37,6 +39,7 @@ export function ShareImportModal({
   count,
   albums,
   photoCountOf,
+  defaultName,
   onPick,
   onCreate,
   onCancel,
@@ -90,7 +93,7 @@ export function ShareImportModal({
         <NameModal
           visible={creating}
           title={L.home.createTitle}
-          initialValue=""
+          initialValue={defaultName ?? ''}
           submitLabel={L.home.createSubmit}
           onSubmit={(name) => {
             setCreating(false);
