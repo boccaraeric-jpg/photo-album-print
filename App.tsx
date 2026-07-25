@@ -55,8 +55,13 @@ import {
   shareFile,
 } from './src/pdf';
 import { buildAlbumImages } from './src/pageImages';
+import {
+  ShareIntentProvider,
+  useShareIntentContext,
+} from 'expo-share-intent';
 import { PhotoCard } from './src/components/PhotoCard';
 import { AlbumCard } from './src/components/AlbumCard';
+import { ShareImportModal } from './src/components/ShareImportModal';
 import { CommentModal } from './src/components/CommentModal';
 import { AdjustModal } from './src/components/AdjustModal';
 import { NameModal } from './src/components/NameModal';
@@ -76,9 +81,14 @@ export default function App() {
   }
   return (
     <SafeAreaProvider>
-      <LangProvider>
-        <Root />
-      </LangProvider>
+      {/* Fournit les photos reçues via le partage système (iOS Share Extension /
+          intent Android). En Expo Go le module natif est absent : le provider
+          no-op sans crasher (requireOptionalNativeModule). */}
+      <ShareIntentProvider>
+        <LangProvider>
+          <Root />
+        </LangProvider>
+      </ShareIntentProvider>
     </SafeAreaProvider>
   );
 }
@@ -110,11 +120,17 @@ function LangProvider({ children }: { children: ReactNode }) {
 
 function Root() {
   const { L } = useLang();
+  const { hasShareIntent, shareIntent, resetShareIntent } =
+    useShareIntentContext();
   const [albums, setAlbums] = useState<Album[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [openAlbumId, setOpenAlbumId] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState(true);
+  // Chemins des images reçues par partage système, en attente du choix de dossier.
+  const [pendingShare, setPendingShare] = useState<string[] | null>(null);
+  // Photo à ouvrir en édition à l'arrivée dans un album (import d'une seule photo).
+  const [editOnOpen, setEditOnOpen] = useState<string | null>(null);
 
   // Chargement initial depuis le stockage persistant.
   useEffect(() => {
@@ -178,22 +194,80 @@ function Root() {
     [photos, L],
   );
 
+  // Photos reçues via le partage système → en attente du choix de dossier.
+  // (En Expo Go, `hasShareIntent` reste faux : module natif absent.)
+  useEffect(() => {
+    if (!hasShareIntent) return;
+    const paths = (shareIntent?.files ?? [])
+      .filter((f) => f.mimeType?.startsWith('image/'))
+      .map((f) => f.path)
+      .filter((p): p is string => !!p);
+    if (paths.length > 0) {
+      setShowWelcome(false); // arrivée par partage : on saute l'accueil
+      setPendingShare(paths);
+    }
+  }, [hasShareIntent, shareIntent]);
+
+  // Importe les images partagées dans le dossier choisi, puis y navigue.
+  const importShared = useCallback(
+    async (paths: string[], albumId: string) => {
+      const created: Photo[] = [];
+      for (const path of paths) {
+        const id = newId();
+        try {
+          const persisted = await persistImage(path, id);
+          created.push({
+            id,
+            albumId,
+            uri: persisted,
+            comment: '',
+            createdAt: Date.now(),
+          });
+        } catch {
+          // Fichier illisible : on ignore cette image, on garde les autres.
+        }
+      }
+      if (created.length) setPhotos((prev) => [...prev, ...created]);
+      setPendingShare(null);
+      resetShareIntent();
+      setOpenAlbumId(albumId);
+      // Une seule photo → ouvrir son éditeur en arrivant dans le dossier.
+      setEditOnOpen(created.length === 1 ? created[0].id : null);
+    },
+    [resetShareIntent],
+  );
+
   const openAlbum = albums.find((a) => a.id === openAlbumId) ?? null;
 
-  if (showWelcome) {
-    return <WelcomeScreen onEnter={() => setShowWelcome(false)} />;
-  }
+  const shareModal = pendingShare && !loading && (
+    <ShareImportModal
+      count={pendingShare.length}
+      albums={albums}
+      photoCountOf={(id) => photos.filter((p) => p.albumId === id).length}
+      onPick={(albumId) => importShared(pendingShare, albumId)}
+      onCreate={(name) => {
+        const album: Album = { id: newId(), name, createdAt: Date.now() };
+        setAlbums((prev) => [...prev, album]);
+        importShared(pendingShare, album.id);
+      }}
+      onCancel={() => {
+        setPendingShare(null);
+        resetShareIntent();
+      }}
+    />
+  );
 
-  if (loading) {
-    return (
+  let content: ReactNode;
+  if (showWelcome) {
+    content = <WelcomeScreen onEnter={() => setShowWelcome(false)} />;
+  } else if (loading) {
+    content = (
       <View style={[styles.screen, styles.center]}>
         <ActivityIndicator size="large" color="#A64B24" />
       </View>
     );
-  }
-
-  if (openAlbum) {
-    return (
+  } else if (openAlbum) {
+    content = (
       <AlbumScreen
         album={openAlbum}
         photos={photos.filter((p) => p.albumId === openAlbum.id)}
@@ -201,19 +275,28 @@ function Root() {
         onRename={(name) => renameAlbum(openAlbum.id, name)}
         onSetCover={(photoId) => setAlbumCover(openAlbum.id, photoId)}
         onBack={() => setOpenAlbumId(null)}
+        initialEditPhotoId={editOnOpen}
+        onEditConsumed={() => setEditOnOpen(null)}
+      />
+    );
+  } else {
+    content = (
+      <HomeScreen
+        albums={albums}
+        photos={photos}
+        onOpen={(album) => setOpenAlbumId(album.id)}
+        onCreate={createAlbum}
+        onRename={renameAlbum}
+        onDelete={deleteAlbum}
       />
     );
   }
 
   return (
-    <HomeScreen
-      albums={albums}
-      photos={photos}
-      onOpen={(album) => setOpenAlbumId(album.id)}
-      onCreate={createAlbum}
-      onRename={renameAlbum}
-      onDelete={deleteAlbum}
-    />
+    <>
+      {content}
+      {shareModal}
+    </>
   );
 }
 
@@ -339,6 +422,10 @@ interface AlbumProps {
   onRename: (name: string) => void;
   onSetCover: (photoId: string) => void;
   onBack: () => void;
+  /** Photo à ouvrir en édition à l'arrivée (import d'une photo partagée). */
+  initialEditPhotoId?: string | null;
+  /** Signale que l'ouverture auto de l'éditeur a été consommée. */
+  onEditConsumed?: () => void;
 }
 
 function AlbumScreen({
@@ -348,6 +435,8 @@ function AlbumScreen({
   onRename,
   onSetCover,
   onBack,
+  initialEditPhotoId,
+  onEditConsumed,
 }: AlbumProps) {
   const { L, lang } = useLang();
   const insets = useSafeAreaInsets();
@@ -406,6 +495,16 @@ function AlbumScreen({
     });
     return () => sub.remove();
   }, [onBack]);
+
+  // Import d'une seule photo partagée : ouvrir directement son éditeur.
+  useEffect(() => {
+    if (!initialEditPhotoId) return;
+    const target = photos.find((p) => p.id === initialEditPhotoId);
+    if (target) {
+      setEditing(target);
+      onEditConsumed?.();
+    }
+  }, [initialEditPhotoId, photos, onEditConsumed]);
 
   const addAsset = useCallback(
     async (

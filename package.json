@@ -16,6 +16,7 @@
     "expo-location": "~19.0.8",
     "expo-media-library": "~18.2.1",
     "expo-print": "~15.0.8",
+    "expo-share-intent": "^5.1.1",
     "expo-sharing": "~14.0.8",
     "expo-speech-recognition": "^56.0.1",
     "expo-status-bar": "~3.0.9",

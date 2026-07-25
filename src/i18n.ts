@@ -220,6 +220,11 @@ const fr = {
     noPhotoBody: "Cet album ne contient pas de photo à envoyer.",
     photosPrepFail: 'La préparation des photos a échoué.',
   },
+  shareImport: {
+    title: (n: number) => `Importer ${n} photo${n > 1 ? 's' : ''} dans…`,
+    hint: 'Choisis le dossier de destination',
+    newFolder: '＋  Nouveau dossier',
+  },
   doc: {
     imageUnavailable: 'Image indisponible',
     photoNo: (n: number) => `Photo n° ${n}`,
@@ -416,6 +421,11 @@ const en: Dict = {
     noPhotoTitle: 'No photo',
     noPhotoBody: 'This album has no photo to send.',
     photosPrepFail: 'Preparing the photos failed.',
+  },
+  shareImport: {
+    title: (n: number) => `Import ${n} photo${n > 1 ? 's' : ''} into…`,
+    hint: 'Choose the destination folder',
+    newFolder: '＋  New folder',
   },
   doc: {
     imageUnavailable: 'Image unavailable',

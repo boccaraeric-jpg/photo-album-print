@@ -3,6 +3,7 @@
     "name": "photo-album-print",
     "slug": "photo-album-print",
     "version": "1.0.0",
+    "scheme": "comclic",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -64,6 +65,17 @@
         {
           "microphonePermission": "L'app utilise le micro pour dicter vos commentaires de photo.",
           "speechRecognitionPermission": "L'app transcrit votre voix en texte pour commenter vos photos."
+        }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsImageWithMaxCount": 10
+          },
+          "iosAppGroupIdentifier": "group.com.boccarasteam.comclic",
+          "androidIntentFilters": ["image/*"],
+          "androidMultiIntentFilters": ["image/*"]
         }
       ]
     ],
