@@ -34,10 +34,19 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
   const [matches, setMatches] = useState<SpellMatch[]>([]);
   const [spellVisible, setSpellVisible] = useState(false);
 
+  // Initialise le formulaire à l'OUVERTURE seulement (clé = id de la photo) :
+  // ne pas dépendre de l'objet `photo` entier, sinon la résolution asynchrone du
+  // lieu (qui recrée l'objet) réinitialiserait un commentaire en cours de frappe.
   useEffect(() => {
     setText(photo?.comment ?? '');
     setPlace(photo?.place ?? '');
-  }, [photo]);
+  }, [photo?.id]);
+
+  // Lieu résolu en arrière-plan (géocodage) après l'ouverture : le remplir s'il
+  // arrive, mais sans écraser une saisie manuelle (on ne touche qu'un champ vide).
+  useEffect(() => {
+    if (photo?.place) setPlace((cur) => cur || photo.place || '');
+  }, [photo?.place]);
 
   const runSpellCheck = async () => {
     if (!text.trim() || checking) return;

@@ -438,6 +438,10 @@ function AlbumScreen({
               setPhotos((prev) =>
                 prev.map((p) => (p.id === id ? { ...p, place } : p)),
               );
+              // Si l'éditeur de cette photo est déjà ouvert, y refléter le lieu
+              // résolu (sinon le champ « Lieu » resterait vide sous les yeux de
+              // l'utilisateur alors que la position a bien été trouvée).
+              setEditing((cur) => (cur && cur.id === id ? { ...cur, place } : cur));
             }
           });
         }
