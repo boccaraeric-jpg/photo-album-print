@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ComClic — installer l'app</title>
+<meta name="description" content="Installer ComClic pour ouvrir un album photo reçu (.comclic)." />
+<style>
+  :root {
+    --paper: #F1E9D6;
+    --card: #FBF7EC;
+    --tan: #EADDC4;
+    --ink: #201B14;
+    --ink-soft: #4A4234;
+    --muted: #8C806A;
+    --sienna: #A64B24;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 20px 56px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55;
+    display: flex;
+    justify-content: center;
+  }
+  main { width: 100%; max-width: 560px; }
+  .logo { display: block; width: 112px; height: 112px; margin: 0 auto 20px; border-radius: 26px; }
+  h1 { font-size: 30px; font-weight: 800; text-align: center; margin: 0 0 6px; letter-spacing: -0.4px; }
+  .kicker {
+    text-align: center; font-size: 12px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 28px;
+  }
+  .card {
+    background: var(--card); border: 1px solid rgba(32,27,20,0.14);
+    border-radius: 18px; padding: 22px 20px; margin-bottom: 16px;
+  }
+  h2 { font-size: 17px; font-weight: 700; margin: 0 0 10px; }
+  p { margin: 0 0 12px; color: var(--ink-soft); font-size: 15px; }
+  p:last-child { margin-bottom: 0; }
+  ol { margin: 0; padding-left: 20px; color: var(--ink-soft); font-size: 15px; }
+  li { margin-bottom: 8px; }
+  li:last-child { margin-bottom: 0; }
+  a.btn {
+    display: block; text-align: center; text-decoration: none;
+    background: var(--sienna); color: #FBF7EC; font-weight: 700; font-size: 16px;
+    padding: 15px 18px; border-radius: 14px; margin-top: 4px;
+  }
+  a.btn.secondary { background: var(--tan); color: var(--ink); }
+  code {
+    background: var(--tan); padding: 1px 6px; border-radius: 5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+  }
+  .en { border-top: 1px dashed rgba(32,27,20,0.2); margin-top: 26px; padding-top: 22px; }
+  .en h2, .en p, .en li { color: var(--muted); }
+  footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 26px; }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #17130E; --card: #221C15; --tan: #3A3123; --ink: #F3EADA; --ink-soft: #D8CCB6; --muted: #A2947B; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <!-- même visuel que l'icône de l'app (design/icon.svg, simplifié) -->
+  <svg class="logo" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" aria-label="ComClic">
+    <defs>
+      <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#EBD9B8"/><stop offset="0.55" stop-color="#DCC59C"/><stop offset="1" stop-color="#C9AC7C"/>
+      </linearGradient>
+      <linearGradient id="chev" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#C4602C"/><stop offset="1" stop-color="#8E3F1B"/>
+      </linearGradient>
+    </defs>
+    <rect width="1024" height="1024" fill="#FBF4EA"/>
+    <g stroke="#B9764F" fill="none" opacity="0.4">
+      <circle cx="512" cy="512" r="392" stroke-width="3"/>
+      <circle cx="512" cy="512" r="300" stroke-width="2.5"/>
+    </g>
+    <path d="M392 336 h150 a28 28 0 0 1 28 28 v30 h-206 v-30 a28 28 0 0 1 28 -28 z" fill="#E6D2AF" stroke="#A98F62" stroke-width="5"/>
+    <rect x="640" y="348" width="92" height="46" rx="20" fill="#E2CDA6" stroke="#A98F62" stroke-width="5"/>
+    <rect x="212" y="386" width="600" height="368" rx="60" fill="url(#body)" stroke="#A98F62" stroke-width="6"/>
+    <circle cx="512" cy="580" r="152" fill="#B4996A" stroke="#8E7042" stroke-width="7"/>
+    <path d="M330 690 L512 428 L694 690" fill="none" stroke="url(#chev)" stroke-width="86" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+
+  <h1>ComClic</h1>
+  <p class="kicker">Commentez vos photos, sauvegardez ou partagez-les</p>
+
+  <div class="card">
+    <h2>On vous a envoyé un album&nbsp;?</h2>
+    <p>
+      Un fichier <code>.comclic</code> contient un album photo entier — photos en pleine
+      qualité, commentaires, lieux et dates. Il s'ouvre uniquement avec l'app ComClic.
+    </p>
+    <!-- Remplacer le href par le lien TestFlight puis, à la publication, par le lien App Store. -->
+    <a class="btn" href="mailto:boccaraeric@gmail.com?subject=ComClic%20-%20demande%20d%27acc%C3%A8s">
+      Demander l'accès à l'app
+    </a>
+    <p style="margin-top:14px;font-size:13px;">
+      ComClic est en phase de test privé. Écrivez-nous&nbsp;: vous recevrez une invitation
+      TestFlight pour l'installer sur votre iPhone.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Ouvrir l'album une fois l'app installée</h2>
+    <ol>
+      <li>Ouvrez le message (Mail, WhatsApp, AirDrop…) contenant le fichier <code>.comclic</code>.</li>
+      <li>Touchez le fichier, puis <strong>Partager</strong> → <strong>ComClic</strong>.</li>
+      <li>Choisissez le dossier de destination&nbsp;: l'album se reconstruit à l'identique.</li>
+    </ol>
+  </div>
+
+  <div class="en">
+    <div class="card">
+      <h2>Received a ComClic album?</h2>
+      <p>
+        A <code>.comclic</code> file holds a whole photo album — full-quality photos, captions,
+        places and dates. It only opens with the ComClic app.
+      </p>
+      <a class="btn secondary" href="mailto:boccaraeric@gmail.com?subject=ComClic%20-%20access%20request">
+        Request access
+      </a>
+      <p style="margin-top:14px;font-size:13px;">
+        ComClic is in private testing. Email us and you'll get a TestFlight invitation.
+        Once installed: tap the file → <strong>Share</strong> → <strong>ComClic</strong>.
+      </p>
+    </div>
+  </div>
+
+  <footer>ComClic — album photo à commenter, imprimer et partager</footer>
+</main>
+</body>
+</html>
