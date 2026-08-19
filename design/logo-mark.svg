@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Marque des en-têtes de l'app (assets/logo-mark.png) : même dessin
+       qu'icon.svg — monogramme « CC » + cercles de visée — mais **sans le fond
+       crème**, pour se poser sur le papier des écrans.
+       Les cercles y sont plus épais que dans icon.svg (20 / 14 au lieu de
+       11 / 8) : affichée à 34 px, l'icône réduit un trait de 11 à moins d'un
+       demi-pixel, et les cercles disparaissent. -->
+  <defs>
+    <linearGradient id="cc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C4602C"/>
+      <stop offset="1" stop-color="#8E3F1B"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(512,512) scale(1.12) translate(-512,-512)">
+    <g stroke="#B9764F" fill="none" opacity="0.75">
+      <circle cx="512" cy="512" r="392" stroke-width="20"/>
+      <circle cx="512" cy="512" r="300" stroke-width="14"/>
+    </g>
+    <g fill="none" stroke="url(#cc)" stroke-width="84" stroke-linecap="round">
+      <path d="M445 385 A 166 166 0 1 0 445 639"/>
+      <path d="M793 385 A 166 166 0 1 0 793 639"/>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="cc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C4602C"/>
+      <stop offset="1" stop-color="#8E3F1B"/>
+    </linearGradient>
+    <filter id="softer" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#4A2A12" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- zone sûre Android : visuel à 66 %, fond transparent -->
+  <g transform="translate(512,512) scale(0.66) translate(-512,-512)">
+    <g filter="url(#softer)">
+      <g fill="none" stroke="url(#cc)" stroke-width="84" stroke-linecap="round">
+        <path d="M445 385 A 166 166 0 1 0 445 639"/>
+        <path d="M793 385 A 166 166 0 1 0 793 639"/>
+      </g>
+    </g>
+  </g>
+</svg>
