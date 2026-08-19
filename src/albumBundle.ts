@@ -1,14 +1,15 @@
 import JSZip from 'jszip';
 import * as FileSystem from 'expo-file-system/legacy';
 import { newId } from './id';
-import { writeBase64Image } from './photoFiles';
+import { readPrintBase64, writeBase64Image } from './photoFiles';
 import type { Photo } from './types';
 
 // Fichier album ComClic : un ZIP (extension .comclic) contenant les images
-// pleine résolution + un manifeste JSON qui décrit tout (commentaires, lieux,
-// dates, ordre, couverture, pages de texte, nom du dossier). Sert à envoyer un
-// album à un ami qui a ComClic : il le reçoit via le partage système et l'app le
-// reconstruit à l'identique (cf. `parseAlbumBundle` + import dans `App`).
+// (redimensionnées/recompressées, même budget que le PDF — cf. plus bas) + un
+// manifeste JSON qui décrit tout (commentaires, lieux, dates, ordre, couverture,
+// pages de texte, nom du dossier). Sert à envoyer un album à un ami qui a
+// ComClic : il le reçoit via le partage système et l'app le reconstruit
+// (cf. `parseAlbumBundle` + import dans `App`).
 
 const MANIFEST = 'manifest.json';
 const MARKER = 'comclic-album';
@@ -46,6 +47,12 @@ export async function buildAlbumBundle(
 ): Promise<string> {
   const zip = new JSZip();
   const manifestEntries: BundleEntry[] = [];
+  // Même budget adaptatif que le PDF (cible ~10 Mo au total) : un ami reçoit
+  // souvent le .comclic par SMS/iMessage, un ZIP en pleine résolution (12
+  // photos ~3 Mo pièce) dépassait largement la taille transmissible.
+  const count = entries.filter((p) => p.kind !== 'text').length;
+  const maxEdge = count > 30 ? 1024 : count > 15 ? 1280 : 1600;
+  const quality = count > 30 ? 0.68 : 0.72;
   let n = 0;
   for (const p of entries) {
     if (p.kind === 'text') {
@@ -59,9 +66,7 @@ export async function buildAlbumBundle(
     n += 1;
     const file = `${String(n).padStart(3, '0')}.jpg`;
     try {
-      const b64 = await FileSystem.readAsStringAsync(p.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      const b64 = await readPrintBase64(p.uri, maxEdge, quality);
       zip.file(file, b64, { base64: true });
       manifestEntries.push({
         file,

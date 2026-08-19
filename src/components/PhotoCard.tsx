@@ -9,6 +9,8 @@ interface Props {
   /** Vrai si cette photo est la couverture (choisie ou par défaut). */
   isCover: boolean;
   onEdit: (photo: Photo) => void;
+  /** Ouvre la photo en grand (visionneuse plein écran). */
+  onView: (photo: Photo) => void;
   onSetCover: (photo: Photo) => void;
   onAdjust: (photo: Photo) => void;
   onCrop: (photo: Photo) => void;
@@ -24,6 +26,7 @@ export function PhotoCard({
   photo,
   isCover,
   onEdit,
+  onView,
   onSetCover,
   onAdjust,
   onCrop,
@@ -62,7 +65,13 @@ export function PhotoCard({
           <Text style={styles.textThumbMark}>¶</Text>
         </View>
       ) : (
-        <Image source={{ uri: photo.uri }} style={styles.thumb} />
+        <Pressable
+          onPress={() => onView(photo)}
+          accessibilityRole="imagebutton"
+          accessibilityLabel={L.viewer.open}
+        >
+          <Image source={{ uri: photo.uri }} style={styles.thumb} />
+        </Pressable>
       )}
       <View style={styles.body}>
         <Text

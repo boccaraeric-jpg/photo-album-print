@@ -53,6 +53,12 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "L'app utilise l'appareil photo pour prendre les photos de votre album."
+        }
+      ],
+      [
         "expo-media-library",
         {
           "savePhotosPermission": "L'app enregistre les photos prises dans votre photothèque."

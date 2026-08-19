@@ -48,6 +48,8 @@ export interface ExportOptions {
   frame: FrameStyle;
   /** Liseré (fin trait) entourant la photo — s'ajoute au support choisi. */
   liseret: boolean;
+  /** Affiche le lieu de prise de vue sous la photo — loisir et pro. */
+  showPlace: boolean;
   /** Format de la date affichée sous chaque photo — mode familial. */
   dateFormat: DateFormat;
   /** Alignement de la date/lieu sous la photo — mode familial. */

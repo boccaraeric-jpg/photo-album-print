@@ -48,6 +48,8 @@ const fr = {
     back: 'Retour',
     error: 'Erreur',
     ok: 'OK',
+    duplicate: 'Dupliquer',
+    later: 'Plus tard',
   },
   welcome: {
     kicker: 'Commentez vos photos, sauvegardez ou partagez-les',
@@ -57,6 +59,7 @@ const fr = {
     noName: 'Sans nom',
     photoCount: (n: number) => `${n} photo${n > 1 ? 's' : ''}`,
     createdOn: (date: string) => `Créé le ${date}`,
+    copyName: (name: string) => `Copie de ${name}`,
   },
   photoCard: {
     tapWriteText: 'Toucher pour écrire le texte de la page',
@@ -101,6 +104,16 @@ const fr = {
     saturation: 'Saturation',
     warmth: 'Chaleur',
   },
+  camera: {
+    take: 'Prendre la photo',
+    flip: 'Pivoter',
+    zoom: 'Zoom',
+    flash: { auto: 'Flash auto', on: 'Flash activé', off: 'Flash coupé' },
+  },
+  viewer: {
+    open: 'Voir la photo en grand',
+    hint: 'Pincez pour agrandir',
+  },
   crop: {
     title: 'Recadrer',
     format: 'Format',
@@ -124,12 +137,11 @@ const fr = {
   },
   export: {
     title: 'Mise en page',
-    proNote:
-      'Mise en page sobre imposée : fond blanc, photos numérotées, avec date/heure, lieu et description sous chacune.',
     sizeLabel: 'Taille des photos',
     bgLabel: 'Couleur du fond',
     frameLabel: 'Encadrement',
     liseretLabel: 'Liseré autour de la photo',
+    placeLabel: 'Lieu de la prise de vue',
     dateLabel: 'Date sous les photos',
     datePosLabel: 'Position de la date',
     textAlignLabel: 'Alignement du texte (pages de texte)',
@@ -172,6 +184,7 @@ const fr = {
     createSubmit: 'Créer',
     renameTitle: 'Renommer le dossier',
     renameSubmit: 'Renommer',
+    duplicating: 'Duplication du dossier…',
   },
   albumScreen: {
     back: 'Dossiers',
@@ -183,7 +196,7 @@ const fr = {
     emptyText:
       'Prenez une photo ou importez-en une depuis votre galerie photo de votre portable, puis ajoutez un commentaire si vous le souhaitez.',
     modeLabel: 'CRÉEZ VOTRE ALBUM EN MODE',
-    private: 'Privé',
+    private: 'Loisir',
     or: 'ou',
     professional: 'Professionnel',
     sendLabelPro: 'Envoyer',
@@ -220,6 +233,24 @@ const fr = {
     noPhotoTitle: 'Aucune photo',
     noPhotoBody: "Cet album ne contient pas de photo à envoyer.",
     photosPrepFail: 'La préparation des photos a échoué.',
+    duplicateAlbumTitle: (name: string) => `Dupliquer « ${name} » ?`,
+    duplicateAlbumBody:
+      'Une copie indépendante du dossier et de ses photos sera créée. Modifier ou supprimer la copie ne touche pas à l’original.',
+    duplicateFail: 'La duplication du dossier a échoué.',
+    textPageTitle: 'Nouvelle page de texte',
+    textPageBody: 'Où placer cette page dans le dossier ?',
+    textPageAtStart: 'Au début',
+    textPageAtEnd: 'À la fin',
+  },
+  invite: {
+    title: 'Lien d’installation',
+    body:
+      'Si votre destinataire ne possède pas encore l’app ComClic, envoyez-lui le lien d’installation pour qu’il profite de toutes les fonctionnalités.',
+    send: 'Envoyer le lien',
+    /** Message texte envoyé à l'ami (SMS, WhatsApp, Mail…). */
+    message: (url: string) =>
+      `Je vous envoie un album photo réalisé avec ComClic. Installez l’app pour l’ouvrir : ${url}`,
+    fail: 'Le partage du lien a échoué.',
   },
   shareImport: {
     title: (n: number) => `Importer ${n} photo${n > 1 ? 's' : ''} dans…`,
@@ -251,6 +282,8 @@ const en: Dict = {
     back: 'Back',
     error: 'Error',
     ok: 'OK',
+    duplicate: 'Duplicate',
+    later: 'Later',
   },
   welcome: {
     kicker: 'Comment on your photos, save them or share them',
@@ -260,6 +293,7 @@ const en: Dict = {
     noName: 'Untitled',
     photoCount: (n: number) => `${n} photo${n > 1 ? 's' : ''}`,
     createdOn: (date: string) => `Created on ${date}`,
+    copyName: (name: string) => `${name} (copy)`,
   },
   photoCard: {
     tapWriteText: 'Tap to write this page’s text',
@@ -304,6 +338,16 @@ const en: Dict = {
     saturation: 'Saturation',
     warmth: 'Warmth',
   },
+  camera: {
+    take: 'Take photo',
+    flip: 'Flip',
+    zoom: 'Zoom',
+    flash: { auto: 'Flash auto', on: 'Flash on', off: 'Flash off' },
+  },
+  viewer: {
+    open: 'View photo full screen',
+    hint: 'Pinch to zoom',
+  },
   crop: {
     title: 'Crop',
     format: 'Format',
@@ -327,12 +371,11 @@ const en: Dict = {
   },
   export: {
     title: 'Layout',
-    proNote:
-      'Clean fixed layout: white background, numbered photos, with date/time, location and description under each.',
     sizeLabel: 'Photo size',
     bgLabel: 'Background color',
     frameLabel: 'Framing',
     liseretLabel: 'Border around the photo',
+    placeLabel: 'Place the photo was taken',
     dateLabel: 'Date under photos',
     datePosLabel: 'Date position',
     textAlignLabel: 'Text alignment (text pages)',
@@ -375,6 +418,7 @@ const en: Dict = {
     createSubmit: 'Create',
     renameTitle: 'Rename folder',
     renameSubmit: 'Rename',
+    duplicating: 'Duplicating folder…',
   },
   albumScreen: {
     back: 'Folders',
@@ -386,7 +430,7 @@ const en: Dict = {
     emptyText:
       'Take a photo or import one from your phone’s gallery, then add a caption if you like.',
     modeLabel: 'CREATE YOUR ALBUM IN MODE',
-    private: 'Private',
+    private: 'Leisure',
     or: 'or',
     professional: 'Professional',
     sendLabelPro: 'Send',
@@ -423,6 +467,23 @@ const en: Dict = {
     noPhotoTitle: 'No photo',
     noPhotoBody: 'This album has no photo to send.',
     photosPrepFail: 'Preparing the photos failed.',
+    duplicateAlbumTitle: (name: string) => `Duplicate “${name}”?`,
+    duplicateAlbumBody:
+      'An independent copy of the folder and its photos will be created. Editing or deleting the copy leaves the original untouched.',
+    duplicateFail: 'Duplicating the folder failed.',
+    textPageTitle: 'New text page',
+    textPageBody: 'Where should this page go in the folder?',
+    textPageAtStart: 'At the beginning',
+    textPageAtEnd: 'At the end',
+  },
+  invite: {
+    title: 'Install link',
+    body:
+      'If your recipient doesn’t have the ComClic app yet, send them the install link so they can enjoy all its features.',
+    send: 'Send the link',
+    message: (url: string) =>
+      `I’m sending you a photo album made with ComClic. Install the app to open it: ${url}`,
+    fail: 'Sharing the link failed.',
   },
   shareImport: {
     title: (n: number) => `Import ${n} photo${n > 1 ? 's' : ''} into…`,

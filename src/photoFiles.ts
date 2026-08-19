@@ -26,6 +26,15 @@ export async function persistImage(srcUri: string, id: string): Promise<string> 
   return dest;
 }
 
+/**
+ * Copie un fichier déjà persisté vers une nouvelle entrée du répertoire de
+ * l'app (duplication d'un dossier). Chaque copie est **indépendante** : la
+ * supprimer ne touche pas l'original (cf. `deleteImage`).
+ */
+export async function copyImage(uri: string, id: string): Promise<string> {
+  return persistImage(uri, id);
+}
+
 /** Supprime le fichier image associé (sans échouer s'il n'existe plus). */
 export async function deleteImage(uri: string): Promise<void> {
   try {
