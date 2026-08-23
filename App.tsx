@@ -18,6 +18,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import {
   useCameraPermissions,
   type CameraCapturedPicture,
@@ -378,6 +379,44 @@ function Root() {
     [finishImport],
   );
 
+  /**
+   * Ouvre un fichier `.comclic` depuis l'app Fichiers (Mail, Messages, iCloud…).
+   *
+   * Double du partage système, volontaire : `expo-share-intent` est un module
+   * **natif**, donc inerte dans Expo Go, et la feuille de partage ne propose pas
+   * toujours ComClic selon l'app d'origine. Ce chemin-ci passe par le même
+   * `parseAlbumBundle` + `pendingImport`, donc le même écran de destination.
+   */
+  const importBundleFile = useCallback(async () => {
+    const res = await DocumentPicker.getDocumentAsync({
+      // Les .comclic sont des ZIP ; iOS ne connaît pas cette extension, d'où le
+      // type large, avec vérification du contenu juste après.
+      type: '*/*',
+      copyToCacheDirectory: true,
+    });
+    if (res.canceled || !res.assets?.length) return;
+    const file = res.assets[0];
+    if (!looksLikeBundle(file.name) && !looksLikeBundle(file.uri)) {
+      Alert.alert(L.alert.importNotBundleTitle, L.alert.importNotBundleBody);
+      return;
+    }
+    try {
+      const parsed = await parseAlbumBundle(file.uri);
+      if (!parsed) {
+        Alert.alert(L.alert.importNotBundleTitle, L.alert.importNotBundleBody);
+        return;
+      }
+      const photoCount = parsed.entries.filter((e) => e.kind === 'photo').length;
+      setPendingImport({
+        count: photoCount,
+        defaultName: parsed.name || null,
+        run: (albumId) => runAlbumImport(parsed.entries, albumId),
+      });
+    } catch {
+      Alert.alert(L.common.error, L.alert.importFailBody);
+    }
+  }, [runAlbumImport, L]);
+
   // Partage système entrant → album ComClic (prioritaire) sinon images.
   // (En Expo Go, `hasShareIntent` reste faux : module natif absent.)
   useEffect(() => {
@@ -474,6 +513,7 @@ function Root() {
         onRename={renameAlbum}
         onDuplicate={duplicateAlbum}
         onDelete={deleteAlbum}
+        onImportBundle={importBundleFile}
       />
     );
   }
@@ -500,6 +540,8 @@ interface HomeProps {
   onRename: (id: string, name: string) => void;
   onDuplicate: (album: Album) => void;
   onDelete: (album: Album) => void;
+  /** Ouvre un fichier .comclic reçu d'un autre utilisateur (app Fichiers). */
+  onImportBundle: () => void;
 }
 
 function HomeScreen({
@@ -510,6 +552,7 @@ function HomeScreen({
   onRename,
   onDuplicate,
   onDelete,
+  onImportBundle,
 }: HomeProps) {
   const { L, lang, setLang } = useLang();
   const insets = useSafeAreaInsets();
@@ -661,6 +704,12 @@ function HomeScreen({
           onPress={() => setCreating(true)}
         >
           <Text style={styles.btnPrimaryText}>{L.home.newFolder}</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.btn, styles.btnGhost]}
+          onPress={onImportBundle}
+        >
+          <Text style={styles.btnGhostText}>{L.home.importAlbum}</Text>
         </Pressable>
       </View>
 

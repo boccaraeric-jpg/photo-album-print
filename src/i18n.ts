@@ -186,6 +186,7 @@ const fr = {
     noMatchTitle: 'Aucun dossier trouvé',
     noMatchText: 'Essayez un autre mot : la recherche porte sur le nom du dossier.',
     newFolder: '＋  Nouveau dossier',
+    importAlbum: '⤓  Importer un album reçu',
     createTitle: 'Nouveau dossier',
     createSubmit: 'Créer',
     renameTitle: 'Renommer le dossier',
@@ -243,6 +244,10 @@ const fr = {
     duplicateAlbumBody:
       'Une copie indépendante du dossier et de ses photos sera créée. Modifier ou supprimer la copie ne touche pas à l’original.',
     duplicateFail: 'La duplication du dossier a échoué.',
+    importNotBundleTitle: 'Fichier non reconnu',
+    importNotBundleBody:
+      "Choisissez un fichier d'album ComClic (.comclic) reçu par message, mail ou AirDrop.",
+    importFailBody: "L'ouverture de l'album a échoué.",
     textPageTitle: 'Nouvelle page de texte',
     textPageBody: 'Où placer cette page dans le dossier ?',
     textPageAtStart: 'Au début',
@@ -426,6 +431,7 @@ const en: Dict = {
     noMatchTitle: 'No folder found',
     noMatchText: 'Try another word: the search looks at folder names.',
     newFolder: '＋  New folder',
+    importAlbum: '⤓  Import a received album',
     createTitle: 'New folder',
     createSubmit: 'Create',
     renameTitle: 'Rename folder',
@@ -483,6 +489,10 @@ const en: Dict = {
     duplicateAlbumBody:
       'An independent copy of the folder and its photos will be created. Editing or deleting the copy leaves the original untouched.',
     duplicateFail: 'Duplicating the folder failed.',
+    importNotBundleTitle: 'File not recognised',
+    importNotBundleBody:
+      'Pick a ComClic album file (.comclic) received by message, mail or AirDrop.',
+    importFailBody: 'Opening the album failed.',
     textPageTitle: 'New text page',
     textPageBody: 'Where should this page go in the folder?',
     textPageAtStart: 'At the beginning',

@@ -99,6 +99,15 @@ le dossier de destination, puis `runAlbumImport` / `runImageImport` créent les 
 `finishImport` ouvre le dossier. ⚠️ Module **natif** : en Expo Go `hasShareIntent` reste faux (le
 provider est no-op) — ce flux ne se teste que sur un build EAS.
 
+**Recevoir un album sans le partage système** : le bouton **« ⤓ Importer un album reçu »** de la
+barre d'`HomeScreen` (`importBundleFile` dans `Root`) ouvre l'app Fichiers via
+`expo-document-picker`, puis rejoint le **même** chemin que le partage entrant —
+`looksLikeBundle()` + `parseAlbumBundle()` → `pendingImport` → `ShareImportModal` (choix du dossier)
+→ `runAlbumImport`. Double volontaire : `expo-share-intent` est natif donc **inerte en Expo Go**, et
+la feuille de partage ne propose pas ComClic depuis toutes les apps. Le sélecteur demande `type: '*/*'`
+— iOS ne connaît pas l'extension `.comclic`, un filtre par type ne renverrait rien ; le contrôle se
+fait après coup sur le nom puis sur le manifeste.
+
 **Dictée vocale** (`expo-speech-recognition`, `src/components/VoiceCommentButton.tsx`) :
 reconnaissance **on-device** (iOS `SFSpeechRecognizer`) dans la langue courante de l'app ; la dictée
 **s'ajoute** au commentaire existant (résultats partiels en direct, phrases finales figées). Là
