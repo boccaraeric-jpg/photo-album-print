@@ -25,13 +25,21 @@ import {
 
 import { C, F } from './src/theme';
 
-import type { Adjustments, Album, ExportOptions, Photo } from './src/types';
+import type {
+  Adjustments,
+  Album,
+  AlbumSort,
+  ExportOptions,
+  Photo,
+} from './src/types';
 import {
   comparePhotos,
+  loadAlbumSort,
   loadData,
   loadExportOptions,
   loadLang,
   saveAlbums,
+  saveAlbumSort,
   saveExportOptions,
   saveLang,
   savePhotos,
@@ -41,6 +49,7 @@ import {
   detectDeviceLang,
   dict,
   LangContext,
+  localeTag,
   SUPPORTED,
   useLang,
   type Lang,
@@ -83,6 +92,21 @@ import { CameraModal } from './src/components/CameraModal';
 import { PhotoViewerModal } from './src/components/PhotoViewerModal';
 import { CropModal } from './src/components/CropModal';
 import { WelcomeScreen } from './src/components/WelcomeScreen';
+
+// Ordre des puces de tri de l'accueil (libellés dans `L.home.sorts`).
+const SORT_KEYS: AlbumSort[] = ['recent', 'name', 'count'];
+
+/**
+ * Normalise pour la recherche : minuscules et **sans accents**, afin que
+ * « ete » trouve « Été ». `NFD` sépare les diacritiques, que l'on retire.
+ */
+function normalizeSearch(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+}
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -491,6 +515,47 @@ function HomeScreen({
   const insets = useSafeAreaInsets();
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<Album | null>(null);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<AlbumSort>('recent');
+
+  // Le tri est retrouvé au lancement suivant (le texte cherché, lui, ne l'est pas).
+  useEffect(() => {
+    loadAlbumSort().then((stored) => {
+      if (stored) setSort(stored);
+    });
+  }, []);
+
+  const chooseSort = useCallback((next: AlbumSort) => {
+    setSort(next);
+    saveAlbumSort(next);
+  }, []);
+
+  // Nombre de photos par dossier : sert au tri « Photos » et à chaque carte.
+  const countById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of photos) map.set(p.albumId, (map.get(p.albumId) ?? 0) + 1);
+    return map;
+  }, [photos]);
+
+  const visibleAlbums = useMemo(() => {
+    const needle = normalizeSearch(query);
+    const kept = needle
+      ? albums.filter((a) => normalizeSearch(a.name).includes(needle))
+      : albums;
+    const sorted = [...kept];
+    if (sort === 'name') {
+      sorted.sort((a, b) =>
+        a.name.localeCompare(b.name, localeTag(lang), { sensitivity: 'base' }),
+      );
+    } else if (sort === 'count') {
+      sorted.sort((a, b) => (countById.get(b.id) ?? 0) - (countById.get(a.id) ?? 0));
+    } else {
+      sorted.sort((a, b) => b.createdAt - a.createdAt);
+    }
+    return sorted;
+  }, [albums, query, sort, countById, lang]);
+
+  const searching = query.trim().length > 0;
 
   return (
     <View style={styles.screen}>
@@ -518,11 +583,46 @@ function HomeScreen({
           <Text style={styles.kicker}>{L.home.kicker}</Text>
         </View>
         <Text style={styles.homeTitle}>{L.home.title}</Text>
-        <Text style={styles.count}>{L.home.folderCount(albums.length)}</Text>
+        <Text style={styles.count}>
+          {searching
+            ? L.home.foundCount(visibleAlbums.length)
+            : L.home.folderCount(albums.length)}
+        </Text>
+
+        <TextInput
+          style={styles.search}
+          value={query}
+          onChangeText={setQuery}
+          placeholder={L.home.searchPlaceholder}
+          placeholderTextColor={C.faint}
+          autoCorrect={false}
+          autoCapitalize="none"
+          clearButtonMode="while-editing"
+          returnKeyType="search"
+        />
+
+        <View style={styles.sortRow}>
+          {SORT_KEYS.map((key) => {
+            const on = sort === key;
+            return (
+              <Pressable
+                key={key}
+                style={[styles.sortChip, on && styles.sortChipOn]}
+                onPress={() => chooseSort(key)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+              >
+                <Text style={[styles.sortText, on && styles.sortTextOn]}>
+                  {L.home.sorts[key]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       <FlatList
-        data={albums}
+        data={visibleAlbums}
         keyExtractor={(a) => a.id}
         style={styles.listFlex}
         contentContainerStyle={styles.list}
@@ -545,8 +645,12 @@ function HomeScreen({
         }}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>{L.home.emptyTitle}</Text>
-            <Text style={styles.emptyText}>{L.home.emptyText}</Text>
+            <Text style={styles.emptyTitle}>
+              {searching ? L.home.noMatchTitle : L.home.emptyTitle}
+            </Text>
+            <Text style={styles.emptyText}>
+              {searching ? L.home.noMatchText : L.home.emptyText}
+            </Text>
           </View>
         }
       />
@@ -1321,6 +1425,28 @@ const styles = StyleSheet.create({
   backBtn: { alignSelf: 'flex-start', paddingVertical: 4, marginBottom: 4 },
   // Rappel de l'icône de l'app en haut de chaque écran (accueil : à gauche du
   // sur-titre ; dossier : à droite du lien de retour).
+  search: {
+    marginTop: 12,
+    height: 44,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.line,
+    fontFamily: F.mono,
+    fontSize: 15,
+    color: C.ink,
+  },
+  sortRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  sortChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: C.tan,
+  },
+  sortChipOn: { backgroundColor: C.sienna },
+  sortText: { fontFamily: F.monoBold, fontSize: 13, color: C.ink },
+  sortTextOn: { color: C.paper },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   brandRowSpread: { justifyContent: 'space-between' },
   brandLogo: { width: 34, height: 34, resizeMode: 'contain' },

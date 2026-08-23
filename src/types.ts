@@ -58,6 +58,9 @@ export interface ExportOptions {
   textAlign: 'left' | 'center' | 'right';
 }
 
+/** Critère de tri de la liste des dossiers (écran d'accueil). */
+export type AlbumSort = 'recent' | 'name' | 'count';
+
 /** Dossier de classement des photos (un PDF est exporté par dossier). */
 export interface Album {
   /** Identifiant unique du dossier */

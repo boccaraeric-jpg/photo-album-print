@@ -179,6 +179,12 @@ const fr = {
     emptyTitle: 'Aucun dossier',
     emptyText:
       'Crée un dossier pour classer tes photos, puis exporte chaque dossier en PDF à imprimer.',
+    searchPlaceholder: 'Rechercher un dossier…',
+    foundCount: (n: number) =>
+      n === 0 ? 'Aucun résultat' : `${n} dossier${n > 1 ? 's' : ''} trouvé${n > 1 ? 's' : ''}`,
+    sorts: { recent: 'Récents', name: 'Nom A→Z', count: 'Photos' },
+    noMatchTitle: 'Aucun dossier trouvé',
+    noMatchText: 'Essayez un autre mot : la recherche porte sur le nom du dossier.',
     newFolder: '＋  Nouveau dossier',
     createTitle: 'Nouveau dossier',
     createSubmit: 'Créer',
@@ -413,6 +419,12 @@ const en: Dict = {
     emptyTitle: 'No folder',
     emptyText:
       'Create a folder to sort your photos, then export each folder as a printable PDF.',
+    searchPlaceholder: 'Search a folder…',
+    foundCount: (n: number) =>
+      n === 0 ? 'No result' : `${n} folder${n > 1 ? 's' : ''} found`,
+    sorts: { recent: 'Recent', name: 'Name A→Z', count: 'Photos' },
+    noMatchTitle: 'No folder found',
+    noMatchText: 'Try another word: the search looks at folder names.',
     newFolder: '＋  New folder',
     createTitle: 'New folder',
     createSubmit: 'Create',

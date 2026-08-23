@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Album, ExportOptions, Photo } from './types';
+import type { Album, AlbumSort, ExportOptions, Photo } from './types';
 import { newId } from './id';
 import { SUPPORTED, type Lang } from './i18n';
 
@@ -7,6 +7,7 @@ const ALBUMS_KEY = 'album.albums.v1';
 const PHOTOS_KEY = 'album.photos.v1';
 const EXPORT_OPTIONS_KEY = 'album.exportOptions.v1';
 const LANG_KEY = 'album.lang.v1';
+const ALBUM_SORT_KEY = 'album.sort.v1';
 /** Clé du titre unique d'avant les dossiers (utilisée seulement pour la migration). */
 const LEGACY_TITLE_KEY = 'album.title.v1';
 
@@ -131,4 +132,17 @@ export async function loadLang(): Promise<Lang | null> {
 /** Persiste la langue forcée par l'utilisateur. */
 export async function saveLang(lang: Lang): Promise<void> {
   await AsyncStorage.setItem(LANG_KEY, lang);
+}
+
+const ALBUM_SORTS: AlbumSort[] = ['recent', 'name', 'count'];
+
+/** Tri des dossiers choisi par l'utilisateur, ou null s'il n'a jamais choisi. */
+export async function loadAlbumSort(): Promise<AlbumSort | null> {
+  const raw = await AsyncStorage.getItem(ALBUM_SORT_KEY);
+  return raw && (ALBUM_SORTS as string[]).includes(raw) ? (raw as AlbumSort) : null;
+}
+
+/** Persiste le tri des dossiers (retrouvé au lancement suivant). */
+export async function saveAlbumSort(sort: AlbumSort): Promise<void> {
+  await AsyncStorage.setItem(ALBUM_SORT_KEY, sort);
 }

@@ -307,6 +307,16 @@ de compilation sinon). Valeurs = chaînes **ou fonctions** (pluriel/interpolatio
   'node_modules/.<tmp>'`, le watcher suit un dossier temporaire disparu) : générer les assets
   **Metro arrêté**, ou le relancer ensuite.
 
+## Liste des dossiers (accueil)
+`HomeScreen` filtre et trie la liste avant de la passer à la `FlatList` (`visibleAlbums`) :
+**recherche** sur le nom via `normalizeSearch()` (minuscules **et sans accents** — `NFD` puis
+suppression des diacritiques, pour que « ete » trouve « Été ») et **tri** par `AlbumSort`
+(`recent` = `createdAt` décroissant, `name` = `localeCompare` avec `localeTag(lang)`, `count` =
+nombre de photos décroissant). Le tri est persisté (`album.sort.v1`, `loadAlbumSort` /
+`saveAlbumSort`) ; le texte cherché ne l'est pas. Le nombre de photos par dossier vient d'une `Map`
+mémoïsée sur `photos` — la liste est plate, un `filter` par carte serait quadratique. L'état vide
+distingue « aucun dossier » de « aucun résultat ».
+
 ## Prise de photo
 `＋ Nouvelle photo` ouvre **`src/components/CameraModal.tsx`** (`expo-camera`, `CameraView`), pas la
 caméra système. Raison : `ImagePicker.launchCameraAsync()` déclenche l'écran iOS **« Use Photo /
