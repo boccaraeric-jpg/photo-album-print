@@ -320,8 +320,12 @@ de compilation sinon). Valeurs = chaînes **ou fonctions** (pluriel/interpolatio
 `HomeScreen` filtre et trie la liste avant de la passer à la `FlatList` (`visibleAlbums`) :
 **recherche** sur le nom via `normalizeSearch()` (minuscules **et sans accents** — `NFD` puis
 suppression des diacritiques, pour que « ete » trouve « Été ») et **tri** par `AlbumSort`
-(`recent` = `createdAt` décroissant, `name` = `localeCompare` avec `localeTag(lang)`, `count` =
-nombre de photos décroissant). Le tri est persisté (`album.sort.v1`, `loadAlbumSort` /
+(`recent` = `createdAt` décroissant, `name` = `localeCompare` avec `localeTag(lang)`, `size` =
+**poids réel des fichiers** décroissant). Le poids vient de `fileSize()` (`photoFiles.ts`,
+`getInfoAsync`) : chaque photo n'est mesurée **qu'une fois** — l'effet n'interroge que les `id`
+absents de `sizeByPhoto`, donc ajouter une photo ne relance pas de balayage complet. Le total par
+dossier ignore les `originalUri` conservés pour la ré-édition : c'est le poids de l'album, pas
+l'occupation disque. Affichage via `formatBytes()` (`src/fileSize.ts`, unités Ko/Mo/Go ou KB/MB/GB). Le tri est persisté (`album.sort.v1`, `loadAlbumSort` /
 `saveAlbumSort`) ; le texte cherché ne l'est pas. Le nombre de photos par dossier vient d'une `Map`
 mémoïsée sur `photos` — la liste est plate, un `filter` par carte serait quadratique. L'état vide
 distingue « aucun dossier » de « aucun résultat ».

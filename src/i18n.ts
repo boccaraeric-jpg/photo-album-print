@@ -182,7 +182,7 @@ const fr = {
     searchPlaceholder: 'Rechercher un dossier…',
     foundCount: (n: number) =>
       n === 0 ? 'Aucun résultat' : `${n} dossier${n > 1 ? 's' : ''} trouvé${n > 1 ? 's' : ''}`,
-    sorts: { recent: 'Récents', name: 'Nom A→Z', count: 'Photos' },
+    sorts: { recent: 'Récents', name: 'Nom A→Z', size: 'Taille de fichier' },
     noMatchTitle: 'Aucun dossier trouvé',
     noMatchText: 'Essayez un autre mot : la recherche porte sur le nom du dossier.',
     newFolder: '＋  Nouveau dossier',
@@ -427,7 +427,7 @@ const en: Dict = {
     searchPlaceholder: 'Search a folder…',
     foundCount: (n: number) =>
       n === 0 ? 'No result' : `${n} folder${n > 1 ? 's' : ''} found`,
-    sorts: { recent: 'Recent', name: 'Name A→Z', count: 'Photos' },
+    sorts: { recent: 'Recent', name: 'Name A→Z', size: 'File size' },
     noMatchTitle: 'No folder found',
     noMatchText: 'Try another word: the search looks at folder names.',
     newFolder: '＋  New folder',

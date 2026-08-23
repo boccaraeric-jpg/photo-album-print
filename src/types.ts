@@ -59,7 +59,7 @@ export interface ExportOptions {
 }
 
 /** Critère de tri de la liste des dossiers (écran d'accueil). */
-export type AlbumSort = 'recent' | 'name' | 'count';
+export type AlbumSort = 'recent' | 'name' | 'size';
 
 /** Dossier de classement des photos (un PDF est exporté par dossier). */
 export interface Album {

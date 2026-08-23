@@ -7,6 +7,9 @@ interface Props {
   album: Album;
   /** Nombre de photos du dossier. */
   count: number;
+  /** Poids total des photos, déjà formaté (« 38 Mo ») ; absent tant que la
+   *  mesure des fichiers n'est pas terminée. */
+  sizeLabel?: string;
   /** Vignette : URI de la première photo du dossier, s'il y en a une. */
   thumbUri?: string;
   onOpen: (album: Album) => void;
@@ -19,6 +22,7 @@ interface Props {
 export function AlbumCard({
   album,
   count,
+  sizeLabel,
   thumbUri,
   onOpen,
   onRename,
@@ -39,7 +43,10 @@ export function AlbumCard({
         <Text style={styles.name} numberOfLines={2}>
           {album.name.trim() || L.album.noName}
         </Text>
-        <Text style={styles.count}>{L.album.photoCount(count)}</Text>
+        <Text style={styles.count}>
+          {L.album.photoCount(count)}
+          {sizeLabel ? ` · ${sizeLabel}` : ''}
+        </Text>
         <Text style={styles.created}>
           {L.album.createdOn(
             new Date(album.createdAt).toLocaleDateString(localeTag(lang), {

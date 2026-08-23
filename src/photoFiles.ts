@@ -125,3 +125,16 @@ export async function readPrintBase64(
   printCache.set(key, b64);
   return b64;
 }
+
+/**
+ * Poids d'un fichier image sur le disque, en octets (0 si absent ou illisible).
+ * Sert au tri « Taille de fichier » de l'accueil.
+ */
+export async function fileSize(uri: string): Promise<number> {
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    return info.exists && typeof info.size === 'number' ? info.size : 0;
+  } catch {
+    return 0;
+  }
+}

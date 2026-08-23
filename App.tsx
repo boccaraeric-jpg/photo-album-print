@@ -59,7 +59,8 @@ import { newId } from './src/id';
 import { extractTakenAt } from './src/exif';
 import { getCurrentCoords, resolveCoords } from './src/photoLocation';
 import { reverseGeocode } from './src/geocode';
-import { copyImage, deleteImage, persistImage } from './src/photoFiles';
+import { copyImage, deleteImage, fileSize, persistImage } from './src/photoFiles';
+import { formatBytes } from './src/fileSize';
 import { saveToPhotoLibrary } from './src/mediaLibrary';
 import { zipImages, zipPhotos } from './src/albumZip';
 import {
@@ -95,7 +96,7 @@ import { CropModal } from './src/components/CropModal';
 import { WelcomeScreen } from './src/components/WelcomeScreen';
 
 // Ordre des puces de tri de l'accueil (libellés dans `L.home.sorts`).
-const SORT_KEYS: AlbumSort[] = ['recent', 'name', 'count'];
+const SORT_KEYS: AlbumSort[] = ['recent', 'name', 'size'];
 
 /**
  * Normalise pour la recherche : minuscules et **sans accents**, afin que
@@ -573,12 +574,43 @@ function HomeScreen({
     saveAlbumSort(next);
   }, []);
 
-  // Nombre de photos par dossier : sert au tri « Photos » et à chaque carte.
+  // Nombre de photos par dossier : affiché sur chaque carte.
   const countById = useMemo(() => {
     const map = new Map<string, number>();
     for (const p of photos) map.set(p.albumId, (map.get(p.albumId) ?? 0) + 1);
     return map;
   }, [photos]);
+
+  // Poids des fichiers, mesuré une seule fois par photo puis conservé : seules
+  // les photos encore inconnues sont interrogées, donc ajouter une photo ne
+  // relance pas un balayage complet du dossier.
+  const [sizeByPhoto, setSizeByPhoto] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const missing = photos.filter(
+        (p) => p.kind !== 'text' && p.uri && sizeByPhoto[p.id] === undefined,
+      );
+      if (missing.length === 0) return;
+      const measured: Record<string, number> = {};
+      for (const p of missing) measured[p.id] = await fileSize(p.uri);
+      if (!cancelled) setSizeByPhoto((prev) => ({ ...prev, ...measured }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [photos, sizeByPhoto]);
+
+  // Poids total par dossier (photos affichées ; les originaux conservés pour la
+  // ré-édition ne sont pas comptés — c'est le poids de l'album, pas du disque).
+  const bytesById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of photos) {
+      const size = sizeByPhoto[p.id];
+      if (size) map.set(p.albumId, (map.get(p.albumId) ?? 0) + size);
+    }
+    return map;
+  }, [photos, sizeByPhoto]);
 
   const visibleAlbums = useMemo(() => {
     const needle = normalizeSearch(query);
@@ -590,13 +622,13 @@ function HomeScreen({
       sorted.sort((a, b) =>
         a.name.localeCompare(b.name, localeTag(lang), { sensitivity: 'base' }),
       );
-    } else if (sort === 'count') {
-      sorted.sort((a, b) => (countById.get(b.id) ?? 0) - (countById.get(a.id) ?? 0));
+    } else if (sort === 'size') {
+      sorted.sort((a, b) => (bytesById.get(b.id) ?? 0) - (bytesById.get(a.id) ?? 0));
     } else {
       sorted.sort((a, b) => b.createdAt - a.createdAt);
     }
     return sorted;
-  }, [albums, query, sort, countById, lang]);
+  }, [albums, query, sort, bytesById, lang]);
 
   const searching = query.trim().length > 0;
 
@@ -678,6 +710,11 @@ function HomeScreen({
             <AlbumCard
               album={item}
               count={albumPhotos.length}
+              sizeLabel={
+                bytesById.get(item.id)
+                  ? formatBytes(bytesById.get(item.id)!, lang)
+                  : undefined
+              }
               thumbUri={cover?.uri}
               onOpen={onOpen}
               onRename={setRenaming}
