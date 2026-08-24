@@ -316,6 +316,14 @@ de compilation sinon). Valeurs = chaînes **ou fonctions** (pluriel/interpolatio
   'node_modules/.<tmp>'`, le watcher suit un dossier temporaire disparu) : générer les assets
   **Metro arrêté**, ou le relancer ensuite.
 
+### Règle générale : ne jamais toucher `node_modules` avec Metro allumé
+Vaut pour `npm install/uninstall`, `npx expo install` **et `npm dedupe`**. Metro garde en cache la
+carte des modules : un paquet déplacé ou dédupliqué pendant qu'il tourne donne, à chaque
+rechargement, `Unable to resolve module <nom>` pointant un chemin qui n'existe plus — alors que le
+paquet est bien installé (vu avec `expo-constants` après un `npm dedupe`). Le code n'est pas en
+cause, inutile de le chercher. Remise en route : arrêter Metro, supprimer `node_modules/.cache` et
+`$TEMP/metro-cache` + `$TEMP/metro-file-map-*`, puis `npx expo start --clear`.
+
 ## Liste des dossiers (accueil)
 `HomeScreen` filtre et trie la liste avant de la passer à la `FlatList` (`visibleAlbums`) :
 **recherche** sur le nom via `normalizeSearch()` (minuscules **et sans accents** — `NFD` puis
