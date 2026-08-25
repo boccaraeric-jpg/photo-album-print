@@ -20,19 +20,27 @@ import type { Photo } from '../types';
 import { checkSpelling, type SpellMatch } from '../spellcheck';
 import { SpellCheckModal } from './SpellCheckModal';
 
-// Reconnaissance vocale = module natif, **absent d'Expo Go**. On ne charge le
-// bouton (et donc le module) que si le natif répond « disponible ». Tout est en
+// Reconnaissance vocale = module natif, **absent d'Expo Go**. Tout est en
 // `require` protégé : un import statique de `./VoiceCommentButton` exécuterait
-// `import 'expo-speech-recognition'` au chargement et planterait Expo Go. Ici, en
-// Expo Go, le require échoue ou `isRecognitionAvailable()` est faux → bouton non
-// chargé, app stable. Sur un build EAS/TestFlight, le bouton apparaît.
+// `import 'expo-speech-recognition'` au chargement et planterait Expo Go. En Expo
+// Go le require échoue → bouton non chargé, app stable. Sur un build EAS le
+// module répond → le bouton apparaît.
+//
+// ⚠️ Ne **pas** conditionner à `isRecognitionAvailable()` ici : côté iOS il rend
+// `SFSpeechRecognizer().isAvailable`, qui reste **faux tant que l'autorisation de
+// reconnaissance vocale n'a pas été accordée**. Ce test tourne au chargement du
+// module, donc avant toute demande — et son résultat est figé pour la session.
+// On n'affichait alors jamais le bouton, donc on ne demandait jamais
+// l'autorisation, donc le test restait faux (constaté sur TestFlight, build 5).
+// La disponibilité réelle se vérifie au moment du clic, après la demande de
+// permission, dans `VoiceCommentButton`.
 let VoiceButton: ComponentType<{
   value: string;
   onChangeText: (t: string) => void;
 }> | null = null;
 try {
   const mod = require('expo-speech-recognition');
-  if (mod.ExpoSpeechRecognitionModule?.isRecognitionAvailable?.()) {
+  if (typeof mod?.ExpoSpeechRecognitionModule?.start === 'function') {
     VoiceButton = require('./VoiceCommentButton').VoiceCommentButton;
   }
 } catch {

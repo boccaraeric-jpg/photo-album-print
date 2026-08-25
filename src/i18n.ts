@@ -87,6 +87,9 @@ const fr = {
     micDeniedTitle: 'Micro non autorisé',
     micDeniedBody:
       'Autorise le micro et la reconnaissance vocale dans les réglages pour dicter tes commentaires.',
+    micFailedTitle: 'Dictée indisponible',
+    micFailedBody:
+      'La reconnaissance vocale hors ligne n’a pas démarré. Vérifie que la dictée est activée dans Réglages → Général → Clavier, avec la langue de l’app installée.',
   },
   spell: {
     progress: (i: number, n: number) => `Faute ${i} sur ${n}`,
@@ -332,6 +335,9 @@ const en: Dict = {
     micDeniedTitle: 'Microphone not allowed',
     micDeniedBody:
       'Allow the microphone and speech recognition in Settings to dictate your captions.',
+    micFailedTitle: 'Dictation unavailable',
+    micFailedBody:
+      'On-device speech recognition did not start. Check that dictation is enabled in Settings → General → Keyboard, with the app language installed.',
   },
   spell: {
     progress: (i: number, n: number) => `Mistake ${i} of ${n}`,

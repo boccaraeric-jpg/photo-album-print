@@ -48,6 +48,13 @@ export function VoiceCommentButton({ value, onChangeText }: Props) {
     setRecording(false);
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
       Alert.alert(L.comment.micDeniedTitle, L.comment.micDeniedBody);
+      return;
+    }
+    // Autre échec = le plus souvent le modèle hors ligne de la langue courante
+    // n'est pas installé sur l'iPhone (`requiresOnDeviceRecognition`). Sans ce
+    // message, l'appui sur le micro ne produisait rien de visible.
+    if (e.error !== 'aborted' && e.error !== 'no-speech') {
+      Alert.alert(L.comment.micFailedTitle, L.comment.micFailedBody);
     }
   });
 
