@@ -57,7 +57,11 @@ import {
 } from './src/i18n';
 import { newId } from './src/id';
 import { extractTakenAt } from './src/exif';
-import { getCurrentCoords, resolveCoords } from './src/photoLocation';
+import {
+  getCurrentCoords,
+  getLastKnownCoords,
+  resolveCoords,
+} from './src/photoLocation';
 import { reverseGeocode } from './src/geocode';
 import { copyImage, deleteImage, fileSize, persistImage } from './src/photoFiles';
 import { formatBytes } from './src/fileSize';
@@ -873,13 +877,29 @@ function AlbumScreen({
     }
   }, [initialEditPhotoId, photos, onEditConsumed]);
 
+  // Géocodage inverse best-effort : renseigne le lieu sans bloquer, et le
+  // reflète dans l'éditeur s'il est déjà ouvert (sinon le champ « Lieu »
+  // resterait vide alors que la position a bien été trouvée).
+  const attachPlace = useCallback(
+    (id: string, coords: { lat: number; lon: number }) => {
+      reverseGeocode(coords).then((place) => {
+        if (!place) return;
+        setPhotos((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, place } : p)),
+        );
+        setEditing((cur) => (cur && cur.id === id ? { ...cur, place } : cur));
+      });
+    },
+    [setPhotos],
+  );
+
   const addAsset = useCallback(
     async (
       uri: string,
       openEditor: boolean,
       takenAt?: number,
       coords?: { lat: number; lon: number },
-    ) => {
+    ): Promise<string | undefined> => {
       const id = newId();
       try {
         const persisted = await persistImage(uri, id);
@@ -896,26 +916,14 @@ function AlbumScreen({
         };
         setPhotos((prev) => [...prev, photo]);
         if (openEditor) setEditing(photo);
-        // Géocodage inverse best-effort en arrière-plan : renseigne le lieu
-        // sans bloquer l'import (l'utilisateur peut le corriger à la main).
-        if (coords) {
-          reverseGeocode(coords).then((place) => {
-            if (place) {
-              setPhotos((prev) =>
-                prev.map((p) => (p.id === id ? { ...p, place } : p)),
-              );
-              // Si l'éditeur de cette photo est déjà ouvert, y refléter le lieu
-              // résolu (sinon le champ « Lieu » resterait vide sous les yeux de
-              // l'utilisateur alors que la position a bien été trouvée).
-              setEditing((cur) => (cur && cur.id === id ? { ...cur, place } : cur));
-            }
-          });
-        }
+        if (coords) attachPlace(id, coords);
+        return id;
       } catch {
         Alert.alert(L.common.error, L.alert.savePhotoFail);
+        return undefined;
       }
     },
-    [album.id, setPhotos],
+    [album.id, setPhotos, attachPlace, L],
   );
 
   // Ouvre l'appareil photo **intégré** (`CameraModal`) plutôt que la caméra
@@ -935,21 +943,42 @@ function AlbumScreen({
   const onCapture = useCallback(
     async (picture: CameraCapturedPicture) => {
       setCapturing(false);
-      // Enregistre d'abord la photo dans la photothèque du téléphone
-      // (sans commentaire), pour la conserver en dehors de l'album.
-      try {
-        const saved = await saveToPhotoLibrary(picture.uri);
-        if (!saved) {
-          Alert.alert(L.alert.photoNotAddedTitle, L.alert.photoNotAddedBody);
-        }
-      } catch {
-        // L'échec d'enregistrement dans Photos ne doit pas bloquer l'album.
-      }
-      // La capture ne porte pas de GPS → position de l'appareil.
-      const coords = await getCurrentCoords();
-      await addAsset(picture.uri, true, extractTakenAt(picture), coords);
+      // Copie dans la photothèque du téléphone : lancée sans être attendue.
+      // L'éditeur de commentaire n'en dépend pas, et l'attendre retardait son
+      // ouverture de plusieurs centaines de millisecondes.
+      saveToPhotoLibrary(picture.uri)
+        .then((saved) => {
+          if (!saved) {
+            Alert.alert(L.alert.photoNotAddedTitle, L.alert.photoNotAddedBody);
+          }
+        })
+        .catch(() => {
+          // L'échec d'enregistrement dans Photos ne doit pas bloquer l'album.
+        });
+      // La capture ne porte pas de GPS → position de l'appareil. On part de la
+      // dernière position connue, disponible **immédiatement** : attendre un
+      // point frais (`getCurrentCoords`) prenait plusieurs secondes en intérieur
+      // et retardait d'autant l'ouverture de l'éditeur.
+      const quick = await getLastKnownCoords();
+      const id = await addAsset(
+        picture.uri,
+        true,
+        extractTakenAt(picture),
+        quick,
+      );
+      if (!id) return;
+      // Point précis en arrière-plan : corrige les coordonnées, et résout le lieu
+      // si la position immédiate manquait (permission jamais accordée, ou trop
+      // ancienne). C'est aussi cet appel qui demande la permission au besoin.
+      getCurrentCoords().then((coords) => {
+        if (!coords) return;
+        setPhotos((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, coords } : p)),
+        );
+        if (!quick) attachPlace(id, coords);
+      });
     },
-    [addAsset, L],
+    [addAsset, attachPlace, setPhotos, L],
   );
 
   const pickFromLibrary = useCallback(async () => {

@@ -25,6 +25,31 @@ export async function getCurrentCoords(): Promise<Coords | undefined> {
 }
 
 /**
+ * Dernière position connue du système — **immédiate** (aucune acquisition GPS).
+ * Sert à ne pas faire attendre l'utilisateur après une prise de photo :
+ * `getCurrentCoords()` peut demander plusieurs secondes le temps d'obtenir un
+ * point, ce qui retardait d'autant l'ouverture de l'éditeur de commentaire.
+ *
+ * Ne demande **pas** la permission : si elle n'a jamais été accordée, on renvoie
+ * `undefined` et c'est l'appel de précision, lancé en arrière-plan, qui posera la
+ * question. Position ignorée au-delà de 5 minutes — au-delà, l'utilisateur a pu
+ * se déplacer et un lieu faux vaut moins que pas de lieu.
+ */
+export async function getLastKnownCoords(): Promise<Coords | undefined> {
+  try {
+    const perm = await Location.getForegroundPermissionsAsync();
+    if (!perm.granted) return undefined;
+    const pos = await Location.getLastKnownPositionAsync({
+      maxAge: 5 * 60 * 1000,
+    });
+    if (!pos) return undefined;
+    return { lat: pos.coords.latitude, lon: pos.coords.longitude };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Résout les coordonnées GPS d'une photo choisie.
  *
  * Sur iOS, le sélecteur moderne (PHPicker) **retire le GPS de l'EXIF** par
