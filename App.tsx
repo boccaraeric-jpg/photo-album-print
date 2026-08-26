@@ -458,12 +458,24 @@ function Root() {
           defaultName: null,
           run: (albumId) => runImageImport(paths, albumId),
         });
+        return;
+      }
+      // 3) Reçu quelque chose d'inexploitable (texte, lien, image au type
+      // inattendu…). Sans ce message, l'app s'ouvrait et restait muette : de
+      // l'extérieur, impossible de distinguer « rien n'est arrivé » de « c'est
+      // arrivé mais je n'en fais rien ».
+      if (!cancelled) {
+        Alert.alert(
+          L.alert.shareUnreadTitle,
+          L.alert.shareUnreadBody(shareIntent?.type ?? '?', files.length),
+        );
+        resetShareIntent();
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [hasShareIntent, shareIntent, runAlbumImport, runImageImport]);
+  }, [hasShareIntent, shareIntent, runAlbumImport, runImageImport, resetShareIntent, L]);
 
   const openAlbum = albums.find((a) => a.id === openAlbumId) ?? null;
 

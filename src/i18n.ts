@@ -231,6 +231,9 @@ const fr = {
       "Autorise l'accès à l'appareil photo dans les réglages pour prendre des photos.",
     permLibraryBody:
       "Autorise l'accès à la galerie dans les réglages pour importer des photos.",
+    shareUnreadTitle: 'Partage illisible',
+    shareUnreadBody: (kind: string, n: number) =>
+      `ComClic n’a pas pu lire ce qui a été partagé (type ${kind}, ${n} fichier${n > 1 ? 's' : ''}). Essaie « ＋ Nouvelle photo » ou l’import depuis la galerie.`,
     photoNotAddedTitle: 'Photo non ajoutée à Photos',
     photoNotAddedBody:
       "La photo est bien dans l'album, mais autorise l'ajout à la photothèque dans les réglages pour la conserver aussi dans Photos.",
@@ -479,6 +482,9 @@ const en: Dict = {
       'Allow camera access in Settings to take photos.',
     permLibraryBody:
       'Allow gallery access in Settings to import photos.',
+    shareUnreadTitle: 'Nothing readable shared',
+    shareUnreadBody: (kind: string, n: number) =>
+      `ComClic could not read what was shared (type ${kind}, ${n} file${n > 1 ? 's' : ''}). Try “＋ New photo” or importing from the library.`,
     photoNotAddedTitle: 'Photo not added to Photos',
     photoNotAddedBody:
       'The photo is in the album, but allow adding to the photo library in Settings to keep it in Photos too.',
