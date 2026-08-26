@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -29,11 +29,37 @@ interface Props {
 export function VoiceCommentButton({ value, onChangeText }: Props) {
   const { L, lang } = useLang();
   const [recording, setRecording] = useState(false);
+  // Miroir de `recording` lisible depuis les écouteurs : ceux-ci sont **globaux**
+  // (ils reçoivent toute session de reconnaissance, pas seulement la nôtre).
+  const recordingRef = useRef(false);
   // Texte présent avant/au fil de la dictée : chaque phrase finale s'y ajoute,
   // les résultats partiels sont recomposés par-dessus sans le perdre.
   const baseRef = useRef('');
 
+  const setRec = (on: boolean) => {
+    recordingRef.current = on;
+    setRecording(on);
+  };
+
+  // Fermer l'éditeur sans appuyer sur stop laissait la session tourner
+  // (`continuous: true`) : le bouton suivant se rebranchait dessus et le
+  // commentaire se remplissait tout seul. On coupe donc au démontage.
+  useEffect(
+    () => () => {
+      recordingRef.current = false;
+      try {
+        ExpoSpeechRecognitionModule.abort();
+      } catch {
+        // Session déjà close : rien à couper.
+      }
+    },
+    [],
+  );
+
   useSpeechRecognitionEvent('result', (e) => {
+    // Le bouton est le seul déclencheur : hors enregistrement demandé, tout
+    // résultat vient d'une session résiduelle et ne doit pas écrire dans le champ.
+    if (!recordingRef.current) return;
     const transcript = e.results[0]?.transcript ?? '';
     if (!transcript) return;
     const base = baseRef.current;
@@ -42,10 +68,10 @@ export function VoiceCommentButton({ value, onChangeText }: Props) {
     if (e.isFinal) baseRef.current = joined;
   });
 
-  useSpeechRecognitionEvent('end', () => setRecording(false));
+  useSpeechRecognitionEvent('end', () => setRec(false));
 
   useSpeechRecognitionEvent('error', (e) => {
-    setRecording(false);
+    setRec(false);
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
       Alert.alert(L.comment.micDeniedTitle, L.comment.micDeniedBody);
       return;
@@ -60,7 +86,7 @@ export function VoiceCommentButton({ value, onChangeText }: Props) {
 
   const stop = () => {
     ExpoSpeechRecognitionModule.stop();
-    setRecording(false);
+    setRec(false);
   };
 
   const start = async () => {
@@ -70,7 +96,7 @@ export function VoiceCommentButton({ value, onChangeText }: Props) {
       return;
     }
     baseRef.current = value.trim();
-    setRecording(true);
+    setRec(true);
     ExpoSpeechRecognitionModule.start({
       lang: localeTag(lang),
       interimResults: true,
