@@ -61,6 +61,7 @@ import {
   getCurrentCoords,
   getLastKnownCoords,
   resolveCoords,
+  resolveTakenAt,
 } from './src/photoLocation';
 import { reverseGeocode } from './src/geocode';
 import { copyImage, deleteImage, fileSize, persistImage } from './src/photoFiles';
@@ -1008,10 +1009,12 @@ function AlbumScreen({
       // Une seule photo → ouvre l'éditeur de commentaire ; plusieurs → ajout direct.
       const openEditor = res.assets.length === 1;
       for (const asset of res.assets) {
+        // Date **et** lieu passent par la photothèque quand l'EXIF de l'asset
+        // est vide : PHPicker caviarde les métadonnées de la copie qu'il remet.
         await addAsset(
           asset.uri,
           openEditor,
-          extractTakenAt(asset),
+          await resolveTakenAt(asset),
           await resolveCoords(asset),
         );
       }

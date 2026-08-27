@@ -1,7 +1,7 @@
 import * as MediaLibrary from 'expo-media-library';
 import * as Location from 'expo-location';
 import type { ImagePickerAsset } from 'expo-image-picker';
-import { extractCoords } from './exif';
+import { extractCoords, extractTakenAt } from './exif';
 
 type Coords = { lat: number; lon: number };
 
@@ -22,6 +22,37 @@ export async function getCurrentCoords(): Promise<Coords | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Date de prise de vue d'une photo choisie dans la galerie.
+ *
+ * Même piège que pour le GPS : sur iOS, PHPicker **caviarde les métadonnées** de
+ * l'asset remis à l'app, donc `extractTakenAt()` revient souvent vide et la photo
+ * héritait de sa date d'**import** (`photoDate()` retombe sur `createdAt`). La
+ * photothèque, elle, connaît la vraie date : on la lui demande via l'`assetId`.
+ * `creationTime` est en millisecondes, comme `takenAt`.
+ */
+export async function resolveTakenAt(
+  asset: ImagePickerAsset,
+): Promise<number | undefined> {
+  const fromExif = extractTakenAt(asset);
+  if (fromExif) return fromExif;
+
+  if (!asset.assetId) return undefined;
+  try {
+    const perm = await MediaLibrary.getPermissionsAsync();
+    if (!perm.granted) {
+      const req = await MediaLibrary.requestPermissionsAsync();
+      if (!req.granted) return undefined;
+    }
+    const info = await MediaLibrary.getAssetInfoAsync(asset.assetId);
+    const ts = info.creationTime;
+    if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) return ts;
+  } catch {
+    // Permission refusée ou asset introuvable → repli sur la date d'ajout.
+  }
+  return undefined;
 }
 
 /**
