@@ -8,7 +8,11 @@ import type { ImagePickerAsset } from 'expo-image-picker';
  * la reconstruit comme heure locale. Retourne `undefined` si rien d'exploitable
  * (l'appelant retombe alors sur la date d'ajout).
  */
-export function extractTakenAt(asset: ImagePickerAsset): number | undefined {
+// Accepte aussi bien un asset d'`expo-image-picker` qu'une capture
+// d'`expo-camera` : seul l'EXIF est lu.
+export function extractTakenAt(
+  asset: Pick<ImagePickerAsset, 'exif'>,
+): number | undefined {
   const exif = asset.exif;
   if (!exif) return undefined;
 

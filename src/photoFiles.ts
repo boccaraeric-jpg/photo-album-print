@@ -26,6 +26,15 @@ export async function persistImage(srcUri: string, id: string): Promise<string> 
   return dest;
 }
 
+/**
+ * Copie un fichier déjà persisté vers une nouvelle entrée du répertoire de
+ * l'app (duplication d'un dossier). Chaque copie est **indépendante** : la
+ * supprimer ne touche pas l'original (cf. `deleteImage`).
+ */
+export async function copyImage(uri: string, id: string): Promise<string> {
+  return persistImage(uri, id);
+}
+
 /** Supprime le fichier image associé (sans échouer s'il n'existe plus). */
 export async function deleteImage(uri: string): Promise<void> {
   try {
@@ -115,4 +124,17 @@ export async function readPrintBase64(
   if (printCache.size > 60) printCache.clear();
   printCache.set(key, b64);
   return b64;
+}
+
+/**
+ * Poids d'un fichier image sur le disque, en octets (0 si absent ou illisible).
+ * Sert au tri « Taille de fichier » de l'accueil.
+ */
+export async function fileSize(uri: string): Promise<number> {
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    return info.exists && typeof info.size === 'number' ? info.size : 0;
+  } catch {
+    return 0;
+  }
 }

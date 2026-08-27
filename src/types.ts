@@ -48,6 +48,8 @@ export interface ExportOptions {
   frame: FrameStyle;
   /** Liseré (fin trait) entourant la photo — s'ajoute au support choisi. */
   liseret: boolean;
+  /** Affiche le lieu de prise de vue sous la photo — loisir et pro. */
+  showPlace: boolean;
   /** Format de la date affichée sous chaque photo — mode familial. */
   dateFormat: DateFormat;
   /** Alignement de la date/lieu sous la photo — mode familial. */
@@ -55,6 +57,9 @@ export interface ExportOptions {
   /** Alignement du texte des pages de texte — pro et familial. */
   textAlign: 'left' | 'center' | 'right';
 }
+
+/** Critère de tri de la liste des dossiers (écran d'accueil). */
+export type AlbumSort = 'recent' | 'name' | 'size';
 
 /** Dossier de classement des photos (un PDF est exporté par dossier). */
 export interface Album {

@@ -48,6 +48,8 @@ const fr = {
     back: 'Retour',
     error: 'Erreur',
     ok: 'OK',
+    duplicate: 'Dupliquer',
+    later: 'Plus tard',
   },
   welcome: {
     kicker: 'Commentez vos photos, sauvegardez ou partagez-les',
@@ -57,6 +59,7 @@ const fr = {
     noName: 'Sans nom',
     photoCount: (n: number) => `${n} photo${n > 1 ? 's' : ''}`,
     createdOn: (date: string) => `Créé le ${date}`,
+    copyName: (name: string) => `Copie de ${name}`,
   },
   photoCard: {
     tapWriteText: 'Toucher pour écrire le texte de la page',
@@ -84,6 +87,9 @@ const fr = {
     micDeniedTitle: 'Micro non autorisé',
     micDeniedBody:
       'Autorise le micro et la reconnaissance vocale dans les réglages pour dicter tes commentaires.',
+    micFailedTitle: 'Dictée indisponible',
+    micFailedBody:
+      'La reconnaissance vocale hors ligne n’a pas démarré. Vérifie que la dictée est activée dans Réglages → Général → Clavier, avec la langue de l’app installée.',
   },
   spell: {
     progress: (i: number, n: number) => `Faute ${i} sur ${n}`,
@@ -100,6 +106,16 @@ const fr = {
     contrast: 'Contraste',
     saturation: 'Saturation',
     warmth: 'Chaleur',
+  },
+  camera: {
+    take: 'Prendre la photo',
+    flip: 'Pivoter',
+    zoom: 'Zoom',
+    flash: { auto: 'Flash auto', on: 'Flash activé', off: 'Flash coupé' },
+  },
+  viewer: {
+    open: 'Voir la photo en grand',
+    hint: 'Pincez pour agrandir',
   },
   crop: {
     title: 'Recadrer',
@@ -124,12 +140,11 @@ const fr = {
   },
   export: {
     title: 'Mise en page',
-    proNote:
-      'Mise en page sobre imposée : fond blanc, photos numérotées, avec date/heure, lieu et description sous chacune.',
     sizeLabel: 'Taille des photos',
     bgLabel: 'Couleur du fond',
     frameLabel: 'Encadrement',
     liseretLabel: 'Liseré autour de la photo',
+    placeLabel: 'Lieu de la prise de vue',
     dateLabel: 'Date sous les photos',
     datePosLabel: 'Position de la date',
     textAlignLabel: 'Alignement du texte (pages de texte)',
@@ -167,11 +182,19 @@ const fr = {
     emptyTitle: 'Aucun dossier',
     emptyText:
       'Crée un dossier pour classer tes photos, puis exporte chaque dossier en PDF à imprimer.',
+    searchPlaceholder: 'Rechercher un dossier…',
+    foundCount: (n: number) =>
+      n === 0 ? 'Aucun résultat' : `${n} dossier${n > 1 ? 's' : ''} trouvé${n > 1 ? 's' : ''}`,
+    sorts: { recent: 'Récents', name: 'Nom A→Z', size: 'Taille de fichier' },
+    noMatchTitle: 'Aucun dossier trouvé',
+    noMatchText: 'Essayez un autre mot : la recherche porte sur le nom du dossier.',
     newFolder: '＋  Nouveau dossier',
+    importAlbum: '⤓  Importer un album reçu',
     createTitle: 'Nouveau dossier',
     createSubmit: 'Créer',
     renameTitle: 'Renommer le dossier',
     renameSubmit: 'Renommer',
+    duplicating: 'Duplication du dossier…',
   },
   albumScreen: {
     back: 'Dossiers',
@@ -183,7 +206,7 @@ const fr = {
     emptyText:
       'Prenez une photo ou importez-en une depuis votre galerie photo de votre portable, puis ajoutez un commentaire si vous le souhaitez.',
     modeLabel: 'CRÉEZ VOTRE ALBUM EN MODE',
-    private: 'Privé',
+    private: 'Loisir',
     or: 'ou',
     professional: 'Professionnel',
     sendLabelPro: 'Envoyer',
@@ -208,6 +231,9 @@ const fr = {
       "Autorise l'accès à l'appareil photo dans les réglages pour prendre des photos.",
     permLibraryBody:
       "Autorise l'accès à la galerie dans les réglages pour importer des photos.",
+    shareUnreadTitle: 'Partage illisible',
+    shareUnreadBody: (kind: string, n: number) =>
+      `ComClic n’a pas pu lire ce qui a été partagé (type ${kind}, ${n} fichier${n > 1 ? 's' : ''}). Essaie « ＋ Nouvelle photo » ou l’import depuis la galerie.`,
     photoNotAddedTitle: 'Photo non ajoutée à Photos',
     photoNotAddedBody:
       "La photo est bien dans l'album, mais autorise l'ajout à la photothèque dans les réglages pour la conserver aussi dans Photos.",
@@ -220,6 +246,28 @@ const fr = {
     noPhotoTitle: 'Aucune photo',
     noPhotoBody: "Cet album ne contient pas de photo à envoyer.",
     photosPrepFail: 'La préparation des photos a échoué.',
+    duplicateAlbumTitle: (name: string) => `Dupliquer « ${name} » ?`,
+    duplicateAlbumBody:
+      'Une copie indépendante du dossier et de ses photos sera créée. Modifier ou supprimer la copie ne touche pas à l’original.',
+    duplicateFail: 'La duplication du dossier a échoué.',
+    importNotBundleTitle: 'Fichier non reconnu',
+    importNotBundleBody:
+      "Choisissez un fichier d'album ComClic (.comclic) reçu par message, mail ou AirDrop.",
+    importFailBody: "L'ouverture de l'album a échoué.",
+    textPageTitle: 'Nouvelle page de texte',
+    textPageBody: 'Où placer cette page dans le dossier ?',
+    textPageAtStart: 'Au début',
+    textPageAtEnd: 'À la fin',
+  },
+  invite: {
+    title: 'Lien d’installation',
+    body:
+      'Si votre destinataire ne possède pas encore l’app ComClic, envoyez-lui le lien d’installation pour qu’il profite de toutes les fonctionnalités.',
+    send: 'Envoyer le lien',
+    /** Message texte envoyé à l'ami (SMS, WhatsApp, Mail…). */
+    message: (url: string) =>
+      `Je vous envoie un album photo réalisé avec ComClic. Installez l’app pour l’ouvrir : ${url}`,
+    fail: 'Le partage du lien a échoué.',
   },
   shareImport: {
     title: (n: number) => `Importer ${n} photo${n > 1 ? 's' : ''} dans…`,
@@ -251,6 +299,8 @@ const en: Dict = {
     back: 'Back',
     error: 'Error',
     ok: 'OK',
+    duplicate: 'Duplicate',
+    later: 'Later',
   },
   welcome: {
     kicker: 'Comment on your photos, save them or share them',
@@ -260,6 +310,7 @@ const en: Dict = {
     noName: 'Untitled',
     photoCount: (n: number) => `${n} photo${n > 1 ? 's' : ''}`,
     createdOn: (date: string) => `Created on ${date}`,
+    copyName: (name: string) => `${name} (copy)`,
   },
   photoCard: {
     tapWriteText: 'Tap to write this page’s text',
@@ -287,6 +338,9 @@ const en: Dict = {
     micDeniedTitle: 'Microphone not allowed',
     micDeniedBody:
       'Allow the microphone and speech recognition in Settings to dictate your captions.',
+    micFailedTitle: 'Dictation unavailable',
+    micFailedBody:
+      'On-device speech recognition did not start. Check that dictation is enabled in Settings → General → Keyboard, with the app language installed.',
   },
   spell: {
     progress: (i: number, n: number) => `Mistake ${i} of ${n}`,
@@ -303,6 +357,16 @@ const en: Dict = {
     contrast: 'Contrast',
     saturation: 'Saturation',
     warmth: 'Warmth',
+  },
+  camera: {
+    take: 'Take photo',
+    flip: 'Flip',
+    zoom: 'Zoom',
+    flash: { auto: 'Flash auto', on: 'Flash on', off: 'Flash off' },
+  },
+  viewer: {
+    open: 'View photo full screen',
+    hint: 'Pinch to zoom',
   },
   crop: {
     title: 'Crop',
@@ -327,12 +391,11 @@ const en: Dict = {
   },
   export: {
     title: 'Layout',
-    proNote:
-      'Clean fixed layout: white background, numbered photos, with date/time, location and description under each.',
     sizeLabel: 'Photo size',
     bgLabel: 'Background color',
     frameLabel: 'Framing',
     liseretLabel: 'Border around the photo',
+    placeLabel: 'Place the photo was taken',
     dateLabel: 'Date under photos',
     datePosLabel: 'Date position',
     textAlignLabel: 'Text alignment (text pages)',
@@ -370,11 +433,19 @@ const en: Dict = {
     emptyTitle: 'No folder',
     emptyText:
       'Create a folder to sort your photos, then export each folder as a printable PDF.',
+    searchPlaceholder: 'Search a folder…',
+    foundCount: (n: number) =>
+      n === 0 ? 'No result' : `${n} folder${n > 1 ? 's' : ''} found`,
+    sorts: { recent: 'Recent', name: 'Name A→Z', size: 'File size' },
+    noMatchTitle: 'No folder found',
+    noMatchText: 'Try another word: the search looks at folder names.',
     newFolder: '＋  New folder',
+    importAlbum: '⤓  Import a received album',
     createTitle: 'New folder',
     createSubmit: 'Create',
     renameTitle: 'Rename folder',
     renameSubmit: 'Rename',
+    duplicating: 'Duplicating folder…',
   },
   albumScreen: {
     back: 'Folders',
@@ -386,7 +457,7 @@ const en: Dict = {
     emptyText:
       'Take a photo or import one from your phone’s gallery, then add a caption if you like.',
     modeLabel: 'CREATE YOUR ALBUM IN MODE',
-    private: 'Private',
+    private: 'Leisure',
     or: 'or',
     professional: 'Professional',
     sendLabelPro: 'Send',
@@ -411,6 +482,9 @@ const en: Dict = {
       'Allow camera access in Settings to take photos.',
     permLibraryBody:
       'Allow gallery access in Settings to import photos.',
+    shareUnreadTitle: 'Nothing readable shared',
+    shareUnreadBody: (kind: string, n: number) =>
+      `ComClic could not read what was shared (type ${kind}, ${n} file${n > 1 ? 's' : ''}). Try “＋ New photo” or importing from the library.`,
     photoNotAddedTitle: 'Photo not added to Photos',
     photoNotAddedBody:
       'The photo is in the album, but allow adding to the photo library in Settings to keep it in Photos too.',
@@ -423,6 +497,27 @@ const en: Dict = {
     noPhotoTitle: 'No photo',
     noPhotoBody: 'This album has no photo to send.',
     photosPrepFail: 'Preparing the photos failed.',
+    duplicateAlbumTitle: (name: string) => `Duplicate “${name}”?`,
+    duplicateAlbumBody:
+      'An independent copy of the folder and its photos will be created. Editing or deleting the copy leaves the original untouched.',
+    duplicateFail: 'Duplicating the folder failed.',
+    importNotBundleTitle: 'File not recognised',
+    importNotBundleBody:
+      'Pick a ComClic album file (.comclic) received by message, mail or AirDrop.',
+    importFailBody: 'Opening the album failed.',
+    textPageTitle: 'New text page',
+    textPageBody: 'Where should this page go in the folder?',
+    textPageAtStart: 'At the beginning',
+    textPageAtEnd: 'At the end',
+  },
+  invite: {
+    title: 'Install link',
+    body:
+      'If your recipient doesn’t have the ComClic app yet, send them the install link so they can enjoy all its features.',
+    send: 'Send the link',
+    message: (url: string) =>
+      `I’m sending you a photo album made with ComClic. Install the app to open it: ${url}`,
+    fail: 'Sharing the link failed.',
   },
   shareImport: {
     title: (n: number) => `Import ${n} photo${n > 1 ? 's' : ''} into…`,

@@ -7,19 +7,26 @@ interface Props {
   album: Album;
   /** Nombre de photos du dossier. */
   count: number;
+  /** Poids total des photos, déjà formaté (« 38 Mo ») ; absent tant que la
+   *  mesure des fichiers n'est pas terminée. */
+  sizeLabel?: string;
   /** Vignette : URI de la première photo du dossier, s'il y en a une. */
   thumbUri?: string;
   onOpen: (album: Album) => void;
   onRename: (album: Album) => void;
+  /** Crée une copie indépendante du dossier (photos comprises). */
+  onDuplicate: (album: Album) => void;
   onDelete: (album: Album) => void;
 }
 
 export function AlbumCard({
   album,
   count,
+  sizeLabel,
   thumbUri,
   onOpen,
   onRename,
+  onDuplicate,
   onDelete,
 }: Props) {
   const { L, lang } = useLang();
@@ -36,7 +43,10 @@ export function AlbumCard({
         <Text style={styles.name} numberOfLines={2}>
           {album.name.trim() || L.album.noName}
         </Text>
-        <Text style={styles.count}>{L.album.photoCount(count)}</Text>
+        <Text style={styles.count}>
+          {L.album.photoCount(count)}
+          {sizeLabel ? ` · ${sizeLabel}` : ''}
+        </Text>
         <Text style={styles.created}>
           {L.album.createdOn(
             new Date(album.createdAt).toLocaleDateString(localeTag(lang), {
@@ -54,6 +64,14 @@ export function AlbumCard({
           onPress={() => onRename(album)}
         >
           <Text style={styles.iconText}>✎</Text>
+        </Pressable>
+        <Pressable
+          style={styles.iconBtn}
+          hitSlop={10}
+          accessibilityLabel={L.common.duplicate}
+          onPress={() => onDuplicate(album)}
+        >
+          <Text style={styles.iconText}>⧉</Text>
         </Pressable>
         <Pressable
           style={styles.iconBtn}
@@ -114,11 +132,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginTop: 3,
   },
-  actions: { gap: 8 },
+  actions: { gap: 6 },
   iconBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: C.tan,
     alignItems: 'center',
     justifyContent: 'center',

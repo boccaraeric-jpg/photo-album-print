@@ -4,6 +4,7 @@ import {
   Alert,
   BackHandler,
   FlatList,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -17,16 +18,29 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import {
+  useCameraPermissions,
+  type CameraCapturedPicture,
+} from 'expo-camera';
 
 import { C, F } from './src/theme';
 
-import type { Adjustments, Album, ExportOptions, Photo } from './src/types';
+import type {
+  Adjustments,
+  Album,
+  AlbumSort,
+  ExportOptions,
+  Photo,
+} from './src/types';
 import {
   comparePhotos,
+  loadAlbumSort,
   loadData,
   loadExportOptions,
   loadLang,
   saveAlbums,
+  saveAlbumSort,
   saveExportOptions,
   saveLang,
   savePhotos,
@@ -36,15 +50,22 @@ import {
   detectDeviceLang,
   dict,
   LangContext,
+  localeTag,
   SUPPORTED,
   useLang,
   type Lang,
 } from './src/i18n';
 import { newId } from './src/id';
 import { extractTakenAt } from './src/exif';
-import { getCurrentCoords, resolveCoords } from './src/photoLocation';
+import {
+  getCurrentCoords,
+  getLastKnownCoords,
+  resolveCoords,
+  resolveTakenAt,
+} from './src/photoLocation';
 import { reverseGeocode } from './src/geocode';
-import { deleteImage, persistImage } from './src/photoFiles';
+import { copyImage, deleteImage, fileSize, persistImage } from './src/photoFiles';
+import { formatBytes } from './src/fileSize';
 import { saveToPhotoLibrary } from './src/mediaLibrary';
 import { zipImages, zipPhotos } from './src/albumZip';
 import {
@@ -54,6 +75,7 @@ import {
   type ImportedEntry,
 } from './src/albumBundle';
 import { bakeAdjustedImage, isNeutral } from './src/adjustments';
+import { shareInstallLink } from './src/links';
 import {
   buildAlbumHtml,
   DEFAULT_EXPORT_OPTIONS,
@@ -73,8 +95,25 @@ import { AdjustModal } from './src/components/AdjustModal';
 import { NameModal } from './src/components/NameModal';
 import { ExportModal } from './src/components/ExportModal';
 import { PreviewModal } from './src/components/PreviewModal';
+import { CameraModal } from './src/components/CameraModal';
+import { PhotoViewerModal } from './src/components/PhotoViewerModal';
 import { CropModal } from './src/components/CropModal';
 import { WelcomeScreen } from './src/components/WelcomeScreen';
+
+// Ordre des puces de tri de l'accueil (libellés dans `L.home.sorts`).
+const SORT_KEYS: AlbumSort[] = ['recent', 'name', 'size'];
+
+/**
+ * Normalise pour la recherche : minuscules et **sans accents**, afin que
+ * « ete » trouve « Été ». `NFD` sépare les diacritiques, que l'on retire.
+ */
+function normalizeSearch(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+}
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -133,6 +172,8 @@ function Root() {
   const [loading, setLoading] = useState(true);
   const [openAlbumId, setOpenAlbumId] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState(true);
+  // Duplication de dossier en cours (copie des fichiers photo : peut durer).
+  const [duplicating, setDuplicating] = useState(false);
   // Import en attente (photos partagées OU album ComClic reçu d'un ami) :
   // nombre d'éléments, nom de dossier suggéré, et l'action d'import une fois le
   // dossier choisi. `null` tant qu'aucun partage n'est en cours.
@@ -177,6 +218,64 @@ function Root() {
       prev.map((a) => (a.id === id ? { ...a, coverPhotoId: photoId } : a)),
     );
   }, []);
+
+  // Duplique un dossier : nouveau dossier « Copie de … » + copie **de fichier**
+  // pour chaque photo. Les copies sont indépendantes (supprimer une photo de la
+  // copie n'efface pas l'original, cf. `deleteImage` qui supprime le fichier).
+  const duplicateAlbum = useCallback(
+    (album: Album) => {
+      const albumPhotos = photos
+        .filter((p) => p.albumId === album.id)
+        .sort(comparePhotos);
+      Alert.alert(
+        L.alert.duplicateAlbumTitle(album.name.trim() || L.album.noName),
+        L.alert.duplicateAlbumBody,
+        [
+          { text: L.common.cancel, style: 'cancel' },
+          {
+            text: L.common.duplicate,
+            onPress: async () => {
+              setDuplicating(true);
+              try {
+                const copyId = newId();
+                const created: Photo[] = [];
+                let coverId: string | undefined;
+                for (const p of albumPhotos) {
+                  const id = newId();
+                  if (p.kind === 'text') {
+                    created.push({ ...p, id, albumId: copyId });
+                  } else {
+                    // Une image ajustée garde son original : les deux fichiers
+                    // sont copiés pour que la copie reste ré-éditable.
+                    const uri = await copyImage(p.uri, id);
+                    const originalUri =
+                      p.originalUri && p.originalUri !== p.uri
+                        ? await copyImage(p.originalUri, `${id}-orig`)
+                        : undefined;
+                    created.push({ ...p, id, albumId: copyId, uri, originalUri });
+                  }
+                  if (p.id === album.coverPhotoId) coverId = id;
+                }
+                const copy: Album = {
+                  id: copyId,
+                  name: L.album.copyName(album.name.trim() || L.album.noName),
+                  createdAt: Date.now(),
+                  coverPhotoId: coverId,
+                };
+                setAlbums((prev) => [...prev, copy]);
+                if (created.length) setPhotos((prev) => [...prev, ...created]);
+              } catch {
+                Alert.alert(L.common.error, L.alert.duplicateFail);
+              } finally {
+                setDuplicating(false);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [photos, L],
+  );
 
   const deleteAlbum = useCallback(
     (album: Album) => {
@@ -286,6 +385,44 @@ function Root() {
     [finishImport],
   );
 
+  /**
+   * Ouvre un fichier `.comclic` depuis l'app Fichiers (Mail, Messages, iCloud…).
+   *
+   * Double du partage système, volontaire : `expo-share-intent` est un module
+   * **natif**, donc inerte dans Expo Go, et la feuille de partage ne propose pas
+   * toujours ComClic selon l'app d'origine. Ce chemin-ci passe par le même
+   * `parseAlbumBundle` + `pendingImport`, donc le même écran de destination.
+   */
+  const importBundleFile = useCallback(async () => {
+    const res = await DocumentPicker.getDocumentAsync({
+      // Les .comclic sont des ZIP ; iOS ne connaît pas cette extension, d'où le
+      // type large, avec vérification du contenu juste après.
+      type: '*/*',
+      copyToCacheDirectory: true,
+    });
+    if (res.canceled || !res.assets?.length) return;
+    const file = res.assets[0];
+    if (!looksLikeBundle(file.name) && !looksLikeBundle(file.uri)) {
+      Alert.alert(L.alert.importNotBundleTitle, L.alert.importNotBundleBody);
+      return;
+    }
+    try {
+      const parsed = await parseAlbumBundle(file.uri);
+      if (!parsed) {
+        Alert.alert(L.alert.importNotBundleTitle, L.alert.importNotBundleBody);
+        return;
+      }
+      const photoCount = parsed.entries.filter((e) => e.kind === 'photo').length;
+      setPendingImport({
+        count: photoCount,
+        defaultName: parsed.name || null,
+        run: (albumId) => runAlbumImport(parsed.entries, albumId),
+      });
+    } catch {
+      Alert.alert(L.common.error, L.alert.importFailBody);
+    }
+  }, [runAlbumImport, L]);
+
   // Partage système entrant → album ComClic (prioritaire) sinon images.
   // (En Expo Go, `hasShareIntent` reste faux : module natif absent.)
   useEffect(() => {
@@ -322,12 +459,24 @@ function Root() {
           defaultName: null,
           run: (albumId) => runImageImport(paths, albumId),
         });
+        return;
+      }
+      // 3) Reçu quelque chose d'inexploitable (texte, lien, image au type
+      // inattendu…). Sans ce message, l'app s'ouvrait et restait muette : de
+      // l'extérieur, impossible de distinguer « rien n'est arrivé » de « c'est
+      // arrivé mais je n'en fais rien ».
+      if (!cancelled) {
+        Alert.alert(
+          L.alert.shareUnreadTitle,
+          L.alert.shareUnreadBody(shareIntent?.type ?? '?', files.length),
+        );
+        resetShareIntent();
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [hasShareIntent, shareIntent, runAlbumImport, runImageImport]);
+  }, [hasShareIntent, shareIntent, runAlbumImport, runImageImport, resetShareIntent, L]);
 
   const openAlbum = albums.find((a) => a.id === openAlbumId) ?? null;
 
@@ -380,7 +529,9 @@ function Root() {
         onOpen={(album) => setOpenAlbumId(album.id)}
         onCreate={createAlbum}
         onRename={renameAlbum}
+        onDuplicate={duplicateAlbum}
         onDelete={deleteAlbum}
+        onImportBundle={importBundleFile}
       />
     );
   }
@@ -389,6 +540,12 @@ function Root() {
     <>
       {content}
       {shareModal}
+      {duplicating && (
+        <View style={styles.busyOverlay}>
+          <ActivityIndicator size="large" color={C.sienna} />
+          <Text style={styles.busyText}>{L.home.duplicating}</Text>
+        </View>
+      )}
     </>
   );
 }
@@ -399,7 +556,10 @@ interface HomeProps {
   onOpen: (album: Album) => void;
   onCreate: (name: string) => void;
   onRename: (id: string, name: string) => void;
+  onDuplicate: (album: Album) => void;
   onDelete: (album: Album) => void;
+  /** Ouvre un fichier .comclic reçu d'un autre utilisateur (app Fichiers). */
+  onImportBundle: () => void;
 }
 
 function HomeScreen({
@@ -408,12 +568,86 @@ function HomeScreen({
   onOpen,
   onCreate,
   onRename,
+  onDuplicate,
   onDelete,
+  onImportBundle,
 }: HomeProps) {
   const { L, lang, setLang } = useLang();
   const insets = useSafeAreaInsets();
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<Album | null>(null);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<AlbumSort>('recent');
+
+  // Le tri est retrouvé au lancement suivant (le texte cherché, lui, ne l'est pas).
+  useEffect(() => {
+    loadAlbumSort().then((stored) => {
+      if (stored) setSort(stored);
+    });
+  }, []);
+
+  const chooseSort = useCallback((next: AlbumSort) => {
+    setSort(next);
+    saveAlbumSort(next);
+  }, []);
+
+  // Nombre de photos par dossier : affiché sur chaque carte.
+  const countById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of photos) map.set(p.albumId, (map.get(p.albumId) ?? 0) + 1);
+    return map;
+  }, [photos]);
+
+  // Poids des fichiers, mesuré une seule fois par photo puis conservé : seules
+  // les photos encore inconnues sont interrogées, donc ajouter une photo ne
+  // relance pas un balayage complet du dossier.
+  const [sizeByPhoto, setSizeByPhoto] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const missing = photos.filter(
+        (p) => p.kind !== 'text' && p.uri && sizeByPhoto[p.id] === undefined,
+      );
+      if (missing.length === 0) return;
+      const measured: Record<string, number> = {};
+      for (const p of missing) measured[p.id] = await fileSize(p.uri);
+      if (!cancelled) setSizeByPhoto((prev) => ({ ...prev, ...measured }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [photos, sizeByPhoto]);
+
+  // Poids total par dossier (photos affichées ; les originaux conservés pour la
+  // ré-édition ne sont pas comptés — c'est le poids de l'album, pas du disque).
+  const bytesById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of photos) {
+      const size = sizeByPhoto[p.id];
+      if (size) map.set(p.albumId, (map.get(p.albumId) ?? 0) + size);
+    }
+    return map;
+  }, [photos, sizeByPhoto]);
+
+  const visibleAlbums = useMemo(() => {
+    const needle = normalizeSearch(query);
+    const kept = needle
+      ? albums.filter((a) => normalizeSearch(a.name).includes(needle))
+      : albums;
+    const sorted = [...kept];
+    if (sort === 'name') {
+      sorted.sort((a, b) =>
+        a.name.localeCompare(b.name, localeTag(lang), { sensitivity: 'base' }),
+      );
+    } else if (sort === 'size') {
+      sorted.sort((a, b) => (bytesById.get(b.id) ?? 0) - (bytesById.get(a.id) ?? 0));
+    } else {
+      sorted.sort((a, b) => b.createdAt - a.createdAt);
+    }
+    return sorted;
+  }, [albums, query, sort, bytesById, lang]);
+
+  const searching = query.trim().length > 0;
 
   return (
     <View style={styles.screen}>
@@ -436,13 +670,51 @@ function HomeScreen({
             </Pressable>
           ))}
         </View>
-        <Text style={styles.kicker}>{L.home.kicker}</Text>
+        <View style={styles.brandRow}>
+          <Image source={require('./assets/logo-mark.png')} style={styles.brandLogo} />
+          <Text style={styles.kicker}>{L.home.kicker}</Text>
+        </View>
         <Text style={styles.homeTitle}>{L.home.title}</Text>
-        <Text style={styles.count}>{L.home.folderCount(albums.length)}</Text>
+        <Text style={styles.count}>
+          {searching
+            ? L.home.foundCount(visibleAlbums.length)
+            : L.home.folderCount(albums.length)}
+        </Text>
+
+        <TextInput
+          style={styles.search}
+          value={query}
+          onChangeText={setQuery}
+          placeholder={L.home.searchPlaceholder}
+          placeholderTextColor={C.faint}
+          autoCorrect={false}
+          autoCapitalize="none"
+          clearButtonMode="while-editing"
+          returnKeyType="search"
+        />
+
+        <View style={styles.sortRow}>
+          {SORT_KEYS.map((key) => {
+            const on = sort === key;
+            return (
+              <Pressable
+                key={key}
+                style={[styles.sortChip, on && styles.sortChipOn]}
+                onPress={() => chooseSort(key)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+              >
+                <Text style={[styles.sortText, on && styles.sortTextOn]}>
+                  {L.home.sorts[key]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       <FlatList
-        data={albums}
+        data={visibleAlbums}
         keyExtractor={(a) => a.id}
         style={styles.listFlex}
         contentContainerStyle={styles.list}
@@ -455,17 +727,27 @@ function HomeScreen({
             <AlbumCard
               album={item}
               count={albumPhotos.length}
+              sizeLabel={
+                bytesById.get(item.id)
+                  ? formatBytes(bytesById.get(item.id)!, lang)
+                  : undefined
+              }
               thumbUri={cover?.uri}
               onOpen={onOpen}
               onRename={setRenaming}
+              onDuplicate={onDuplicate}
               onDelete={onDelete}
             />
           );
         }}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>{L.home.emptyTitle}</Text>
-            <Text style={styles.emptyText}>{L.home.emptyText}</Text>
+            <Text style={styles.emptyTitle}>
+              {searching ? L.home.noMatchTitle : L.home.emptyTitle}
+            </Text>
+            <Text style={styles.emptyText}>
+              {searching ? L.home.noMatchText : L.home.emptyText}
+            </Text>
           </View>
         }
       />
@@ -476,6 +758,12 @@ function HomeScreen({
           onPress={() => setCreating(true)}
         >
           <Text style={styles.btnPrimaryText}>{L.home.newFolder}</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.btn, styles.btnGhost]}
+          onPress={onImportBundle}
+        >
+          <Text style={styles.btnGhostText}>{L.home.importAlbum}</Text>
         </Pressable>
       </View>
 
@@ -536,6 +824,9 @@ function AlbumScreen({
   const [editing, setEditing] = useState<Photo | null>(null);
   const [adjusting, setAdjusting] = useState<Photo | null>(null);
   const [cropping, setCropping] = useState<Photo | null>(null);
+  const [capturing, setCapturing] = useState(false);
+  const [viewing, setViewing] = useState<Photo | null>(null);
+  const [, requestCameraPermission] = useCameraPermissions();
   const [exportVisible, setExportVisible] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [sending, setSending] = useState(false);
@@ -599,13 +890,29 @@ function AlbumScreen({
     }
   }, [initialEditPhotoId, photos, onEditConsumed]);
 
+  // Géocodage inverse best-effort : renseigne le lieu sans bloquer, et le
+  // reflète dans l'éditeur s'il est déjà ouvert (sinon le champ « Lieu »
+  // resterait vide alors que la position a bien été trouvée).
+  const attachPlace = useCallback(
+    (id: string, coords: { lat: number; lon: number }) => {
+      reverseGeocode(coords).then((place) => {
+        if (!place) return;
+        setPhotos((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, place } : p)),
+        );
+        setEditing((cur) => (cur && cur.id === id ? { ...cur, place } : cur));
+      });
+    },
+    [setPhotos],
+  );
+
   const addAsset = useCallback(
     async (
       uri: string,
       openEditor: boolean,
       takenAt?: number,
       coords?: { lat: number; lon: number },
-    ) => {
+    ): Promise<string | undefined> => {
       const id = newId();
       try {
         const persisted = await persistImage(uri, id);
@@ -622,52 +929,70 @@ function AlbumScreen({
         };
         setPhotos((prev) => [...prev, photo]);
         if (openEditor) setEditing(photo);
-        // Géocodage inverse best-effort en arrière-plan : renseigne le lieu
-        // sans bloquer l'import (l'utilisateur peut le corriger à la main).
-        if (coords) {
-          reverseGeocode(coords).then((place) => {
-            if (place) {
-              setPhotos((prev) =>
-                prev.map((p) => (p.id === id ? { ...p, place } : p)),
-              );
-              // Si l'éditeur de cette photo est déjà ouvert, y refléter le lieu
-              // résolu (sinon le champ « Lieu » resterait vide sous les yeux de
-              // l'utilisateur alors que la position a bien été trouvée).
-              setEditing((cur) => (cur && cur.id === id ? { ...cur, place } : cur));
-            }
-          });
-        }
+        if (coords) attachPlace(id, coords);
+        return id;
       } catch {
         Alert.alert(L.common.error, L.alert.savePhotoFail);
+        return undefined;
       }
     },
-    [album.id, setPhotos],
+    [album.id, setPhotos, attachPlace, L],
   );
 
+  // Ouvre l'appareil photo **intégré** (`CameraModal`) plutôt que la caméra
+  // système : celle d'iOS impose son écran « Use Photo / Retake » après chaque
+  // déclenchement, redondant avec la suppression depuis le dossier.
   const takePhoto = useCallback(async () => {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) {
+    const perm = await requestCameraPermission();
+    if (!perm?.granted) {
       Alert.alert(L.alert.permTitle, L.alert.permCameraBody);
       return;
     }
-    const res = await ImagePicker.launchCameraAsync({ quality: 0.8, exif: true });
-    if (!res.canceled && res.assets[0]) {
-      const asset = res.assets[0];
-      // Enregistre d'abord la photo dans la photothèque du téléphone
-      // (sans commentaire), pour la conserver en dehors de l'album.
-      try {
-        const saved = await saveToPhotoLibrary(asset.uri);
-        if (!saved) {
-          Alert.alert(L.alert.photoNotAddedTitle, L.alert.photoNotAddedBody);
-        }
-      } catch {
-        // L'échec d'enregistrement dans Photos ne doit pas bloquer l'album.
-      }
-      // Appareil photo : la capture ne porte pas de GPS → position de l'appareil.
-      const coords = (await resolveCoords(asset)) ?? (await getCurrentCoords());
-      await addAsset(asset.uri, true, extractTakenAt(asset), coords);
-    }
-  }, [addAsset]);
+    setCapturing(true);
+  }, [requestCameraPermission, L]);
+
+  // Photo prise dans `CameraModal` : même traitement qu'avant (photothèque,
+  // position de l'appareil, ouverture de l'éditeur de commentaire).
+  const onCapture = useCallback(
+    async (picture: CameraCapturedPicture) => {
+      setCapturing(false);
+      // Copie dans la photothèque du téléphone : lancée sans être attendue.
+      // L'éditeur de commentaire n'en dépend pas, et l'attendre retardait son
+      // ouverture de plusieurs centaines de millisecondes.
+      saveToPhotoLibrary(picture.uri)
+        .then((saved) => {
+          if (!saved) {
+            Alert.alert(L.alert.photoNotAddedTitle, L.alert.photoNotAddedBody);
+          }
+        })
+        .catch(() => {
+          // L'échec d'enregistrement dans Photos ne doit pas bloquer l'album.
+        });
+      // La capture ne porte pas de GPS → position de l'appareil. On part de la
+      // dernière position connue, disponible **immédiatement** : attendre un
+      // point frais (`getCurrentCoords`) prenait plusieurs secondes en intérieur
+      // et retardait d'autant l'ouverture de l'éditeur.
+      const quick = await getLastKnownCoords();
+      const id = await addAsset(
+        picture.uri,
+        true,
+        extractTakenAt(picture),
+        quick,
+      );
+      if (!id) return;
+      // Point précis en arrière-plan : corrige les coordonnées, et résout le lieu
+      // si la position immédiate manquait (permission jamais accordée, ou trop
+      // ancienne). C'est aussi cet appel qui demande la permission au besoin.
+      getCurrentCoords().then((coords) => {
+        if (!coords) return;
+        setPhotos((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, coords } : p)),
+        );
+        if (!quick) attachPlace(id, coords);
+      });
+    },
+    [addAsset, attachPlace, setPhotos, L],
+  );
 
   const pickFromLibrary = useCallback(async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -684,10 +1009,12 @@ function AlbumScreen({
       // Une seule photo → ouvre l'éditeur de commentaire ; plusieurs → ajout direct.
       const openEditor = res.assets.length === 1;
       for (const asset of res.assets) {
+        // Date **et** lieu passent par la photothèque quand l'EXIF de l'asset
+        // est vide : PHPicker caviarde les métadonnées de la copie qu'il remet.
         await addAsset(
           asset.uri,
           openEditor,
-          extractTakenAt(asset),
+          await resolveTakenAt(asset),
           await resolveCoords(asset),
         );
       }
@@ -695,19 +1022,44 @@ function AlbumScreen({
   }, [addAsset]);
 
   // Ajoute une page de texte seule (intro, dédicace, séparateur) et l'ouvre pour
-  // saisir le texte. Réordonnable comme une photo.
+  // saisir le texte. Réordonnable ensuite comme une photo par les boutons ▲▼.
   const addTextPage = useCallback(() => {
-    const entry: Photo = {
-      id: newId(),
-      kind: 'text',
-      albumId: album.id,
-      uri: '',
-      comment: '',
-      createdAt: Date.now(),
+    const create = (position: 'start' | 'end') => {
+      const entry: Photo = {
+        id: newId(),
+        kind: 'text',
+        albumId: album.id,
+        uri: '',
+        comment: '',
+        createdAt: Date.now(),
+      };
+      if (position === 'end') {
+        // `order` laissé indéfini : la comparaison place l'entrée en fin de dossier.
+        setPhotos((prev) => [...prev, entry]);
+      } else {
+        // En tête : il faut renuméroter tout le dossier, un simple `order: 0`
+        // entrerait en conflit avec la photo qui porte déjà ce rang.
+        const rankById = new Map(
+          [entry, ...orderedPhotos].map((p, i) => [p.id, i] as const),
+        );
+        setPhotos((prev) => [
+          ...prev.map((p) =>
+            rankById.has(p.id) ? { ...p, order: rankById.get(p.id)! } : p,
+          ),
+          { ...entry, order: 0 },
+        ]);
+      }
+      setEditing(entry);
     };
-    setPhotos((prev) => [...prev, entry]);
-    setEditing(entry);
-  }, [album.id, setPhotos]);
+
+    // « Au début » = juste après la 1ʳᵉ de couverture, la couverture n'étant pas
+    // une entrée du dossier mais une page générée au rendu.
+    Alert.alert(L.alert.textPageTitle, L.alert.textPageBody, [
+      { text: L.alert.textPageAtStart, onPress: () => create('start') },
+      { text: L.alert.textPageAtEnd, onPress: () => create('end') },
+      { text: L.common.cancel, style: 'cancel' },
+    ]);
+  }, [album.id, orderedPhotos, setPhotos, L]);
 
   // Enregistre une photo recadrée : la version recadrée devient la nouvelle base
   // (les réglages d'image sont réinitialisés, ils se recomposeront dessus).
@@ -900,6 +1252,27 @@ function AlbumScreen({
     }
   }, [orderedPhotos, albumTitle]);
 
+  // Le destinataire d'un album ComClic a besoin de l'app pour l'ouvrir : on lui
+  // propose le lien d'installation dans un message texte séparé (la feuille de
+  // partage native n'accepte pas fichier + texte dans le même envoi).
+  // ⚠️ iOS avale une Alert présentée pendant la fermeture d'une feuille de
+  // partage ou d'un Modal : on laisse l'animation se terminer avant d'ouvrir.
+  const offerInstallLink = useCallback(() => {
+    setTimeout(() => {
+      Alert.alert(L.invite.title, L.invite.body, [
+        { text: L.common.later, style: 'cancel' },
+        {
+          text: L.invite.send,
+          onPress: () => {
+            shareInstallLink(lang).catch(() => {
+              Alert.alert(L.common.error, L.invite.fail);
+            });
+          },
+        },
+      ]);
+    }, 600);
+  }, [L, lang]);
+
   // Étape 2d : album ComClic (.comclic) = images pleine réso + manifeste
   // (commentaires, lieux, dates, ordre, couverture, textes). Destiné à un ami
   // qui a ComClic : il le reçoit via le partage système et l'app le reconstruit.
@@ -909,12 +1282,15 @@ function AlbumScreen({
       const uri = await buildAlbumBundle(orderedPhotos, albumTitle, defaultCoverId);
       await shareFile(uri, albumTitle, 'application/zip', 'public.zip-archive');
       setPreviewVisible(false);
+      // Un .comclic ne s'ouvre qu'avec l'app : proposer d'envoyer le lien
+      // d'installation au destinataire, dans un second message.
+      offerInstallLink();
     } catch {
       Alert.alert(L.common.error, L.alert.photosPrepFail);
     } finally {
       setSending(false);
     }
-  }, [orderedPhotos, albumTitle, defaultCoverId]);
+  }, [orderedPhotos, albumTitle, defaultCoverId, offerInstallLink]);
 
   // Choix du format au moment de l'envoi. Chaque option ouvre la feuille de
   // partage native (Messenger, Mail, AirDrop… y figurent selon le contenu).
@@ -958,11 +1334,14 @@ function AlbumScreen({
       <StatusBar style="dark" />
 
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable hitSlop={14} onPress={onBack} style={styles.backBtn}>
-          <Text style={styles.backLink}>
-            <Text style={styles.backChevron}>‹ </Text>{L.albumScreen.back}
-          </Text>
-        </Pressable>
+        <View style={styles.brandRow}>
+          <Pressable hitSlop={14} onPress={onBack} style={styles.backBtn}>
+            <Text style={styles.backLink}>
+              <Text style={styles.backChevron}>‹ </Text>{L.albumScreen.back}
+            </Text>
+          </Pressable>
+          <Image source={require('./assets/logo-mark.png')} style={styles.brandLogo} />
+        </View>
         <TextInput
           style={styles.titleInput}
           value={album.name}
@@ -1003,6 +1382,7 @@ function AlbumScreen({
             photo={item}
             isCover={item.id === defaultCoverId}
             onEdit={setEditing}
+            onView={setViewing}
             onSetCover={(photo) => onSetCover(photo.id)}
             onAdjust={setAdjusting}
             onCrop={setCropping}
@@ -1081,6 +1461,14 @@ function AlbumScreen({
         onClose={() => setCropping(null)}
       />
 
+      <CameraModal
+        visible={capturing}
+        onCapture={onCapture}
+        onClose={() => setCapturing(false)}
+      />
+
+      <PhotoViewerModal photo={viewing} onClose={() => setViewing(null)} />
+
       <ExportModal
         visible={exportVisible}
         initial={exportOptions}
@@ -1111,6 +1499,20 @@ function AlbumScreen({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.paper },
   center: { alignItems: 'center', justifyContent: 'center' },
+  // Voile bloquant pendant la duplication d'un dossier (copie des fichiers).
+  busyOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(32,27,20,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  busyText: {
+    fontFamily: F.monoBold,
+    fontSize: 13,
+    color: C.card,
+    letterSpacing: 1,
+  },
   reorderHint: {
     fontFamily: F.mono,
     fontSize: 11,
@@ -1151,6 +1553,33 @@ const styles = StyleSheet.create({
   },
   langTextOn: { color: C.paper },
   backBtn: { alignSelf: 'flex-start', paddingVertical: 4, marginBottom: 4 },
+  // Rappel de l'icône de l'app en haut de chaque écran (accueil : à gauche du
+  // sur-titre ; dossier : à droite du lien de retour).
+  search: {
+    marginTop: 12,
+    height: 44,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.line,
+    fontFamily: F.mono,
+    fontSize: 15,
+    color: C.ink,
+  },
+  sortRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  sortChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: C.tan,
+  },
+  sortChipOn: { backgroundColor: C.sienna },
+  sortText: { fontFamily: F.monoBold, fontSize: 13, color: C.ink },
+  sortTextOn: { color: C.paper },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  brandRowSpread: { justifyContent: 'space-between' },
+  brandLogo: { width: 34, height: 34, resizeMode: 'contain' },
   backLink: {
     fontFamily: F.monoBold,
     fontSize: 18,

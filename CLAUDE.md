@@ -20,6 +20,13 @@ Il n'y a **ni tests, ni linter, ni CI** — `tsc --noEmit` est la seule vérific
 L'app se valide **manuellement dans Expo Go sur un iPhone**. Boucle de validation côté PC :
 `npx expo start --clear` puis `curl "http://localhost:8081/index.bundle?platform=ios&dev=true"`
 (HTTP 200 = le bundle compile ; c'est là que sortent les erreurs d'import/transform).
+- ⚠️ Si le **port 8081 est déjà pris** par un autre projet, `npx expo start` s'arrête en mode non
+  interactif (« Input is required… › Skipping dev server ») : démarrer avec `--port 8082` et
+  interroger le bundle sur ce port. Vérifier **quel** projet occupe le port avant de tuer quoi que
+  ce soit : `netstat -ano | grep :8081` puis `Get-CimInstance Win32_Process -Filter "ProcessId=<pid>"`.
+- Bundle HTTP 200 ne prouve pas que l'iPhone a le nouveau code : contrôler que le **log Metro**
+  montre bien un bundle servi à l'appareil, ou chercher une chaîne neuve dans le bundle téléchargé.
+  Un appareil resté sur EAS Update / une vieille URL sert silencieusement l'ancienne version.
 
 ### Connexion Expo Go (pièges récurrents)
 - Après **tout** `npm/expo install`, arrêter Metro et relancer avec `npx expo start --clear`.
@@ -74,6 +81,39 @@ selon `openAlbumId`. Tout se joue par superposition de modaux (`src/components/*
 lancement, `App` affiche d'abord `WelcomeScreen` (accueil **« ComClic »**, halo + reflet dessinés en
 **Skia**, logo `assets/welcome-logo.png`) jusqu'au bouton « Commencer » (état `showWelcome`).
 
+**Duplication d'un dossier** : bouton **⧉** d'`AlbumCard` → `duplicateAlbum` (App.tsx). Crée un
+dossier « Copie de … » (`L.album.copyName`) et **copie les fichiers** de chaque photo via
+`copyImage()` (`photoFiles.ts`, alias de `persistImage`) — jamais de réutilisation d'URI : la copie
+doit être indépendante, sinon supprimer une photo de la copie effacerait le fichier de l'original
+(`deleteImage` supprime le fichier disque). L'`originalUri` d'une photo ajustée est copié aussi (la
+copie reste ré-éditable), et la photo de couverture est remappée. Un voile `busyOverlay` bloque
+l'écran pendant la copie (`duplicating`).
+
+**Entrées venues du système** (`expo-share-intent`, `src/components/ShareImportModal.tsx`,
+`src/albumBundle.ts`) : l'app est une **cible de partage** (feuille de partage iOS via une share
+extension, intents Android ; plugin + `iosAppGroupIdentifier` dans `app.json`). `Root` observe
+`useShareIntentContext()` et remplit `pendingImport` : d'abord un **album ComClic** si le fichier
+reçu passe `looksLikeBundle()` + `parseAlbumBundle()` (le manifeste porte le marqueur
+`comclic-album`), sinon les **images brutes** partagées. Dans les deux cas `ShareImportModal` demande
+le dossier de destination, puis `runAlbumImport` / `runImageImport` créent les `Photo` et
+`finishImport` ouvre le dossier. ⚠️ Module **natif** : en Expo Go `hasShareIntent` reste faux (le
+provider est no-op) — ce flux ne se teste que sur un build EAS.
+
+**Recevoir un album sans le partage système** : le bouton **« ⤓ Importer un album reçu »** de la
+barre d'`HomeScreen` (`importBundleFile` dans `Root`) ouvre l'app Fichiers via
+`expo-document-picker`, puis rejoint le **même** chemin que le partage entrant —
+`looksLikeBundle()` + `parseAlbumBundle()` → `pendingImport` → `ShareImportModal` (choix du dossier)
+→ `runAlbumImport`. Double volontaire : `expo-share-intent` est natif donc **inerte en Expo Go**, et
+la feuille de partage ne propose pas ComClic depuis toutes les apps. Le sélecteur demande `type: '*/*'`
+— iOS ne connaît pas l'extension `.comclic`, un filtre par type ne renverrait rien ; le contrôle se
+fait après coup sur le nom puis sur le manifeste.
+
+**Dictée vocale** (`expo-speech-recognition`, `src/components/VoiceCommentButton.tsx`) :
+reconnaissance **on-device** (iOS `SFSpeechRecognizer`) dans la langue courante de l'app ; la dictée
+**s'ajoute** au commentaire existant (résultats partiels en direct, phrases finales figées). Là
+encore **natif** : `CommentModal` ne monte le bouton que si la reconnaissance est disponible, donc
+invisible dans Expo Go.
+
 **Données & persistance** (`src/types.ts`, `src/storage.ts`) : un `Album` (dossier) regroupe des
 `Photo` stockées en **liste plate globale** (appartenance via `Photo.albumId`, filtrage à
 l'affichage ; un export = un dossier). Tout l'état vit dans `useState` au niveau de `App`, réécrit
@@ -95,15 +135,44 @@ réinitialisés).
 
 **Chaîne d'export** (le cœur de l'app). Les **deux boutons du bas d'`AlbumScreen` sont les points
 d'entrée** (ils pilotent aussi les libellés) :
-- Les deux boutons du bas sont **Privé** (familial) et **Professionnel**. **Les deux** ouvrent
-  `ExportModal` (mise en page) → « Aperçu » → `PreviewModal` → envoi. En **pro**, `ExportModal`
-  n'affiche qu'une note + le réglage d'**alignement du texte** (le reste du gabarit est imposé).
-- Le pop-up format (`chooseFormat`) a **trois options** : **PDF** (`sendPdf`), **Images de l'album**
+- Les deux boutons du bas sont **Loisir** (familial — libellé `albumScreen.private`, renommé depuis
+  « Privé » ; la clé garde son nom) et **Professionnel**. **Les deux** ouvrent
+  `ExportModal` (mise en page) → « Aperçu » → `PreviewModal` → envoi. `ExportModal` est un **écran
+  plein écran** (comme `CropModal` / `PreviewModal`) : en-tête ✕ + titre + badge Privé/Professionnel,
+  corps défilant, barre d'action fixe gérant `insets.bottom`. Pas une feuille basse : la version
+  précédente imitait une sheet système (`Modal transparent` + fond assombri + poignée dessinée) sans
+  ses comportements, et son contenu ne défilait pas.
+- En **pro**, `ExportModal` affiche **encadrement**, **lieu de prise de vue**, **date sous les
+  photos**, **position de la date** et **alignement du texte** ; seuls **taille**, **fond** et **liseré** restent imposés
+  (photo pleine largeur sur fond blanc). Ces quatre réglages sont honorés par les **deux** moteurs :
+  `buildProDocument()` (`pdf.ts` — `frameCss` par `options.frame`, ligne de date retirée si
+  `dateFormat: 'none'`, `.meta .row.date dd { text-align }`) **et** la branche `pro` de
+  `renderPhotoPage()` (`pageImages.ts` — même correspondance d'encadrement, `align` du texte de
+  date). ⚠️ Toucher l'un sans l'autre fait diverger l'aperçu PDF du rendu JPEG.
+- **`showPlace`** (`ExportOptions`) masque le **lieu** dans les deux styles : légende `lieu · date`
+  du familial (`figureHtml`, branche familiale de `renderPhotoPage`) et ligne « Lieu » du pro
+  (`proEntryHtml`, branche pro) — la ligne disparaît en entier, pas seulement sa valeur. Les options
+  déjà persistées n'ont pas la clé : `{ ...DEFAULT_EXPORT_OPTIONS, ...stored }` la ramène à `true`.
+- Le pop-up format (`chooseFormat`) a **quatre options** : **PDF** (`sendPdf`), **Images de l'album**
   (`sendImages` = le rendu mis en page, 1 image/page → ZIP si plusieurs), et **Photos (à réutiliser)**
   (`sendReusablePhotos` → `zipPhotos` dans `albumZip.ts` = ZIP des **fichiers photo affichés** pleine
   résolution + un `contexte.txt` listant commentaire/date/lieu de chaque photo). Chacune ouvre la
   **feuille de partage native iOS** (`expo-sharing`). Un **ZIP** passe par Mail/AirDrop/Fichiers, **pas**
   Messenger/WhatsApp.
+- La 4ᵉ option, **Album ComClic** (`sendComclicAlbum` → `albumBundle.ts`), envoie le `.comclic`
+  (ZIP + manifeste) à un ami qui a l'app. Les photos sont **redimensionnées/recompressées** via
+  `readPrintBase64()` avec le **même budget adaptatif que le PDF** (`maxEdge`/`quality` selon le
+  nombre de photos) — envoyé souvent par SMS/iMessage, la pleine résolution (12 photos ≈ 36 Mo)
+  était intransmissible. Contrairement à « Photos (à réutiliser) » (`sendReusablePhotos`), qui
+  elle garde la pleine résolution : c'est un choix délibéré propre à cette option-là. Ce fichier
+  `.comclic` ne s'ouvrant **qu'**avec ComClic, l'envoi est
+  suivi de `offerInstallLink()` : une alerte propose d'envoyer, **dans un second message**, le lien
+  d'installation (`shareInstallLink` de `src/links.ts` → `Share.share` de React Native, texte seul —
+  la feuille de partage native ne transporte pas fichier + texte en un seul envoi).
+  `INSTALL_URL` pointe vers `docs/index.html`, publié par **GitHub Pages**
+  (`https://boccaraeric-jpg.github.io/photo-album-print/`) : page intermédiaire volontaire, pour
+  pouvoir passer de TestFlight à l'App Store **sans republier de build**. Deux endroits à tenir à
+  jour, et deux seulement : `src/links.ts` (in-app) et `docs/index.html` (la page).
 - `ExportOptions` (`src/types.ts`) : **taille** (`small`/`medium`/`large`/**`full`** = pleine page,
   légende ≤ 15 mots), fond, encadré, **liseré** (posé sur la photo, pas le support), **dateFormat**
   (`short`/`shortTime`/`long`/`full`/`none`), **dateAlign** et **textAlign** (gauche/centre/droite ;
@@ -114,6 +183,11 @@ d'entrée** (ils pilotent aussi les libellés) :
   `uri` vide, `comment` = le texte) créée par « ＋ Page de texte ». `src/paginate.ts`
   `paginateEntries()` renvoie des `AlbumPage` (`photos` groupées | `text` autonome) ; les pages de
   texte s'intercalent dans **les deux** rendus.
+  À la création, `addTextPage` (App.tsx) demande **où placer la page** : « À la fin » laisse
+  `order` indéfini (`comparePhotos` range l'entrée en dernier), « Au début » **renumérote tout le
+  dossier** et donne `order: 0` à la nouvelle page — poser `order: 0` sans renuméroter créerait un
+  ex æquo avec la 1ʳᵉ photo. « Au début » = juste après la 1ʳᵉ de couverture, celle-ci étant une
+  page générée au rendu et non une entrée du dossier.
 - `src/pdf.ts` `buildAlbumHtml()` (familial) / `buildProDocument()` (pro, photos numérotées,
   Lieu / Date / Description, pages de texte intercalées, flux `page-break-inside: avoid`). La **1ère
   de couverture** = titre + année (`yearLabel`, calculée sur les photos) + **la seule photo de
@@ -185,7 +259,7 @@ de compilation sinon). Valeurs = chaînes **ou fonctions** (pluriel/interpolatio
 **`expo-localization`** (langue de l'iPhone), sinon langue forcée persistée (`storage.loadLang`).
 - **Dans React** : `const { L, lang, setLang } = useLang()` (Context → re-render à la bascule). Texte
   = `L.section.key`. Bascule FR/EN = sélecteur dans l'en-tête `HomeScreen` (`setLang`).
-- **Hors React** (`pdf.ts`, `pageImages.ts`, `dateFormat.ts`, `albumZip.ts`) : `lang: Lang` passé en
+- **Hors React** (`pdf.ts`, `pageImages.ts`, `dateFormat.ts`, `albumZip.ts`, `links.ts`) : `lang: Lang` passé en
   **paramètre** ; libellés via `dict(lang).…`, dates via `localeTag(lang)`. `buildAlbumHtml` /
   `buildAlbumImages` / `zipPhotos` prennent `lang` en dernier argument (défaut `'fr'`).
 - Le **correcteur offline FR** (`checkSpelling`, index phonétique FR) n'a pas d'équivalent EN : son
@@ -195,26 +269,114 @@ de compilation sinon). Valeurs = chaînes **ou fonctions** (pluriel/interpolatio
   rendus album embarquent **Montserrat** (sans glyphes CJK) → il faudrait une police CJK dédiée.
 
 ## Dépendances & assets à connaître
-- Ajouts : `react-native-webview` (aperçu), `expo-location` (lieu), `jszip` (export multi-images),
-  `talisman` (phonétique FR), `@expo/vector-icons` (icônes), `expo-font` (polices du thème),
-  `expo-image-manipulator` (recadrage). Toutes épinglées pour Expo Go.
+- Ajouts : `react-native-webview` (aperçu), `expo-location` (lieu), `jszip` (ZIP d'export et
+  `.comclic`), `talisman` (phonétique FR), `@expo/vector-icons` (icônes), `expo-font` (polices du
+  thème), `expo-image-manipulator` (recadrage), `@shopify/react-native-skia` (accueil + rendu JPEG
+  des pages), `@react-native-community/slider` (réglages d'image), `expo-updates` (EAS Update).
+  Toutes épinglées pour Expo Go.
+- **Modules natifs absents d'Expo Go** — ne se valident que sur un build EAS : `expo-share-intent`
+  (import par partage système), `expo-speech-recognition` (dictée). Le code doit rester **tolérant**
+  à leur absence (provider no-op, bouton non monté), sinon Expo Go crashe au lancement.
 - `react-native-reanimated` / `react-native-worklets` sont **présents mais plus utilisés** (restes
   du glisser-déposer supprimé) — sûrs à retirer si besoin.
 - `src/frenchPhonetic.json` est un **asset généré de ~5,9 Mo** (bundle ~15 Mo, premier chargement
   plus long) : ne pas le supprimer ; régénérable par un script node (talisman + `an-array-of-french-words`).
 - `src/montserratFonts.ts` = **~0,9 Mo** de base64 (graisses 500 + 800), généré une fois depuis
   `@expo-google-fonts/montserrat`.
-- **Icônes** (« icône v2 », dossier + chevron sienne sur crème) : `assets/icon.png` (iOS, carré plein
-  bord à bord — recadré **à l'intérieur** des coins arrondis de la source pour que le masque iOS soit
-  le seul arrondi), `assets/android-icon-foreground.png` (visuel à 66 %, zone sûre Android),
-  `assets/android-icon-background.png` (aplat **`#FBF4EA`** = crème intérieure de l'icône, aussi dans
-  `app.json` `adaptiveIcon.backgroundColor`). `assets/welcome-logo.png` (512 px) = **même visuel**,
-  arrondi par le `borderRadius` du style, pas rôgné. Tous générés avec `sharp` depuis
-  `Bureau/icone v2.jpg`. ⚠️ Ces icônes **n'apparaissent que dans un build natif** — dans Expo Go
-  l'app porte l'icône d'Expo Go.
+- **Icônes** (« icône v7 » : **monogramme « CC » de ComClic seul**, sienne, sur crème, avec les
+  cercles de visée — deux arcs ouverts à droite, centres x 338 et 686 / y 512, r 166,
+  `stroke-width: 84`, dimensionnés pour **remplir le cercle de visée extérieur**). Historique utile :
+  v2 = **dossier** ; v3 = appareil photo détaillé mais **chevron** masquant l'objectif ; v4 = chevron
+  réduit en badge (refusé) ; v5 = chevron agrandi ; v6 = chevron remplacé par le **double C** (il ne
+  disait rien du nom de l'app) sur fond d'appareil photo ; **v7 = appareil photo retiré**, il
+  alourdissait le dessin. ⚠️ **Ne pas rapprocher les deux C** : centres trop proches, les arcs
+  s'enchevêtrent et le sigle devient une tache illisible (essayé). Les sources sont **vectorielles et versionnées** dans `design/` :
+  `icon.svg` (visuel complet, fond crème bord à bord), `icon-foreground.svg` (visuel seul à 66 %,
+  transparent, zone sûre Android), `icon-monochrome.svg` (« CC » plein en noir, teinté par Android),
+  `logo-mark.svg` (**marque seule**, transparente, sans cercles de visée).
+  `node design/build-icons.js` régénère **tous** les PNG d'`assets/` : `icon.png` (1024, iOS — carré
+  plein, le masque arrondi est celui d'iOS), `welcome-logo.png` (512, arrondi par le `borderRadius`
+  du style), `favicon.png`, `android-icon-foreground.png`, `android-icon-monochrome.png`,
+  `logo-mark.png` (256) et l'aplat `android-icon-background.png` (**`#FBF4EA`** = crème intérieure,
+  aussi dans `app.json` `adaptiveIcon.backgroundColor`). Retoucher le dessin = éditer le SVG puis
+  relancer le script, jamais repartir d'un JPEG. ⚠️ Ces icônes **n'apparaissent que dans un build
+  natif** — dans Expo Go l'app porte l'icône d'Expo Go.
+- **Logo dans l'app** : `WelcomeScreen` utilise `welcome-logo.png` (grand, fond crème) ;
+  `HomeScreen` et `AlbumScreen` affichent `logo-mark.png` en **34 px** dans leur en-tête (styles
+  `brandRow` / `brandRowSpread` / `brandLogo` d'`App.tsx`) — accueil à gauche du sur-titre, écran
+  dossier à droite du lien de retour. Ce rappel-là, contrairement à l'icône système, **est** visible
+  dans Expo Go.
 - **Outils PC uniquement, jamais dans les deps RN** : `sharp` (génération icônes + logo), `qrcode`
   (QR Expo Go), `@expo-google-fonts/montserrat` (extraction des TTF pour le base64). Les installer en
   **`npm install <pkg> --no-save`**, générer, puis **nettoyer** : `npm uninstall <pkg> --no-save` et
   au besoin `rm -rf node_modules/<pkg>` ; **vérifier** que `package.json` est inchangé
   (`diff` avec une copie avant install). La skill de design vit dans `.agents/skills/` (non suivi,
   hors commits, comme les notes `*.doc` et `skills-lock.json`).
+  ⚠️ Ce cycle install/désinstall **fait tomber Metro** s'il tourne (`ENOENT ... watch
+  'node_modules/.<tmp>'`, le watcher suit un dossier temporaire disparu) : générer les assets
+  **Metro arrêté**, ou le relancer ensuite.
+
+### Règle générale : ne jamais toucher `node_modules` avec Metro allumé
+Vaut pour `npm install/uninstall`, `npx expo install` **et `npm dedupe`**. Metro garde en cache la
+carte des modules : un paquet déplacé ou dédupliqué pendant qu'il tourne donne, à chaque
+rechargement, `Unable to resolve module <nom>` pointant un chemin qui n'existe plus — alors que le
+paquet est bien installé (vu avec `expo-constants` après un `npm dedupe`). Le code n'est pas en
+cause, inutile de le chercher. Remise en route : arrêter Metro, supprimer `node_modules/.cache` et
+`$TEMP/metro-cache` + `$TEMP/metro-file-map-*`, puis `npx expo start --clear`.
+
+## Liste des dossiers (accueil)
+`HomeScreen` filtre et trie la liste avant de la passer à la `FlatList` (`visibleAlbums`) :
+**recherche** sur le nom via `normalizeSearch()` (minuscules **et sans accents** — `NFD` puis
+suppression des diacritiques, pour que « ete » trouve « Été ») et **tri** par `AlbumSort`
+(`recent` = `createdAt` décroissant, `name` = `localeCompare` avec `localeTag(lang)`, `size` =
+**poids réel des fichiers** décroissant). Le poids vient de `fileSize()` (`photoFiles.ts`,
+`getInfoAsync`) : chaque photo n'est mesurée **qu'une fois** — l'effet n'interroge que les `id`
+absents de `sizeByPhoto`, donc ajouter une photo ne relance pas de balayage complet. Le total par
+dossier ignore les `originalUri` conservés pour la ré-édition : c'est le poids de l'album, pas
+l'occupation disque. Affichage via `formatBytes()` (`src/fileSize.ts`, unités Ko/Mo/Go ou KB/MB/GB). Le tri est persisté (`album.sort.v1`, `loadAlbumSort` /
+`saveAlbumSort`) ; le texte cherché ne l'est pas. Le nombre de photos par dossier vient d'une `Map`
+mémoïsée sur `photos` — la liste est plate, un `filter` par carte serait quadratique. L'état vide
+distingue « aucun dossier » de « aucun résultat ».
+
+## Prise de photo
+`＋ Nouvelle photo` ouvre **`src/components/CameraModal.tsx`** (`expo-camera`, `CameraView`), pas la
+caméra système. Raison : `ImagePicker.launchCameraAsync()` déclenche l'écran iOS **« Use Photo /
+Retake »**, que l'API n'expose aucun moyen de sauter ; il faisait doublon avec la suppression depuis
+le dossier. Le déclencheur renvoie la photo **immédiatement** à `onCapture` (App.tsx), qui garde le
+pipeline d'avant : `saveToPhotoLibrary()` → `getCurrentCoords()` (une capture n'a pas de GPS EXIF) →
+`addAsset()` → éditeur de commentaire. `expo-image-picker` reste utilisé pour l'**import galerie**.
+`extractTakenAt()` (`src/exif.ts`) accepte donc les deux formes (`Pick<ImagePickerAsset, 'exif'>`).
+`expo-camera` est **bundlé dans Expo Go** : testable sans build ; le plugin d'`app.json` ne sert
+qu'aux builds natifs.
+Commandes de l'écran : déclencheur, bascule avant/arrière, flash (auto/on/off) et **zoom au
+curseur** (`@react-native-community/slider`, prop `zoom` de `CameraView`, 0 → 1). Pas de pincement :
+`react-native-gesture-handler` n'est pas une dépendance du projet et les gestes sont évités (même
+raison que `CropModal`). Le zoom et `ready` sont **réinitialisés à chaque ouverture** — la
+prévisualisation est démontée à la fermeture, un `ready` resté vrai autoriserait un déclenchement
+avant `onCameraReady`.
+
+## Voir une photo en grand
+La vignette de `PhotoCard` fait 76 px : **toucher la vignette** ouvre
+`src/components/PhotoViewerModal.tsx` (plein écran noir, photo `resizeMode="contain"`, commentaire
+en bas). Toucher le **reste de la carte** garde l'ancien comportement — ouverture de `CommentModal`.
+Le zoom utilise les props natives de `ScrollView` (`minimumZoomScale` / `maximumZoomScale`), donc
+sans `react-native-gesture-handler` ; ⚠️ **iOS uniquement** — sur Android la photo s'affiche en plein
+écran mais ne se pince pas. Les pages de texte n'ouvrent pas la visionneuse.
+
+## Petits modules à connaître
+`src/id.ts` `newId()` (identifiants `timestamp-suffixe`, utilisé pour photos, dossiers et noms de
+fichiers persistés) · `src/mediaLibrary.ts` `saveToPhotoLibrary()` (copie dans l'app Photos, permission
+**écriture seule**, renvoie `false` si refusée — l'ajout à l'album ne doit jamais échouer pour autant)
+· `src/dateFormat.ts` `photoDate()` (prise de vue réelle sinon date d'ajout) et le rendu des cinq
+`DateFormat`.
+
+## Identité de l'app
+`app.json` : `slug` **`photo-album-print`** (historique) mais l'app s'appelle **ComClic** ;
+`scheme` `comclic` ; `owner` = organisation **`boccaras-team`** ; `ios.bundleIdentifier` =
+`android.package` = `com.boccarasteam.comclic`. Ne pas « corriger » le slug : il identifie le projet
+côté EAS (builds, updates, canal `preview`).
+
+## Commits
+Messages **en français**, préfixe conventionnel quand il s'applique (`feat:`, `fix:`, `docs:`,
+`chore:`), sujet centré sur l'effet utilisateur. Exemples du dépôt : `feat: envoyer/recevoir un album
+entre utilisateurs ComClic`, `docs: documenter le downscale des photos dans le PDF (readPrintBase64)`.

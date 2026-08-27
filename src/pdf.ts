@@ -28,6 +28,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   background: '#f6f1e9',
   frame: 'card',
   liseret: false,
+  showPlace: true,
   dateFormat: 'long',
   dateAlign: 'left',
   textAlign: 'center',
@@ -83,11 +84,12 @@ function figureHtml(
   item: Item,
   variant: '' | 'solo' | 'large',
   dateFormat: ExportOptions['dateFormat'],
+  showPlace: boolean,
   lang: Lang,
 ): string {
   const { photo, src } = item;
   const comment = photo.comment.trim();
-  const place = photo.place?.trim();
+  const place = showPlace ? photo.place?.trim() : undefined;
   const date = formatPhotoDate(photoDate(photo), dateFormat, lang);
   const img = src
     ? `<img src="${src}" />`
@@ -113,13 +115,14 @@ function pageHtml(
   title: string,
   pageNo: number,
   dateFormat: ExportOptions['dateFormat'],
+  showPlace: boolean,
   lang: Lang,
 ): string {
   // Page d'une seule photo : « large » si c'est la taille choisie,
   // « solo » si c'est une exception (commentaire long ou photo restante).
   const variant = group.length > 1 ? '' : perPage === 1 ? 'large' : 'solo';
   const figures = group
-    .map((item) => figureHtml(item, variant, dateFormat, lang))
+    .map((item) => figureHtml(item, variant, dateFormat, showPlace, lang))
     .join('');
   // En taille « petite », les photos s'organisent en grille 2 colonnes.
   const body =
@@ -395,10 +398,11 @@ export async function buildAlbumHtml(
     }),
   );
 
-  // Rendu professionnel : gabarit sobre imposé (fond blanc, photos numérotées,
-  // date/heure + lieu + description), indépendant des réglages familiaux.
+  // Rendu professionnel : gabarit sobre (fond blanc, photos numérotées, lieu +
+  // description). Réglages honorés en pro : encadrement, format et position de
+  // la date, alignement des pages de texte. Le reste reste imposé.
   if (options.style === 'pro') {
-    return buildProDocument(items, title, options.textAlign, lang);
+    return buildProDocument(items, title, options, lang);
   }
 
   // Les pages de texte ne comptent pas comme des photos (couverture, année).
@@ -430,7 +434,15 @@ export async function buildAlbumHtml(
         (p) => items.find((it) => it.photo.id === p.id)!,
       );
       if (options.photoSize === 'full') return fullPageHtml(groupItems[0], lang);
-      return pageHtml(groupItems, perPage, title, no, options.dateFormat, lang);
+      return pageHtml(
+        groupItems,
+        perPage,
+        title,
+        no,
+        options.dateFormat,
+        options.showPlace,
+        lang,
+      );
     })
     .join('');
 
@@ -465,15 +477,26 @@ export async function buildAlbumHtml(
 }
 
 /** Une ligne factuelle « Clé : valeur » du rapport professionnel. */
-function proMeta(label: string, value: string): string {
-  return `<div class="row"><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`;
+function proMeta(label: string, value: string, cls = ''): string {
+  return `<div class="row ${cls}"><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`;
 }
 
-function proEntryHtml(item: Item, number: number, lang: Lang): string {
+function proEntryHtml(
+  item: Item,
+  number: number,
+  dateFormat: ExportOptions['dateFormat'],
+  showPlace: boolean,
+  lang: Lang,
+): string {
   const { photo, src } = item;
   const D = dict(lang).doc;
-  const date = formatPhotoDate(photoDate(photo), 'full', lang) || '—';
-  const place = photo.place?.trim() || '—';
+  // « Aucune » retire la ligne de date entière, pas seulement sa valeur.
+  const date =
+    dateFormat === 'none'
+      ? ''
+      : formatPhotoDate(photoDate(photo), dateFormat, lang) || '—';
+  // Comme la date, « Lieu » disparaît en entier quand l'option est décochée.
+  const place = showPlace ? photo.place?.trim() || '—' : '';
   const desc = photo.comment.trim() || '—';
   const img = src
     ? `<img src="${src}" />`
@@ -483,8 +506,8 @@ function proEntryHtml(item: Item, number: number, lang: Lang): string {
       <div class="num">${D.photoNo(number)}</div>
       <div class="frame">${img}</div>
       <dl class="meta">
-        ${proMeta(D.place, place)}
-        ${proMeta(D.date, date)}
+        ${place ? proMeta(D.place, place) : ''}
+        ${date ? proMeta(D.date, date, 'date') : ''}
         ${proMeta(D.description, desc)}
       </dl>
     </article>`;
@@ -504,16 +527,17 @@ function proTextPageHtml(item: Photo): string {
 function buildProDocument(
   items: Item[],
   title: string,
-  textAlign: ExportOptions['textAlign'],
+  options: ExportOptions,
   lang: Lang,
 ): string {
+  const { textAlign, dateAlign, dateFormat, showPlace } = options;
   // Les photos sont numérotées ; les pages de texte s'intercalent en pleine page.
   let photoNo = 0;
   const entries = items
     .map((it) =>
       it.photo.kind === 'text'
         ? proTextPageHtml(it.photo)
-        : proEntryHtml(it, ++photoNo, lang),
+        : proEntryHtml(it, ++photoNo, dateFormat, showPlace, lang),
     )
     .join('');
   const today = new Date().toLocaleDateString(localeTag(lang), {
@@ -521,6 +545,16 @@ function buildProDocument(
     month: 'long',
     year: 'numeric',
   });
+
+  // Encadrement des photos : seule la caisse change, la hauteur de la vignette
+  // reste fixe pour ne pas déplacer les fiches d'une page à l'autre.
+  const frameCss = {
+    card: 'background: #f8f9fa; border: 0; border-radius: 6px;',
+    border: 'background: #f8f9fa; border: 1px solid #d7dbe0; border-radius: 4px;',
+    polaroid:
+      'background: #ffffff; border: 1px solid #e5e7eb; border-radius: 2px; padding: 14px 14px 20px;',
+    none: 'background: transparent; border: 0; border-radius: 0;',
+  }[options.frame];
 
   const styles = `
     ${MONTSERRAT_FACE}
@@ -538,8 +572,8 @@ function buildProDocument(
     .entry { page-break-inside: avoid; margin-bottom: 28px; }
     .num { font-size: 13px; font-weight: 700; color: #111827; margin-bottom: 8px;
       letter-spacing: 0.5px; }
-    .frame { border: 1px solid #d7dbe0; border-radius: 4px; height: 300px; overflow: hidden;
-      display: flex; align-items: center; justify-content: center; background: #f8f9fa; }
+    .frame { height: 300px; overflow: hidden;
+      display: flex; align-items: center; justify-content: center; ${frameCss} }
     .frame img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
     .missing { color: #9ca3af; font-style: italic; }
     .meta { margin: 12px 0 0; }
@@ -547,6 +581,9 @@ function buildProDocument(
     .meta dt { width: 96px; flex-shrink: 0; color: #6b7280; margin: 0; text-transform: uppercase;
       font-size: 10px; letter-spacing: 1px; padding-top: 2px; }
     .meta dd { margin: 0; color: #14181f; line-height: 1.5; }
+    /* La valeur de date occupe toute la largeur restante pour que son
+       alignement (gauche / centre / droite) soit visible. */
+    .meta .row.date dd { flex: 1; text-align: ${dateAlign}; }
     .pro-textpage { page-break-before: always; page-break-after: always;
       padding: 64px 56px 0; text-align: ${textAlign}; white-space: pre-wrap;
       font-size: 20px; line-height: 1.7; color: #14181f; }`;

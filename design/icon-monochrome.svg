@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- monochrome Android : monogramme « CC » plein (le système teinte le noir). -->
+  <g transform="translate(512,512) scale(0.66) translate(-512,-512)">
+    <g fill="none" stroke="#000000" stroke-width="84" stroke-linecap="round">
+      <path d="M445 385 A 166 166 0 1 0 445 639"/>
+      <path d="M793 385 A 166 166 0 1 0 793 639"/>
+    </g>
+  </g>
+</svg>

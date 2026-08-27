@@ -266,8 +266,9 @@ async function renderPhotoPage(
     const cellY = PAD + r * (cellH + gapY);
 
     if (pro) {
-      // Rendu professionnel : numéro, photo entière encadrée d'un filet,
-      // légende factuelle (date/heure, lieu, description).
+      // Rendu professionnel : numéro, photo entière encadrée, légende factuelle
+      // (lieu, date selon le réglage, description). L'encadrement suit le même
+      // choix que le PDF pro (cf. `frameCss` dans `pdf.ts`).
       const numH = 34;
       drawText(canvas, D.photoNo(startNumber + i + 1), cellX, cellY, cellW, {
         color: '#111827',
@@ -278,34 +279,77 @@ async function renderPhotoPage(
       const captionH = 150;
       const imgY = cellY + numH;
       const imgH = cellH - numH - captionH;
-      const back = Skia.Paint();
-      back.setAntiAlias(true);
-      back.setColor(Skia.Color('#f8f9fa'));
-      canvas.drawRRect(rrect(cellX, imgY, cellW, imgH, 6), back);
-      drawContainImage(canvas, images[i], cellX + 4, imgY + 4, cellW - 8, imgH - 8);
-      const border = Skia.Paint();
-      border.setAntiAlias(true);
-      border.setStyle(PaintStyle.Stroke);
-      border.setStrokeWidth(2);
-      border.setColor(Skia.Color('#d7dbe0'));
-      canvas.drawRRect(rrect(cellX + 1, imgY + 1, cellW - 2, imgH - 2, 6), border);
 
-      const date = formatPhotoDate(photoDate(photo), 'full', lang) || '—';
-      const place = photo.place?.trim() || '—';
+      const plate =
+        options.frame === 'polaroid'
+          ? '#ffffff'
+          : options.frame === 'none'
+            ? null
+            : '#f8f9fa';
+      const strokeColor =
+        options.frame === 'border'
+          ? '#d7dbe0'
+          : options.frame === 'polaroid'
+            ? '#e5e7eb'
+            : null;
+      // Le polaroïd garde une marge blanche épaisse autour de la vignette.
+      const inset = options.frame === 'polaroid' ? 16 : 4;
+
+      if (plate) {
+        const back = Skia.Paint();
+        back.setAntiAlias(true);
+        back.setColor(Skia.Color(plate));
+        canvas.drawRRect(rrect(cellX, imgY, cellW, imgH, 6), back);
+      }
+      drawContainImage(
+        canvas,
+        images[i],
+        cellX + inset,
+        imgY + inset,
+        cellW - 2 * inset,
+        imgH - 2 * inset,
+      );
+      if (strokeColor) {
+        const border = Skia.Paint();
+        border.setAntiAlias(true);
+        border.setStyle(PaintStyle.Stroke);
+        border.setStrokeWidth(2);
+        border.setColor(Skia.Color(strokeColor));
+        canvas.drawRRect(rrect(cellX + 1, imgY + 1, cellW - 2, imgH - 2, 6), border);
+      }
+
+      // « Aucune » retire la ligne de date entière.
+      const date =
+        options.dateFormat === 'none'
+          ? ''
+          : formatPhotoDate(photoDate(photo), options.dateFormat, lang) || '—';
+      const dateAlign =
+        options.dateAlign === 'center'
+          ? TextAlign.Center
+          : options.dateAlign === 'right'
+            ? TextAlign.Right
+            : TextAlign.Left;
+      // Comme la date, la ligne « Lieu » disparaît quand l'option est décochée.
+      const place = options.showPlace ? photo.place?.trim() || '—' : '';
       const desc = photo.comment.trim() || '—';
       let ty = imgY + imgH + 14;
-      ty +=
-        drawText(canvas, `${D.place} : ${place}`, cellX, ty, cellW, {
-          color: '#14181f',
-          size: 20,
-          maxLines: 1,
-        }) + 4;
-      ty +=
-        drawText(canvas, `${D.date} : ${date}`, cellX, ty, cellW, {
-          color: '#14181f',
-          size: 20,
-          maxLines: 1,
-        }) + 4;
+      if (place) {
+        ty +=
+          drawText(canvas, `${D.place} : ${place}`, cellX, ty, cellW, {
+            color: '#14181f',
+            size: 20,
+            maxLines: 1,
+          }) + 4;
+      }
+      if (date) {
+        ty +=
+          drawText(canvas, `${D.date} : ${date}`, cellX, ty, cellW, {
+            color: '#14181f',
+            size: 20,
+            maxLines: 1,
+            align: dateAlign,
+          }) + 4;
+      }
       drawText(canvas, `${D.description} : ${desc}`, cellX, ty, cellW, {
         color: '#14181f',
         size: 20,
@@ -331,7 +375,7 @@ async function renderPhotoPage(
     }
 
     const comment = photo.comment.trim();
-    const place = photo.place?.trim();
+    const place = options.showPlace ? photo.place?.trim() : undefined;
     const date = formatPhotoDate(photoDate(photo), options.dateFormat, lang);
     const meta = [place, date].filter(Boolean).join(' · ');
     const captionH = comment || meta ? (perPage === 4 ? 92 : 122) : 0;
@@ -633,10 +677,9 @@ export async function buildAlbumImages(
   };
 
   const pro = options.style === 'pro';
-  // En mode pro : gabarit imposé (fond blanc, sans cadre, 2 photos/page).
-  const eff: ExportOptions = pro
-    ? { ...options, background: '#ffffff', frame: 'none' }
-    : options;
+  // En mode pro : gabarit imposé (fond blanc, 2 photos/page). L'encadrement, le
+  // format et la position de la date restent réglables par l'utilisateur.
+  const eff: ExportOptions = pro ? { ...options, background: '#ffffff' } : options;
   const perPage = pro ? 2 : PER_PAGE[options.photoSize];
   const full = !pro && options.photoSize === 'full';
 

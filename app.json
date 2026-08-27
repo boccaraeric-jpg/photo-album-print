@@ -11,6 +11,7 @@
       "bundleIdentifier": "com.boccarasteam.comclic",
       "supportsTablet": true,
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "CFBundleDevelopmentRegion": "fr",
         "CFBundleAllowMixedLocalizations": true,
         "CFBundleLocalizations": [
@@ -49,6 +50,12 @@
         "expo-image-picker",
         {
           "photosPermission": "L'app accède à votre galerie pour importer des photos dans votre album.",
+          "cameraPermission": "L'app utilise l'appareil photo pour prendre les photos de votre album."
+        }
+      ],
+      [
+        "expo-camera",
+        {
           "cameraPermission": "L'app utilise l'appareil photo pour prendre les photos de votre album."
         }
       ],
