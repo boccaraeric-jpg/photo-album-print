@@ -14,6 +14,7 @@ npm start              # Démarre Metro (Expo Go) — scanner le QR depuis l'iPh
 npm run ios            # Ouvre dans le simulateur iOS
 npm run android        # Ouvre sur Android
 npx tsc --noEmit       # Vérification de types (pas de script lint/test dans ce projet)
+npx expo-doctor        # Cohérence des versions natives avec le SDK (18 contrôles)
 ```
 
 Il n'y a **ni tests, ni linter, ni CI** — `tsc --noEmit` est la seule vérification statique.
@@ -72,6 +73,39 @@ L'app se valide **manuellement dans Expo Go sur un iPhone**. Boucle de validatio
 - ⚠️ Les réglages **natifs** (ex. `CFBundleLocalizations` FR dans `app.json.ios.infoPlist`, qui
   traduisent les boutons caméra et le menu Coller/Sélectionner en français) n'arrivent **que par un
   build**, jamais par un EAS Update (OTA = JS uniquement).
+- **`.easignore`** (commité) remplace `.gitignore` pour l'archive envoyée à EAS : il en reprend donc
+  **tout** le contenu, plus `.agents/`, `.claude/`, `skills-lock.json`. Ces dossiers contiennent des
+  **liens symboliques** que Windows refuse de recréer dans le clone temporaire d'EAS
+  (`EPERM: operation not permitted, symlink …`), ce qui faisait échouer l'upload. Motifs images
+  ancrés (`/*.png`) pour ne pas exclure `assets/`.
+- ⚠️ **Épingler les paquets natifs sur la dist-tag du SDK, pas sur `latest`.** `npm install
+  <pkg>` prend `latest`, qui vise le SDK suivant : le module s'installe, le plugin de config tourne
+  (les clés d'`Info.plist` apparaissent), mais **l'autolinking ne l'embarque pas** — le bouton
+  correspondant reste invisible et aucun EAS Update ne peut rien y faire. Vécu avec
+  `expo-speech-recognition` en 56.0.1 sur un projet SDK 54 (bonne version : **3.1.3**, cf.
+  `npm view <pkg> dist-tags`). Toujours `npx expo install <pkg>@<version-sdk>`.
+- **Vérifier qu'un module natif est réellement dans le livrable** plutôt que de le déduire du code :
+  dézipper l'`.ipa` et chercher le symbole dans `Payload/*.app/<binaire>` (`grep -ac`), ou l'`.aab`
+  et chercher dans `base/dex/*.dex`. Un module absent donne 0 occurrence alors qu'`ExpoCamera` en
+  donne des dizaines — c'est le test qui a tranché le diagnostic de la dictée.
+
+### Android & Google Play
+- Même base de code, même `app.json` : `android.package`, `adaptiveIcon` (4 couches), permissions
+  média/micro et `androidIntentFilters` du partage entrant sont déjà en place.
+- `eas build --platform android --profile production` produit un **`.aab`** (format imposé par
+  Google). Le **keystore** est généré et conservé par EAS : le perdre interdit **définitivement**
+  toute mise à jour sous `com.boccarasteam.comclic`. Récupérable par
+  `eas credentials -p android` → `Download existing keystore` (le `.jks` seul est inutile sans les
+  deux mots de passe affichés au même écran).
+- Le `.aab` pèse ~107 Mo car il embarque **quatre architectures** ; Google n'en livre qu'une par
+  appareil (~30 Mo). Ne pas chercher à « alléger » ce chiffre.
+- Fiche Play : icône **512×512**, image de présentation **1024×500** (sans équivalent Apple),
+  captures dont le **rapport ne dépasse pas 2:1** — une capture d'iPhone (2,16:1) est refusée telle
+  quelle, il faut des bandes latérales, pas un rognage. Ne **jamais** mentionner iOS, l'App Store ou
+  TestFlight dans une fiche Play (référence à une plateforme concurrente).
+- Compte de type **Organisation** : dispense de la règle « 12 testeurs pendant 14 jours » imposée aux
+  comptes personnels, mais impose la validation du **site web** déclaré via une propriété Google
+  Search Console (cf. `docs/`).
 
 ## Architecture
 
@@ -96,8 +130,11 @@ extension, intents Android ; plugin + `iosAppGroupIdentifier` dans `app.json`). 
 reçu passe `looksLikeBundle()` + `parseAlbumBundle()` (le manifeste porte le marqueur
 `comclic-album`), sinon les **images brutes** partagées. Dans les deux cas `ShareImportModal` demande
 le dossier de destination, puis `runAlbumImport` / `runImageImport` créent les `Photo` et
-`finishImport` ouvre le dossier. ⚠️ Module **natif** : en Expo Go `hasShareIntent` reste faux (le
-provider est no-op) — ce flux ne se teste que sur un build EAS.
+`finishImport` ouvre le dossier. Un partage qui n'est **ni** un album **ni** une image reconnue
+déclenche l'alerte `alert.shareUnread…` (type reçu + nombre de fichiers) : sans elle, l'app
+s'ouvrait et restait muette, indiscernable d'une extension de partage en panne. ⚠️ Module **natif** :
+en Expo Go `hasShareIntent` reste faux (le provider est no-op) — ce flux ne se teste que sur un
+build EAS.
 
 **Recevoir un album sans le partage système** : le bouton **« ⤓ Importer un album reçu »** de la
 barre d'`HomeScreen` (`importBundleFile` dans `Root`) ouvre l'app Fichiers via
@@ -111,8 +148,18 @@ fait après coup sur le nom puis sur le manifeste.
 **Dictée vocale** (`expo-speech-recognition`, `src/components/VoiceCommentButton.tsx`) :
 reconnaissance **on-device** (iOS `SFSpeechRecognizer`) dans la langue courante de l'app ; la dictée
 **s'ajoute** au commentaire existant (résultats partiels en direct, phrases finales figées). Là
-encore **natif** : `CommentModal` ne monte le bouton que si la reconnaissance est disponible, donc
-invisible dans Expo Go.
+encore **natif** : `CommentModal` ne monte le bouton que si le **module natif répond** (`typeof
+mod.ExpoSpeechRecognitionModule?.start === 'function'` dans un `require` protégé), donc invisible
+dans Expo Go.
+> ⚠️ Ne **pas** conditionner ce montage à `isRecognitionAvailable()` : côté iOS il rend
+> `SFSpeechRecognizer().isAvailable`, **faux tant que l'autorisation n'a pas été accordée**. Le test
+> tournant au chargement du module, son résultat restait figé : pas de bouton → jamais de demande de
+> permission → toujours faux. La disponibilité réelle s'éprouve **au clic**, après
+> `requestPermissionsAsync()`.
+> ⚠️ Les écouteurs `useSpeechRecognitionEvent` sont **globaux**. Une session `continuous: true` non
+> arrêtée survivait à la fermeture de l'éditeur, et le bouton suivant se rebranchait dessus : le
+> commentaire se remplissait tout seul. D'où `abort()` au démontage **et** rejet de tout résultat
+> reçu hors enregistrement demandé (`recordingRef`).
 
 **Données & persistance** (`src/types.ts`, `src/storage.ts`) : un `Album` (dossier) regroupe des
 `Photo` stockées en **liste plate globale** (appartenance via `Photo.albumId`, filtrage à
@@ -173,6 +220,8 @@ d'entrée** (ils pilotent aussi les libellés) :
   (`https://boccaraeric-jpg.github.io/photo-album-print/`) : page intermédiaire volontaire, pour
   pouvoir passer de TestFlight à l'App Store **sans republier de build**. Deux endroits à tenir à
   jour, et deux seulement : `src/links.ts` (in-app) et `docs/index.html` (la page).
+  ⚠️ GitHub Pages sert **`main` + dossier `/docs`**, et le dépôt doit rester **public** (Pages sur
+  dépôt privé = offre payante). Un commit resté sur une branche ne publie rien.
 - `ExportOptions` (`src/types.ts`) : **taille** (`small`/`medium`/`large`/**`full`** = pleine page,
   légende ≤ 15 mots), fond, encadré, **liseré** (posé sur la photo, pas le support), **dateFormat**
   (`short`/`shortTime`/`long`/`full`/`none`), **dateAlign** et **textAlign** (gauche/centre/droite ;
@@ -208,9 +257,12 @@ d'entrée** (ils pilotent aussi les libellés) :
   595×842), **jamais de `vh`**, **hauteurs fixes** en familial (pas de flex vertical), et
   `print-color-adjust: exact` (sinon iOS supprime fonds/ombres).
 
-**Lieu de prise de vue** (`src/exif.ts`, `src/photoLocation.ts`, `src/geocode.ts`) : le GPS EXIF est
-**souvent absent** (PHPicker iOS le retire) → `resolveCoords()` tente EXIF, puis `expo-media-library`
-via `assetId`, puis (photo prise dans l'app) la **position de l'appareil** (`expo-location`).
+**Lieu et date de prise de vue** (`src/exif.ts`, `src/photoLocation.ts`, `src/geocode.ts`) :
+PHPicker (iOS) **caviarde les métadonnées** de l'asset remis à l'app, donc l'EXIF est souvent vide.
+Deux résolutions bâties sur le même schéma — EXIF, puis `expo-media-library` via l'`assetId` :
+`resolveCoords()` pour le GPS (puis, pour une photo prise dans l'app, la **position de l'appareil**)
+et `resolveTakenAt()` pour la date (`creationTime` de la photothèque). Sans ce second repli, une
+photo importée héritait de sa date d'**import** — `photoDate()` retombant sur `createdAt`.
 `reverseGeocode()` transforme les coordonnées en « Ville, Pays » (permission demandée **seulement
 sur Android**). Repli : saisie manuelle du `Photo.place` dans `CommentModal`.
 
@@ -342,9 +394,14 @@ distingue « aucun dossier » de « aucun résultat ».
 `＋ Nouvelle photo` ouvre **`src/components/CameraModal.tsx`** (`expo-camera`, `CameraView`), pas la
 caméra système. Raison : `ImagePicker.launchCameraAsync()` déclenche l'écran iOS **« Use Photo /
 Retake »**, que l'API n'expose aucun moyen de sauter ; il faisait doublon avec la suppression depuis
-le dossier. Le déclencheur renvoie la photo **immédiatement** à `onCapture` (App.tsx), qui garde le
-pipeline d'avant : `saveToPhotoLibrary()` → `getCurrentCoords()` (une capture n'a pas de GPS EXIF) →
-`addAsset()` → éditeur de commentaire. `expo-image-picker` reste utilisé pour l'**import galerie**.
+le dossier. Le déclencheur renvoie la photo **immédiatement** à `onCapture` (App.tsx), dont le
+pipeline est **non bloquant** : `saveToPhotoLibrary()` part sans être attendu, la position vient de
+`getLastKnownCoords()` (immédiate), et seul `persistImage()` bloque — le fichier doit exister avant
+l'ajout au dossier. L'éditeur de commentaire s'ouvre donc tout de suite ; le **point GPS précis**
+(`getCurrentCoords()`, plusieurs secondes en intérieur) arrive **en arrière-plan** et corrige les
+coordonnées, puis résout le lieu si la position immédiate manquait. C'est aussi lui qui demande la
+permission de localisation au besoin. Attendre ces deux tâches figeait l'écran plusieurs secondes
+après chaque déclenchement. `expo-image-picker` reste utilisé pour l'**import galerie**.
 `extractTakenAt()` (`src/exif.ts`) accepte donc les deux formes (`Pick<ImagePickerAsset, 'exif'>`).
 `expo-camera` est **bundlé dans Expo Go** : testable sans build ; le plugin d'`app.json` ne sert
 qu'aux builds natifs.
@@ -369,6 +426,17 @@ fichiers persistés) · `src/mediaLibrary.ts` `saveToPhotoLibrary()` (copie dans
 **écriture seule**, renvoie `false` si refusée — l'ajout à l'album ne doit jamais échouer pour autant)
 · `src/dateFormat.ts` `photoDate()` (prise de vue réelle sinon date d'ajout) et le rendu des cinq
 `DateFormat`.
+
+## Le dossier `docs/` (site public, exigé par les stores)
+Trois fichiers, tous **obligatoires** une fois publiés — les supprimer casse quelque chose ailleurs :
+- `index.html` : page d'installation visée par `INSTALL_URL` (`src/links.ts`).
+- `privacy.html` : politique de confidentialité. **Apple et Google exigent cette URL** pour toute
+  fiche d'app. Contenu aligné sur le fonctionnement réel : aucune collecte, stockage local,
+  géocodage délégué au service du système, partage à l'initiative de l'utilisateur, correcteur
+  hors ligne. La mettre à jour si une fonction se met à envoyer quoi que ce soit sur un réseau.
+- `google<hash>.html` : preuve de propriété **Google Search Console**, exigée par la validation du
+  site déclaré dans le compte développeur Play. Google revérifie périodiquement : le retirer fait
+  perdre la validation du compte.
 
 ## Identité de l'app
 `app.json` : `slug` **`photo-album-print`** (historique) mais l'app s'appelle **ComClic** ;
