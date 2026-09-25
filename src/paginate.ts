@@ -1,4 +1,5 @@
 import type { ExportOptions, Photo } from './types';
+import { stripMarks } from './richText';
 
 /**
  * Petite = grille 2×2, moyenne = 2 empilées, grande = pleine page (avec légende),
@@ -15,7 +16,9 @@ export const PER_PAGE: Record<ExportOptions['photoSize'], number> = {
 const LONG_COMMENT = 160;
 
 export function isLongComment(photo: Photo): boolean {
-  return photo.comment.trim().length > LONG_COMMENT;
+  // Sur le texte NU : les marques de mise en forme ne doivent pas faire basculer
+  // une photo sur une page entière.
+  return stripMarks(photo.comment).trim().length > LONG_COMMENT;
 }
 
 /** Une page de l'album : soit des photos, soit une page de texte seule. */

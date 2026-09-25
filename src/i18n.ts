@@ -78,6 +78,11 @@ const fr = {
     placeLabel: 'Lieu',
     placePlaceholder: 'Lieu de la prise de vue…',
     checkButton: '✓ Vérifier orthographe & grammaire',
+    boldLabel: 'Gras',
+    underlineLabel: 'Souligné',
+    formatSelection: 'appliqué au texte sélectionné',
+    formatAll: 'appliqué à tout le texte',
+    tapToEdit: 'Toucher pour modifier',
     spellTitle: 'Orthographe',
     spellNone: 'Aucune faute détectée.',
     spellUnavailableTitle: 'Correcteur indisponible',
@@ -90,6 +95,10 @@ const fr = {
     micFailedTitle: 'Dictée indisponible',
     micFailedBody:
       'La reconnaissance vocale hors ligne n’a pas démarré. Vérifie que la dictée est activée dans Réglages → Général → Clavier, avec la langue de l’app installée.',
+  },
+  version: {
+    embedded: 'version intégrée',
+    update: 'maj',
   },
   spell: {
     progress: (i: number, n: number) => `Faute ${i} sur ${n}`,
@@ -148,6 +157,7 @@ const fr = {
     dateLabel: 'Date sous les photos',
     datePosLabel: 'Position de la date',
     textAlignLabel: 'Alignement du texte (pages de texte)',
+    commentPosLabel: 'Position du commentaire',
     previewBtn: 'Aperçu',
     yes: 'Oui',
     no: 'Non',
@@ -160,6 +170,7 @@ const fr = {
     },
     frames: { card: 'Cadre', border: 'Bordure', polaroid: 'Polaroïd', none: 'Sans cadre' },
     aligns: { left: 'Gauche', center: 'Centre', right: 'Droite' },
+    commentPos: { top: 'Haut', middle: 'Centre', bottom: 'Bas' },
     dateFormats: {
       short: 'Simple',
       shortTime: 'Simple + heure',
@@ -175,6 +186,29 @@ const fr = {
       none: 'sans date',
     },
   },
+  backup: {
+    building: 'Préparation de la sauvegarde…',
+    restoring: 'Restauration en cours…',
+    fileBase: 'ComClic sauvegarde',
+    shareTitle: 'Sauvegarde ComClic',
+    emptyTitle: 'Rien à sauvegarder',
+    emptyBody: 'Créez au moins un dossier avant de lancer une sauvegarde.',
+    tooLargeTitle: 'Sauvegarde trop volumineuse',
+    tooLargeBody: (n: number) =>
+      `Cette version sauvegarde jusqu'à 200 photos en un seul fichier, et vous en avez ${n}. Envoyez d'abord quelques dossiers en « Album ComClic » pour alléger l'app.`,
+    failTitle: 'Sauvegarde impossible',
+    failBody:
+      "Le fichier n'a pas pu être écrit. Vérifiez l'espace libre sur l'iPhone, puis réessayez.",
+    restoreTitle: 'Restaurer cette sauvegarde ?',
+    restoreBody: (albums: number, photos: number, date: string) =>
+      `Sauvegarde du ${date} : ${albums} dossier${albums > 1 ? 's' : ''}, ${photos} photo${photos > 1 ? 's' : ''}.
+
+Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un nom déjà utilisé donnera un dossier en double.`,
+    restoreConfirm: 'Restaurer',
+    doneTitle: 'Restauration terminée',
+    doneBody: (albums: number, photos: number) =>
+      `${albums} dossier${albums > 1 ? 's' : ''} et ${photos} photo${photos > 1 ? 's' : ''} restaurés. Vos réglages sont revenus ; le tri de la liste s'appliquera au prochain lancement.`,
+  },
   home: {
     kicker: 'ALBUM PHOTO',
     title: 'Mes dossiers',
@@ -189,7 +223,8 @@ const fr = {
     noMatchTitle: 'Aucun dossier trouvé',
     noMatchText: 'Essayez un autre mot : la recherche porte sur le nom du dossier.',
     newFolder: '＋  Nouveau dossier',
-    importAlbum: '⤓  Importer un album reçu',
+    importAlbum: '⤓  Importer / restaurer',
+    backupAll: '💾  Sauvegarder tout',
     createTitle: 'Nouveau dossier',
     createSubmit: 'Créer',
     renameTitle: 'Renommer le dossier',
@@ -329,6 +364,11 @@ const en: Dict = {
     placeLabel: 'Location',
     placePlaceholder: 'Where it was taken…',
     checkButton: '✓ Check spelling & grammar',
+    boldLabel: 'Bold',
+    underlineLabel: 'Underline',
+    formatSelection: 'applies to the selected text',
+    formatAll: 'applies to the whole caption',
+    tapToEdit: 'Tap to edit',
     spellTitle: 'Spelling',
     spellNone: 'No mistakes found.',
     spellUnavailableTitle: 'Checker unavailable',
@@ -341,6 +381,10 @@ const en: Dict = {
     micFailedTitle: 'Dictation unavailable',
     micFailedBody:
       'On-device speech recognition did not start. Check that dictation is enabled in Settings → General → Keyboard, with the app language installed.',
+  },
+  version: {
+    embedded: 'built-in version',
+    update: 'upd',
   },
   spell: {
     progress: (i: number, n: number) => `Mistake ${i} of ${n}`,
@@ -399,6 +443,7 @@ const en: Dict = {
     dateLabel: 'Date under photos',
     datePosLabel: 'Date position',
     textAlignLabel: 'Text alignment (text pages)',
+    commentPosLabel: 'Caption position',
     previewBtn: 'Preview',
     yes: 'Yes',
     no: 'No',
@@ -411,6 +456,7 @@ const en: Dict = {
     },
     frames: { card: 'Card', border: 'Border', polaroid: 'Polaroid', none: 'No frame' },
     aligns: { left: 'Left', center: 'Center', right: 'Right' },
+    commentPos: { top: 'Top', middle: 'Middle', bottom: 'Bottom' },
     dateFormats: {
       short: 'Simple',
       shortTime: 'Simple + time',
@@ -426,6 +472,29 @@ const en: Dict = {
       none: 'no date',
     },
   },
+  backup: {
+    building: 'Preparing backup…',
+    restoring: 'Restoring…',
+    fileBase: 'ComClic backup',
+    shareTitle: 'ComClic backup',
+    emptyTitle: 'Nothing to back up',
+    emptyBody: 'Create at least one folder before running a backup.',
+    tooLargeTitle: 'Backup too large',
+    tooLargeBody: (n: number) =>
+      `This version backs up to 200 photos in a single file, and you have ${n}. Send a few folders as a ComClic Album first to lighten the app.`,
+    failTitle: 'Backup failed',
+    failBody:
+      'The file could not be written. Check the free space on your iPhone, then try again.',
+    restoreTitle: 'Restore this backup?',
+    restoreBody: (albums: number, photos: number, date: string) =>
+      `Backup from ${date}: ${albums} folder${albums > 1 ? 's' : ''}, ${photos} photo${photos > 1 ? 's' : ''}.
+
+Folders will be ADDED to the ones already there: nothing is replaced. A name already in use creates a duplicate folder.`,
+    restoreConfirm: 'Restore',
+    doneTitle: 'Restore complete',
+    doneBody: (albums: number, photos: number) =>
+      `${albums} folder${albums > 1 ? 's' : ''} and ${photos} photo${photos > 1 ? 's' : ''} restored. Your settings are back; the list sorting applies at next launch.`,
+  },
   home: {
     kicker: 'PHOTO ALBUM',
     title: 'My folders',
@@ -440,7 +509,8 @@ const en: Dict = {
     noMatchTitle: 'No folder found',
     noMatchText: 'Try another word: the search looks at folder names.',
     newFolder: '＋  New folder',
-    importAlbum: '⤓  Import a received album',
+    importAlbum: '⤓  Import / restore',
+    backupAll: '💾  Back up all',
     createTitle: 'New folder',
     createSubmit: 'Create',
     renameTitle: 'Rename folder',

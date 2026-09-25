@@ -7,6 +7,7 @@ import { fileDateStamp, formatPhotoDate, photoDate } from './dateFormat';
 import { dict, localeTag, type Lang } from './i18n';
 import { paginateEntries, PER_PAGE } from './paginate';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
+import { richToHtml } from './richText';
 
 /** Déclarations @font-face Montserrat (500 corps + 800 titres) embarquées en
  *  base64, pour un rendu identique et hors-ligne dans le PDF/aperçu. */
@@ -32,6 +33,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   dateFormat: 'long',
   dateAlign: 'left',
   textAlign: 'center',
+  commentVAlign: 'top',
 };
 
 function escapeHtml(input: string): string {
@@ -98,7 +100,7 @@ function figureHtml(
   const caption =
     comment || meta
       ? `<figcaption class="caption">
-          ${comment ? escapeHtml(comment) : ''}
+          ${comment ? richToHtml(comment, escapeHtml) : ''}
           ${meta ? `<span class="date">${escapeHtml(meta)}</span>` : ''}
         </figcaption>`
       : '';
@@ -146,7 +148,7 @@ function fullPageHtml(item: Item, lang: Lang): string {
   return `
     <section class="sheet full-sheet">
       <div class="full-img">${img}</div>
-      <div class="full-cap">${comment ? escapeHtml(comment) : ''}</div>
+      <div class="full-cap">${comment ? richToHtml(comment, escapeHtml) : ''}</div>
     </section>`;
 }
 
@@ -170,6 +172,30 @@ const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
 
 /** Hauteur de la zone image (px) selon la taille choisie. */
+/**
+ * Hauteur de la bande réservée au commentaire quand il est centré ou aligné en
+ * bas (≈ 2 lignes de légende + la ligne date/lieu). En position « haut » aucune
+ * bande n'est posée : la légende coule comme avant, rendu strictement identique.
+ */
+const CAPTION_BANDS: Record<ExportOptions['photoSize'], number> = {
+  small: 58,
+  medium: 66,
+  large: 66,
+  full: 0, // la pleine page a son propre bandeau (.full-cap)
+};
+
+/**
+ * Hauteur qu'occupe déjà une légende d'une ligne. La bande ne coûte donc que la
+ * différence, retranchée à la photo : la carte garde sa hauteur et la
+ * pagination ne bouge pas (une page en plus casserait le montage).
+ */
+const CAPTION_BASES: Record<ExportOptions['photoSize'], number> = {
+  small: 35,
+  medium: 38,
+  large: 38,
+  full: 0,
+};
+
 const PH_HEIGHTS: Record<ExportOptions['photoSize'], string> = {
   small: '170px',
   medium: '250px',
@@ -189,7 +215,12 @@ function buildStyles(options: ExportOptions): string {
   const muted = dark ? '#8f8a80' : '#a89f8d';
   const accent = dark ? '#e3a455' : '#b45309';
 
-  const phHeight = PH_HEIGHTS[options.photoSize];
+  // Position verticale du commentaire : « haut » = flux d'origine, sans bande.
+  const vAlign = options.commentVAlign ?? 'top';
+  const band = vAlign === 'top' ? 0 : CAPTION_BANDS[options.photoSize];
+  // Ce que la bande coûte en plus d'une légende d'une ligne, pris sur la photo.
+  const shrink = band ? band - CAPTION_BASES[options.photoSize] : 0;
+  const phHeight = `${parseInt(PH_HEIGHTS[options.photoSize], 10) - shrink}px`;
   const captionSize = options.photoSize === 'small' ? '16px' : '18px';
   const cardGap = options.photoSize === 'small' ? '12px' : '16px';
 
@@ -304,15 +335,27 @@ function buildStyles(options: ExportOptions): string {
   }
   .ph img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .card.solo { max-width: 460px; }
-  .card.solo .ph { height: 380px; }
+  .card.solo .ph { height: ${380 - shrink}px; }
   .card.solo .ph img { object-fit: contain; }
-  .card.large .ph { height: 480px; }
+  .card.large .ph { height: ${480 - shrink}px; }
   .card.large .ph img { object-fit: contain; }
   .missing { color: ${muted}; font-style: italic; font-size: 13px; }
   .caption {
     margin: 8px 4px 2px; font-size: ${captionSize}; line-height: 1.45;
     color: ${captionInk};
   }
+  /* Bande de commentaire : hauteur MINIMALE (et non fixe), pour qu'un long
+     commentaire continue de s'étendre au lieu d'être rogné. */
+  ${
+    band
+      ? `.caption {
+    min-height: ${band}px; display: flex; flex-direction: column;
+    justify-content: ${vAlign === 'middle' ? 'center' : 'flex-end'};
+  }`
+      : ''
+  }
+  .caption strong { font-weight: 800; }
+  .caption u, .meta u, .full-cap u { text-decoration: underline; }
   .caption .date {
     display: block; margin-top: 3px; font-size: 6.5px;
     text-align: ${options.dateAlign ?? 'left'};
@@ -477,8 +520,9 @@ export async function buildAlbumHtml(
 }
 
 /** Une ligne factuelle « Clé : valeur » du rapport professionnel. */
-function proMeta(label: string, value: string, cls = ''): string {
-  return `<div class="row ${cls}"><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`;
+function proMeta(label: string, value: string, cls = '', rich = false): string {
+  const body = rich ? richToHtml(value, escapeHtml) : escapeHtml(value);
+  return `<div class="row ${cls}"><dt>${label}</dt><dd>${body}</dd></div>`;
 }
 
 function proEntryHtml(
@@ -508,7 +552,7 @@ function proEntryHtml(
       <dl class="meta">
         ${place ? proMeta(D.place, place) : ''}
         ${date ? proMeta(D.date, date, 'date') : ''}
-        ${proMeta(D.description, desc)}
+        ${proMeta(D.description, desc, '', true)}
       </dl>
     </article>`;
 }

@@ -74,6 +74,12 @@ import {
   parseAlbumBundle,
   type ImportedEntry,
 } from './src/albumBundle';
+import {
+  buildBackup,
+  parseBackup,
+  peekBackup,
+  type ParsedBackup,
+} from './src/backup';
 import { bakeAdjustedImage, isNeutral } from './src/adjustments';
 import { shareInstallLink } from './src/links';
 import {
@@ -164,7 +170,7 @@ function LangProvider({ children }: { children: ReactNode }) {
 }
 
 function Root() {
-  const { L } = useLang();
+  const { L, lang, setLang } = useLang();
   const { hasShareIntent, shareIntent, resetShareIntent } =
     useShareIntentContext();
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -174,6 +180,9 @@ function Root() {
   const [showWelcome, setShowWelcome] = useState(true);
   // Duplication de dossier en cours (copie des fichiers photo : peut durer).
   const [duplicating, setDuplicating] = useState(false);
+  // Libellé du voile d'occupation pour les tâches longues de sauvegarde /
+  // restauration (`null` = rien en cours). La duplication garde le sien.
+  const [busyLabel, setBusyLabel] = useState<string | null>(null);
   // Import en attente (photos partagées OU album ComClic reçu d'un ami) :
   // nombre d'éléments, nom de dossier suggéré, et l'action d'import une fois le
   // dossier choisi. `null` tant qu'aucun partage n'est en cours.
@@ -386,6 +395,131 @@ function Root() {
   );
 
   /**
+   * Restaure une sauvegarde complète : les dossiers sont **ajoutés** à ceux
+   * déjà présents, jamais fusionnés ni remplacés. Un nom déjà pris donne un
+   * doublon (« Copie de … ») — c'est le choix le plus sûr : une restauration
+   * ne doit jamais pouvoir effacer un travail en cours.
+   */
+  const runBackupRestore = useCallback(
+    (parsed: ParsedBackup) => {
+      const createdAlbums: Album[] = [];
+      const createdPhotos: Photo[] = [];
+      const base = Date.now();
+      const taken = new Set(albums.map((a) => a.name.trim().toLowerCase()));
+
+      parsed.albums.forEach((src, ai) => {
+        const albumId = newId();
+        const clash = taken.has(src.name.trim().toLowerCase());
+        const name = clash ? L.album.copyName(src.name) : src.name;
+        taken.add(name.trim().toLowerCase());
+        let coverPhotoId: string | undefined;
+
+        src.entries.forEach((e, i) => {
+          const id = newId();
+          // `createdAt` croissant : conserve l'ordre du fichier pour les
+          // entrées sans `order` (cf. `comparePhotos`).
+          const createdAt = base + ai * 1000 + i;
+          if (e.kind === 'text') {
+            createdPhotos.push({
+              id,
+              kind: 'text',
+              albumId,
+              uri: '',
+              comment: e.comment,
+              order: e.order,
+              createdAt,
+            });
+          } else if (e.uri) {
+            createdPhotos.push({
+              id,
+              albumId,
+              uri: e.uri,
+              comment: e.comment,
+              place: e.place,
+              takenAt: e.takenAt,
+              order: e.order,
+              createdAt,
+            });
+            if (e.cover) coverPhotoId = id;
+          }
+        });
+
+        createdAlbums.push({
+          id: albumId,
+          name,
+          createdAt: src.createdAt || base + ai,
+          coverPhotoId,
+        });
+      });
+
+      if (createdAlbums.length) setAlbums((prev) => [...prev, ...createdAlbums]);
+      if (createdPhotos.length) setPhotos((prev) => [...prev, ...createdPhotos]);
+
+      // Réglages : réécrits dans le stockage. La langue s'applique tout de
+      // suite ; les options d'export sont relues à l'ouverture d'un dossier, et
+      // le tri de la liste au prochain lancement (l'accueil est déjà monté).
+      const { lang: savedLang, sort, exportOptions } = parsed.settings ?? {};
+      if (savedLang) {
+        saveLang(savedLang);
+        setLang(savedLang);
+      }
+      if (sort) saveAlbumSort(sort);
+      if (exportOptions) saveExportOptions(exportOptions);
+
+      const photoCount = createdPhotos.filter((p) => p.kind !== 'text').length;
+      Alert.alert(
+        L.backup.doneTitle,
+        L.backup.doneBody(createdAlbums.length, photoCount),
+      );
+    },
+    [albums, L, setLang],
+  );
+
+  /**
+   * Écrit la sauvegarde de tous les dossiers puis ouvre la feuille de partage :
+   * à l'utilisateur de la déposer dans iCloud Drive, Fichiers ou un mail. Rien
+   * n'est envoyé automatiquement — l'app reste sans réseau.
+   */
+  const backupAll = useCallback(async () => {
+    if (busyLabel) return;
+    setBusyLabel(L.backup.building);
+    try {
+      const [exportOptions, sort] = await Promise.all([
+        loadExportOptions(),
+        loadAlbumSort(),
+      ]);
+      const res = await buildBackup(
+        albums,
+        photos,
+        {
+          lang,
+          sort: sort ?? undefined,
+          exportOptions: exportOptions ?? undefined,
+        },
+        L.backup.fileBase,
+      );
+      if (res.status === 'empty') {
+        Alert.alert(L.backup.emptyTitle, L.backup.emptyBody);
+        return;
+      }
+      if (res.status === 'tooLarge') {
+        Alert.alert(L.backup.tooLargeTitle, L.backup.tooLargeBody(res.photos));
+        return;
+      }
+      await shareFile(
+        res.uri,
+        L.backup.shareTitle,
+        'application/zip',
+        'public.zip-archive',
+      );
+    } catch {
+      Alert.alert(L.backup.failTitle, L.backup.failBody);
+    } finally {
+      setBusyLabel(null);
+    }
+  }, [albums, photos, lang, L, busyLabel]);
+
+  /**
    * Ouvre un fichier `.comclic` depuis l'app Fichiers (Mail, Messages, iCloud…).
    *
    * Double du partage système, volontaire : `expo-share-intent` est un module
@@ -407,6 +541,38 @@ function Root() {
       return;
     }
     try {
+      // Une SAUVEGARDE complète et un ALBUM reçu d'un ami sont deux .comclic :
+      // seul le marqueur du manifeste les distingue. On regarde d'abord la
+      // sauvegarde, en lisant le manifeste seul — extraire les images avant
+      // l'accord de l'utilisateur laisserait des fichiers orphelins s'il annule.
+      const peek = await peekBackup(file.uri);
+      if (peek) {
+        const when = new Date(peek.createdAt).toLocaleDateString(localeTag(lang));
+        Alert.alert(
+          L.backup.restoreTitle,
+          L.backup.restoreBody(peek.albums, peek.photos, when),
+          [
+            { text: L.common.cancel, style: 'cancel' },
+            {
+              text: L.backup.restoreConfirm,
+              onPress: async () => {
+                setBusyLabel(L.backup.restoring);
+                try {
+                  const full = await parseBackup(file.uri);
+                  if (full) runBackupRestore(full);
+                  else Alert.alert(L.common.error, L.alert.importFailBody);
+                } catch {
+                  Alert.alert(L.common.error, L.alert.importFailBody);
+                } finally {
+                  setBusyLabel(null);
+                }
+              },
+            },
+          ],
+        );
+        return;
+      }
+
       const parsed = await parseAlbumBundle(file.uri);
       if (!parsed) {
         Alert.alert(L.alert.importNotBundleTitle, L.alert.importNotBundleBody);
@@ -421,7 +587,7 @@ function Root() {
     } catch {
       Alert.alert(L.common.error, L.alert.importFailBody);
     }
-  }, [runAlbumImport, L]);
+  }, [runAlbumImport, runBackupRestore, lang, L]);
 
   // Partage système entrant → album ComClic (prioritaire) sinon images.
   // (En Expo Go, `hasShareIntent` reste faux : module natif absent.)
@@ -435,6 +601,44 @@ function Root() {
         (f) => looksLikeBundle(f.path) || looksLikeBundle(f.fileName ?? ''),
       );
       if (bundle) {
+        // Une sauvegarde complète porte la même extension qu'un album : on la
+        // reconnaît d'abord, sinon elle finirait dans l'alerte « partage
+        // inexploitable » alors que le fichier vient de l'app elle-même.
+        const peek = await peekBackup(bundle.path);
+        if (peek && !cancelled) {
+          setShowWelcome(false);
+          const when = new Date(peek.createdAt).toLocaleDateString(localeTag(lang));
+          Alert.alert(
+            L.backup.restoreTitle,
+            L.backup.restoreBody(peek.albums, peek.photos, when),
+            [
+              {
+                text: L.common.cancel,
+                style: 'cancel',
+                // Enveloppé : `Alert` passe une valeur au gestionnaire, que
+                // `resetShareIntent` interpréterait comme son propre argument.
+                onPress: () => resetShareIntent(),
+              },
+              {
+                text: L.backup.restoreConfirm,
+                onPress: async () => {
+                  setBusyLabel(L.backup.restoring);
+                  try {
+                    const full = await parseBackup(bundle.path);
+                    if (full) runBackupRestore(full);
+                    else Alert.alert(L.common.error, L.alert.importFailBody);
+                  } catch {
+                    Alert.alert(L.common.error, L.alert.importFailBody);
+                  } finally {
+                    setBusyLabel(null);
+                    resetShareIntent();
+                  }
+                },
+              },
+            ],
+          );
+          return;
+        }
         const parsed = await parseAlbumBundle(bundle.path);
         if (parsed && !cancelled) {
           const photoCount = parsed.entries.filter((e) => e.kind === 'photo').length;
@@ -476,7 +680,16 @@ function Root() {
     return () => {
       cancelled = true;
     };
-  }, [hasShareIntent, shareIntent, runAlbumImport, runImageImport, resetShareIntent, L]);
+  }, [
+    hasShareIntent,
+    shareIntent,
+    runAlbumImport,
+    runImageImport,
+    runBackupRestore,
+    resetShareIntent,
+    lang,
+    L,
+  ]);
 
   const openAlbum = albums.find((a) => a.id === openAlbumId) ?? null;
 
@@ -532,6 +745,7 @@ function Root() {
         onDuplicate={duplicateAlbum}
         onDelete={deleteAlbum}
         onImportBundle={importBundleFile}
+        onBackup={backupAll}
       />
     );
   }
@@ -540,10 +754,12 @@ function Root() {
     <>
       {content}
       {shareModal}
-      {duplicating && (
+      {(duplicating || busyLabel) && (
         <View style={styles.busyOverlay}>
           <ActivityIndicator size="large" color={C.sienna} />
-          <Text style={styles.busyText}>{L.home.duplicating}</Text>
+          <Text style={styles.busyText}>
+            {duplicating ? L.home.duplicating : busyLabel}
+          </Text>
         </View>
       )}
     </>
@@ -558,8 +774,10 @@ interface HomeProps {
   onRename: (id: string, name: string) => void;
   onDuplicate: (album: Album) => void;
   onDelete: (album: Album) => void;
-  /** Ouvre un fichier .comclic reçu d'un autre utilisateur (app Fichiers). */
+  /** Ouvre un fichier .comclic — album reçu d'un ami ou sauvegarde complète. */
   onImportBundle: () => void;
+  /** Écrit la sauvegarde de tous les dossiers et ouvre la feuille de partage. */
+  onBackup: () => void;
 }
 
 function HomeScreen({
@@ -571,6 +789,7 @@ function HomeScreen({
   onDuplicate,
   onDelete,
   onImportBundle,
+  onBackup,
 }: HomeProps) {
   const { L, lang, setLang } = useLang();
   const insets = useSafeAreaInsets();
@@ -759,12 +978,22 @@ function HomeScreen({
         >
           <Text style={styles.btnPrimaryText}>{L.home.newFolder}</Text>
         </Pressable>
-        <Pressable
-          style={[styles.btn, styles.btnGhost]}
-          onPress={onImportBundle}
-        >
-          <Text style={styles.btnGhostText}>{L.home.importAlbum}</Text>
-        </Pressable>
+        {/* Deux actions de fichier côte à côte : entrante (album reçu ou
+            sauvegarde à restaurer) et sortante (sauvegarde de tout). */}
+        <View style={styles.row}>
+          <Pressable
+            style={[styles.btn, styles.rowBtn, styles.btnGhost]}
+            onPress={onImportBundle}
+          >
+            <Text style={styles.btnGhostText}>{L.home.importAlbum}</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.btn, styles.rowBtn, styles.btnGhost]}
+            onPress={onBackup}
+          >
+            <Text style={styles.btnGhostText}>{L.home.backupAll}</Text>
+          </Pressable>
+        </View>
       </View>
 
       <NameModal

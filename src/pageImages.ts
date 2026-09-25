@@ -14,6 +14,7 @@ import { dict, localeTag, type Lang } from './i18n';
 import { paginateEntries, PER_PAGE } from './paginate';
 import { albumFileBase } from './pdf';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
+import { parseRich, type RichRun } from './richText';
 
 /** Tronque un texte à `n` mots (légende de pleine page). */
 function limitWords(text: string, n: number): string {
@@ -127,6 +128,197 @@ function drawText(
       else if (o.align === TextAlign.Right) lx = x + (width - w);
       // Ligne de base ≈ y + taille de police pour le premier interligne.
       canvas.drawText(ln, lx, y + idx * lineHeight + o.size, paint, font);
+    });
+    return lines.length * lineHeight;
+  } catch {
+    return 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Texte riche (**gras** / __souligné__) — pendant Skia de `richToHtml` du PDF.
+ *
+ * `drawText` ci-dessus ne connaît qu'une graisse par bloc : il reste pour les
+ * textes nus (numéros, titres, dates). Les commentaires passent par
+ * `drawRichText`, qui mesure mot à mot avec la police du fragment et souligne
+ * au trait — Skia n'a pas de décoration de texte.
+ * ------------------------------------------------------------------------ */
+
+/** Fragment de mot : un morceau de texte d'un seul style, largeur mesurée. */
+interface Seg {
+  text: string;
+  bold: boolean;
+  underline: boolean;
+  w: number;
+}
+
+/** Un mot = un ou plusieurs fragments collés (le style peut changer en son sein). */
+type Word = Seg[];
+
+// Les polices Skia sont coûteuses à créer : une par (graisse, taille) suffit.
+const fontCache = new Map<string, ReturnType<typeof Skia.Font>>();
+
+function fontFor(bold: boolean, size: number) {
+  const key = `${bold ? 'b' : 'r'}:${size}`;
+  const hit = fontCache.get(key);
+  if (hit) return hit;
+  const font = Skia.Font(typefaceFor(bold), size);
+  fontCache.set(key, font);
+  return font;
+}
+
+const segWidth = (seg: Seg) => seg.w;
+const wordWidth = (word: Word) => word.reduce((sum, seg) => sum + segWidth(seg), 0);
+
+/** Découpe les fragments de style en mots mesurés (les blancs séparent). */
+function toWords(runs: RichRun[], size: number): Word[] {
+  const words: Word[] = [];
+  let current: Word = [];
+  const flush = () => {
+    if (current.length) words.push(current);
+    current = [];
+  };
+  for (const run of runs) {
+    // `split` avec capture : on conserve les blancs pour savoir où couper.
+    for (const piece of run.text.split(/(\s+)/)) {
+      if (!piece) continue;
+      if (/^\s+$/.test(piece)) {
+        flush();
+        continue;
+      }
+      const font = fontFor(run.bold, size);
+      current.push({
+        text: piece,
+        bold: run.bold,
+        underline: run.underline,
+        w: font.getTextWidth(piece),
+      });
+    }
+  }
+  flush();
+  return words;
+}
+
+/** Répartit les mots en lignes tenant dans `width`, ellipsis si tronqué. */
+function layoutRich(
+  words: Word[],
+  size: number,
+  width: number,
+  maxLines: number,
+): Word[][] {
+  const spaceW = fontFor(false, size).getTextWidth(' ');
+  const lines: Word[][] = [];
+  let line: Word[] = [];
+  let lineW = 0;
+  let placed = 0;
+
+  for (const word of words) {
+    const w = wordWidth(word);
+    const add = line.length ? spaceW + w : w;
+    if (line.length && lineW + add > width) {
+      lines.push(line);
+      if (lines.length >= maxLines) {
+        line = [];
+        break;
+      }
+      line = [word];
+      lineW = w;
+    } else {
+      line.push(word);
+      lineW += add;
+    }
+    placed++;
+  }
+  if (line.length && lines.length < maxLines) lines.push(line);
+
+  // Mots non placés → ellipsis collée au dernier fragment de la dernière ligne,
+  // en rognant ce fragment tant que la ligne déborde.
+  if (placed < words.length && lines.length) {
+    const lastLine = lines[lines.length - 1];
+    const lastWord = lastLine[lastLine.length - 1];
+    const seg = lastWord?.[lastWord.length - 1];
+    if (seg) {
+      const font = fontFor(seg.bold, size);
+      const others =
+        lastLine.reduce((sum, word) => sum + wordWidth(word), 0) -
+        seg.w +
+        spaceW * Math.max(0, lastLine.length - 1);
+      let body = seg.text;
+      seg.text = `${body}…`;
+      seg.w = font.getTextWidth(seg.text);
+      while (body && others + seg.w > width) {
+        body = body.slice(0, -1);
+        seg.text = `${body}…`;
+        seg.w = font.getTextWidth(seg.text);
+      }
+    }
+  }
+  return lines;
+}
+
+const lineHeightFor = (size: number) => size * 1.32;
+
+/** Hauteur qu'occupera `drawRichText` — sert à centrer/aligner en bas. */
+function measureRich(
+  text: string,
+  width: number,
+  o: Pick<TextOpts, 'size' | 'maxLines'>,
+): number {
+  if (!text) return 0;
+  try {
+    const words = toWords(parseRich(text), o.size);
+    const lines = layoutRich(words, o.size, width, o.maxLines ?? 999);
+    return lines.length * lineHeightFor(o.size);
+  } catch {
+    return 0;
+  }
+}
+
+/** Dessine un commentaire balisé et renvoie sa hauteur. */
+function drawRichText(
+  canvas: SkCanvas,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  o: TextOpts,
+): number {
+  if (!text) return 0;
+  try {
+    const paint = Skia.Paint();
+    paint.setAntiAlias(true);
+    paint.setColor(Skia.Color(o.color));
+    const rule = Skia.Paint();
+    rule.setAntiAlias(true);
+    rule.setColor(Skia.Color(o.color));
+    rule.setStyle(PaintStyle.Stroke);
+    rule.setStrokeWidth(Math.max(1, o.size / 16));
+
+    const words = toWords(parseRich(text), o.size);
+    const lines = layoutRich(words, o.size, width, o.maxLines ?? 999);
+    const lineHeight = lineHeightFor(o.size);
+    const spaceW = fontFor(false, o.size).getTextWidth(' ');
+
+    lines.forEach((line, idx) => {
+      const textW =
+        line.reduce((sum, word) => sum + wordWidth(word), 0) +
+        spaceW * Math.max(0, line.length - 1);
+      let cx = x;
+      if (o.align === TextAlign.Center) cx = x + (width - textW) / 2;
+      else if (o.align === TextAlign.Right) cx = x + (width - textW);
+      // Ligne de base ≈ y + taille de police, comme `drawText`.
+      const baseline = y + idx * lineHeight + o.size;
+      for (const word of line) {
+        for (const seg of word) {
+          canvas.drawText(seg.text, cx, baseline, paint, fontFor(seg.bold, o.size));
+          if (seg.underline) {
+            const uy = baseline + o.size * 0.16;
+            canvas.drawLine(cx, uy, cx + seg.w, uy, rule);
+          }
+          cx += seg.w;
+        }
+        cx += spaceW;
+      }
     });
     return lines.length * lineHeight;
   } catch {
@@ -350,7 +542,15 @@ async function renderPhotoPage(
             align: dateAlign,
           }) + 4;
       }
-      drawText(canvas, `${D.description} : ${desc}`, cellX, ty, cellW, {
+      // Description : même texte riche que la légende familiale. Le gabarit pro
+      // n'a pas de position verticale — sa fiche coule, comme dans le PDF.
+      const descLabelW = fontFor(false, 20).getTextWidth(`${D.description} : `);
+      drawText(canvas, `${D.description} : `, cellX, ty, cellW, {
+        color: '#14181f',
+        size: 20,
+        maxLines: 1,
+      });
+      drawRichText(canvas, desc, cellX + descLabelW, ty, cellW - descLabelW, {
         color: '#14181f',
         size: 20,
         maxLines: 2,
@@ -407,7 +607,6 @@ async function renderPhotoPage(
     }
 
     // Légende (commentaire tronqué + date · lieu) sous la photo.
-    let ty = imgY + imgH + 14;
     const captionColor = whiteFrame ? '#2c2a26' : ink;
     // Date/lieu nettement lisibles (le tan clair passait inaperçu sur fond crème).
     const metaColor = dark ? '#cbc5b8' : '#6b6456';
@@ -420,10 +619,29 @@ async function renderPhotoPage(
         : options.dateAlign === 'right'
           ? TextAlign.Right
           : TextAlign.Left;
+    // Position verticale du commentaire dans la bande qui lui est réservée
+    // (pendant Skia de la bande `.caption` du PDF). On mesure le bloc avant de
+    // le dessiner pour répartir le vide au-dessus, autour ou en dessous.
+    const commentSize = perPage === 4 ? 28 : 34;
+    const metaSize = perPage === 4 ? 10 : 11;
+    const bandTop = imgY + imgH + 14;
+    const bandH = Math.max(0, captionH - 14);
+    const blockH =
+      (comment
+        ? measureRich(comment, imgW, { size: commentSize, maxLines: 2 })
+        : 0) +
+      (comment && meta ? 6 : 0) +
+      (meta ? lineHeightFor(metaSize) : 0);
+    const slack = Math.max(0, bandH - blockH);
+    const vAlign = options.commentVAlign ?? 'top';
+    let ty =
+      bandTop +
+      (vAlign === 'middle' ? slack / 2 : vAlign === 'bottom' ? slack : 0);
+
     if (comment) {
-      ty += drawText(canvas, comment, imgX, ty, imgW, {
+      ty += drawRichText(canvas, comment, imgX, ty, imgW, {
         color: captionColor,
-        size: perPage === 4 ? 28 : 34,
+        size: commentSize,
         maxLines: 2,
         align,
       });
@@ -432,7 +650,7 @@ async function renderPhotoPage(
     if (meta) {
       drawText(canvas, meta.toLowerCase(), imgX, ty, imgW, {
         color: metaColor,
-        size: perPage === 4 ? 10 : 11,
+        size: metaSize,
         maxLines: 1,
         align: dateAlign,
         letterSpacing: 1,
@@ -629,7 +847,7 @@ async function renderFullPage(
 
   const comment = limitWords(item.comment, 15);
   if (comment) {
-    drawText(canvas, comment, PAD, H - capH + 54, W - 2 * PAD, {
+    drawRichText(canvas, comment, PAD, H - capH + 54, W - 2 * PAD, {
       color: ink,
       size: 28,
       align: TextAlign.Center,

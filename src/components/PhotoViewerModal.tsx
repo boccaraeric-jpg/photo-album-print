@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Photo } from '../types';
 import { F } from '../theme';
 import { useLang } from '../i18n';
+import { RichText } from './RichText';
 
 interface Props {
   /** Photo à afficher en grand ; `null` ferme la visionneuse. */
@@ -73,9 +74,7 @@ export function PhotoViewerModal({ photo, onClose }: Props) {
 
         {!!caption && (
           <View style={[styles.captionBar, { paddingBottom: insets.bottom + 16 }]}>
-            <Text style={styles.caption} numberOfLines={4}>
-              {caption}
-            </Text>
+            <RichText text={caption} style={styles.caption} numberOfLines={4} />
           </View>
         )}
       </View>

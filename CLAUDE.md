@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm start              # Démarre Metro (Expo Go) — scanner le QR depuis l'iPhone
+npm start              # Démarre Metro (⚠️ plus utilisable depuis Expo Go, cf. ci-dessous)
 npm run ios            # Ouvre dans le simulateur iOS
 npm run android        # Ouvre sur Android
 npx tsc --noEmit       # Vérification de types (pas de script lint/test dans ce projet)
@@ -18,7 +18,20 @@ npx expo-doctor        # Cohérence des versions natives avec le SDK (18 contrô
 ```
 
 Il n'y a **ni tests, ni linter, ni CI** — `tsc --noEmit` est la seule vérification statique.
-L'app se valide **manuellement dans Expo Go sur un iPhone**. Boucle de validation côté PC :
+
+> ⛔ **Expo Go ne peut plus ouvrir ce projet** (constaté le 24/09/2026). L'Expo Go de l'App Store
+> est passé au **SDK 57**, le projet est en **SDK 54** (`expo 54.0.37`) : Metro répond à l'appareil
+> `Project is incompatible with this version of Expo Go`. Apple n'autorise que la dernière version
+> d'Expo Go — **aucun QR, tunnel ou réglage réseau n'y changera rien**, et c'est une perte de temps
+> garantie que de chercher la cause côté wifi ou pare-feu. Trois voies à la place :
+> 1. **EAS Update** (`eas update --branch production`) pour toute modification **JS** : arrive en OTA
+>    dans le build TestFlight déjà installé. C'est la boucle normale, quelques minutes.
+> 2. **Development build** (`eas build -p ios --profile development`, profil déjà dans `eas.json`) :
+>    rend la boucle Metro + QR utilisable, sans contrainte de version d'Expo Go.
+> 3. **Montée en SDK 57** : le correctif de fond, mais il faut revalider Skia, `expo-share-intent`,
+>    `expo-speech-recognition` et `expo-file-system/legacy`.
+
+Boucle de validation côté PC (toujours valable, et le seul contrôle rapide) :
 `npx expo start --clear` puis `curl "http://localhost:8081/index.bundle?platform=ios&dev=true"`
 (HTTP 200 = le bundle compile ; c'est là que sortent les erreurs d'import/transform).
 - ⚠️ Si le **port 8081 est déjà pris** par un autre projet, `npx expo start` s'arrête en mode non
@@ -30,6 +43,8 @@ L'app se valide **manuellement dans Expo Go sur un iPhone**. Boucle de validatio
   Un appareil resté sur EAS Update / une vieille URL sert silencieusement l'ancienne version.
 
 ### Connexion Expo Go (pièges récurrents)
+> Section conservée pour l'après-SDK 57 ou un development build : **inapplicable tant que le projet
+> est en SDK 54** (cf. l'encadré ci-dessus). Ne pas s'y lancer pour « réparer » une connexion Expo Go.
 - Après **tout** `npm/expo install`, arrêter Metro et relancer avec `npx expo start --clear`.
 - « Même wifi mais ça ne charge plus » : le PC sert bien (bundle HTTP 200 en local) ; côté iPhone
   c'est en général une **IP DHCP qui a changé** OU le **pare-feu Windows en profil « Public »** qui
@@ -53,10 +68,25 @@ L'app se valide **manuellement dans Expo Go sur un iPhone**. Boucle de validatio
 
 ### Partage aux testeurs (EAS Update)
 - Projet `@boccaras-team/photo-album-print` (propriété de l'**organisation** `boccaras-team` ;
-  `owner` dans `app.json` ; le compte perso est `boccara`), canal **`preview`** :
-  `npx eas-cli update --branch preview --message "..."`.
+  `owner` dans `app.json` ; le compte perso est `boccara`). Deux canaux existent, `preview` et
+  `production` — **choisir selon la cible, se tromper de canal ne remonte aucune erreur** :
+  ```bash
+  npx eas-cli update --branch production --message "..."   # ← build TestFlight (le cas courant)
+  npx eas-cli update --branch preview    --message "..."   # ← Expo Go / builds internes
+  ```
+  Le build TestFlight `1.0.0 (6)` écoute **`production`** (`updateChannel` du build, visible par
+  `eas build:list --json`). Expo Go étant hors jeu (cf. Commands), `production` est le canal normal.
+- **Un update ne s'applique pas au lancement où il est téléchargé.** Par défaut `expo-updates` affiche
+  d'abord la version en cache et télécharge en arrière-plan : il faut **laisser l'app ouverte au
+  premier plan ~30 s**, puis la fermer **complètement** et la rouvrir. Fermer trop vite interrompt le
+  téléchargement, et on peut répéter l'opération indéfiniment sans rien voir changer. Plusieurs
+  updates publiés à la suite s'appliquent **un par lancement**.
+- Le repère à donner au testeur n'est **pas** le numéro TestFlight (figé par le build) mais
+  l'étiquette de `versionLabel()` en bas de `WelcomeScreen` (horodatage + fin d'`updateId`) :
+  comparer avec la fin de l'`iOS update ID` affiché par `eas update`. Voir « Petits modules ».
 - `runtimeVersion` doit rester `{ "policy": "sdkVersion" }` dans `app.json` (la politique
-  `appVersion` casse le chargement dans Expo Go).
+  `appVersion` casse le chargement dans Expo Go). Le runtime d'un update (`exposdk:54.0.0`) doit
+  **correspondre** à celui du build visé, sinon l'update est publié mais jamais servi.
 - ⚠️ **Depuis le 12 mai 2026, Expo Go ne charge un projet EAS Update que pour un compte membre du
   propriétaire.** Rendre le projet public n'y change rien. Un testeur doit être invité en **Viewer**
   dans l'org `boccaras-team`, accepter l'email **avec l'adresse exacte de l'invitation** (pas de
@@ -135,6 +165,30 @@ déclenche l'alerte `alert.shareUnread…` (type reçu + nombre de fichiers) : s
 s'ouvrait et restait muette, indiscernable d'une extension de partage en panne. ⚠️ Module **natif** :
 en Expo Go `hasShareIntent` reste faux (le provider est no-op) — ce flux ne se teste que sur un
 build EAS.
+
+**Sauvegarde de tous les dossiers** (`src/backup.ts`) : bouton **« 💾 Sauvegarder tout »** de la
+barre d'`HomeScreen` → `buildBackup()` → un **seul `.comclic`** (ZIP + manifeste marqué
+**`comclic-backup`**, à ne pas confondre avec `comclic-album`) contenant **tous** les dossiers, leurs
+entrées (commentaires balisés, lieu, date, ordre, couverture, pages de texte) **et les réglages**
+(langue, tri, options d'export) — puis la feuille de partage native, à l'utilisateur de le déposer
+dans iCloud Drive / Fichiers / un mail. Rien ne part tout seul : l'app reste sans réseau.
+- **Ce que ça couvre** : la sauvegarde iCloud de l'iPhone protège de la perte du téléphone, **pas de
+  la suppression de l'app** — iOS efface alors le conteneur (fichiers image **et** base AsyncStorage).
+  C'est le seul cas sans recours, et le seul que ce fichier adresse.
+- **Restauration** par le **même** bouton que l'import d'album (`importBundleFile`) : `peekBackup()`
+  lit **le manifeste seul** pour annoncer le contenu et demander confirmation — `parseBackup()` écrit
+  les images sur le disque, le faire avant l'accord laisserait des fichiers orphelins à chaque
+  annulation. `runBackupRestore` **ajoute** les dossiers : rien n'est fusionné ni remplacé, un nom
+  déjà pris donne un doublon (`L.album.copyName`). Une restauration ne doit jamais pouvoir effacer un
+  travail en cours. Le **partage entrant** reconnaît aussi une sauvegarde (même extension qu'un
+  album), sinon le fichier tombait dans l'alerte « partage inexploitable ».
+- Réglages restaurés : la **langue** s'applique tout de suite (`setLang`), les **options d'export**
+  sont relues à l'ouverture d'un dossier, le **tri** au prochain lancement (l'accueil est déjà monté).
+- ⚠️ **Plafond assumé : `MAX_BACKUP_PHOTOS` = 200**, images **recompressées** (budget adaptatif sur
+  le total). JSZip construit l'archive **en mémoire** puis la convertit en base64 (+33 %) : au-delà,
+  iOS tue l'app. Une sauvegarde en **pleine résolution** demandera une écriture **en flux** (API
+  `File` du nouveau `expo-file-system` du SDK 54 — le projet est encore sur `legacy`). Ne pas lever
+  le plafond sans ce changement.
 
 **Recevoir un album sans le partage système** : le bouton **« ⤓ Importer un album reçu »** de la
 barre d'`HomeScreen` (`importBundleFile` dans `Root`) ouvre l'app Fichiers via
@@ -228,6 +282,16 @@ d'entrée** (ils pilotent aussi les libellés) :
   `textAlign` = alignement des **pages de texte**, honoré en pro **et** familial). Le **`style`**
   (`family`/`pro`) vient des boutons du bas. La date sous chaque photo est rendue en **minuscules**,
   taille réduite.
+- **`commentVAlign`** (`top`/`middle`/`bottom`) place le commentaire dans la bande qui lui est
+  réservée sous la photo — **familial uniquement** (le gabarit pro dispose sa fiche en flux, une
+  expertise ne doit jamais voir sa description tronquée ; la pleine page a son propre bandeau
+  `.full-cap`, déjà centré). En `top` (défaut) **aucune bande n'est posée** : le CSS est exactement
+  celui d'avant, donc zéro régression pour qui ne touche pas au réglage. En `middle`/`bottom`,
+  `.caption` reçoit une `min-height` (`CAPTION_BANDS` dans `pdf.ts`) et la photo perd d'autant
+  (`CAPTION_BASES` = ce qu'occupait déjà une légende d'une ligne) : **la carte garde sa hauteur**,
+  la pagination ne bouge pas. `min-height` et non `height` : un commentaire long continue de
+  s'étendre au lieu d'être rogné. Côté JPEG, `pageImages.ts` mesure le bloc (`measureRich`) puis
+  répartit le vide dans `captionH`.
 - **Types d'entrées** : une `Photo` est soit une image, soit une **page de texte** (`kind: 'text'`,
   `uri` vide, `comment` = le texte) créée par « ＋ Page de texte ». `src/paginate.ts`
   `paginateEntries()` renvoie des `AlbumPage` (`photos` groupées | `text` autonome) ; les pages de
@@ -256,6 +320,42 @@ d'entrée** (ils pilotent aussi les libellés) :
 - Contraintes de mise en page PDF **à ne pas casser** : dimensionner en **px = points** (A4
   595×842), **jamais de `vh`**, **hauteurs fixes** en familial (pas de flex vertical), et
   `print-color-adjust: exact` (sinon iOS supprime fonds/ombres).
+
+**Mise en forme du commentaire** (`src/richText.ts`, `src/components/RichText.tsx`) : le gras et le
+souligné vivent comme **balises dans la chaîne** `Photo.comment` — `**gras**`, `__souligné__` —
+et non dans un modèle riche. Ce champ traverse AsyncStorage, le `.comclic`, le `contexte.txt` du
+ZIP, la dictée et le correcteur : un tableau de segments aurait imposé une migration à chacun.
+Le **correcteur n'est pas perturbé** (ses jetons sont des suites de lettres, `*`/`_` n'en font pas
+partie, aucun offset ne bouge). `CommentModal` pose deux boutons **B/U** qui encadrent la sélection
+courante (`toggleMark`, espaces de bord exclus) — **rien de sélectionné = tout le commentaire**,
+et la barre **annonce sa cible** (« appliqué au texte sélectionné » / « à tout le texte »),
+la seule façon trouvable de tout mettre en gras (insérer une paire vide au curseur ne servait à
+rien : on ne tape pas « en gras », le curseur ressort de la paire). Réservé au **commentaire d'une
+photo** : pas sur les pages de texte, ni sur le nom de dossier / le lieu (qui servent de nom de
+fichier et de clé de tri).
+> ⚠️ **Une seule zone de texte à l'écran, jamais deux.** RN ne sait pas afficher une graisse
+> partielle dans un `TextInput` : les balises doivent donc rester visibles **pendant la saisie**.
+> D'où la bascule sur le focus (`editing`) — hors saisie, un commentaire balisé s'affiche **rendu**
+> (`RichText` dans un `Pressable` au gabarit de `input`, « Toucher pour modifier »), et le `TextInput`
+> ne revient qu'au toucher (`autoFocus={editing}`). La première version empilait le champ **et** un
+> bloc d'aperçu : deux fois le même texte, l'un balisé l'autre rendu — les testeurs y ont vu deux
+> commentaires enregistrés, et c'était compréhensible. Ne pas réintroduire d'aperçu permanent.
+> Sans marque, le champ reste un `TextInput` ordinaire : zéro changement pour qui n'utilise pas B/U.
+> ⚠️ **iOS annule la sélection avant que le bouton ne réagisse** : le champ émet une sélection
+> **vide** en perdant le focus, et le menu natif (Couper/Copier/Coller), qui s'ouvre **sous** le mot,
+> mange le premier appui. On lisait donc « rien de sélectionné » et la marque partait sur tout le
+> texte — le gras semblait marcher (il visait tout de toute façon), le souligné d'un mot jamais.
+> Trois parades cumulées, à ne pas défaire : barre **au-dessus** du champ (hors du menu natif),
+> **`onPressIn`** et non `onPress` (l'appui-bas précède la perte de focus), et **mémoire de la
+> dernière plage non vide** (`remembered`), effacée seulement à la frappe.
+
+> Les **deux** moteurs doivent suivre, comme pour tout réglage d'export : `richToHtml()` côté
+> `pdf.ts` (légende familiale, pleine page, description pro) et **`drawRichText()`** côté
+> `pageImages.ts`. Skia n'a ni graisse partielle ni décoration : `drawRichText` mesure mot à mot avec
+> la police du fragment (`fontFor`, cache par graisse+taille) et **trace le souligné au trait**.
+> Partout où le commentaire redevient du texte nu — `contexte.txt` et noms de fichiers du ZIP,
+> `isLongComment()` de `paginate.ts` — passer par **`stripMarks()`**, sinon les balises comptent
+> dans la longueur et basculent une photo sur une page entière pour rien.
 
 **Lieu et date de prise de vue** (`src/exif.ts`, `src/photoLocation.ts`, `src/geocode.ts`) :
 PHPicker (iOS) **caviarde les métadonnées** de l'asset remis à l'app, donc l'EXIF est souvent vide.
@@ -335,24 +435,11 @@ de compilation sinon). Valeurs = chaînes **ou fonctions** (pluriel/interpolatio
   plus long) : ne pas le supprimer ; régénérable par un script node (talisman + `an-array-of-french-words`).
 - `src/montserratFonts.ts` = **~0,9 Mo** de base64 (graisses 500 + 800), généré une fois depuis
   `@expo-google-fonts/montserrat`.
-- **Icônes** (« icône v7 » : **monogramme « CC » de ComClic seul**, sienne, sur crème, avec les
-  cercles de visée — deux arcs ouverts à droite, centres x 338 et 686 / y 512, r 166,
-  `stroke-width: 84`, dimensionnés pour **remplir le cercle de visée extérieur**). Historique utile :
-  v2 = **dossier** ; v3 = appareil photo détaillé mais **chevron** masquant l'objectif ; v4 = chevron
-  réduit en badge (refusé) ; v5 = chevron agrandi ; v6 = chevron remplacé par le **double C** (il ne
-  disait rien du nom de l'app) sur fond d'appareil photo ; **v7 = appareil photo retiré**, il
-  alourdissait le dessin. ⚠️ **Ne pas rapprocher les deux C** : centres trop proches, les arcs
-  s'enchevêtrent et le sigle devient une tache illisible (essayé). Les sources sont **vectorielles et versionnées** dans `design/` :
-  `icon.svg` (visuel complet, fond crème bord à bord), `icon-foreground.svg` (visuel seul à 66 %,
-  transparent, zone sûre Android), `icon-monochrome.svg` (« CC » plein en noir, teinté par Android),
-  `logo-mark.svg` (**marque seule**, transparente, sans cercles de visée).
-  `node design/build-icons.js` régénère **tous** les PNG d'`assets/` : `icon.png` (1024, iOS — carré
-  plein, le masque arrondi est celui d'iOS), `welcome-logo.png` (512, arrondi par le `borderRadius`
-  du style), `favicon.png`, `android-icon-foreground.png`, `android-icon-monochrome.png`,
-  `logo-mark.png` (256) et l'aplat `android-icon-background.png` (**`#FBF4EA`** = crème intérieure,
-  aussi dans `app.json` `adaptiveIcon.backgroundColor`). Retoucher le dessin = éditer le SVG puis
-  relancer le script, jamais repartir d'un JPEG. ⚠️ Ces icônes **n'apparaissent que dans un build
-  natif** — dans Expo Go l'app porte l'icône d'Expo Go.
+- **Icônes & logo** : sources SVG et procédure de régénération dans **`design/README.md`**
+  (dessin actuel « v7 » = monogramme « CC » seul, historique des versions refusées, `sharp` en
+  `--no-save`, table des PNG produits dans `assets/`). Retoucher le dessin = éditer le SVG puis
+  relancer `node design/build-icons.js`, **jamais** repartir d'un PNG ou d'un JPEG. ⚠️ Ces icônes
+  **n'apparaissent que dans un build natif** — sous Expo Go l'app porte l'icône d'Expo Go.
 - **Logo dans l'app** : `WelcomeScreen` utilise `welcome-logo.png` (grand, fond crème) ;
   `HomeScreen` et `AlbumScreen` affichent `logo-mark.png` en **34 px** dans leur en-tête (styles
   `brandRow` / `brandRowSpread` / `brandLogo` d'`App.tsx`) — accueil à gauche du sur-titre, écran
@@ -366,7 +453,7 @@ de compilation sinon). Valeurs = chaînes **ou fonctions** (pluriel/interpolatio
   hors commits, comme les notes `*.doc` et `skills-lock.json`).
   ⚠️ Ce cycle install/désinstall **fait tomber Metro** s'il tourne (`ENOENT ... watch
   'node_modules/.<tmp>'`, le watcher suit un dossier temporaire disparu) : générer les assets
-  **Metro arrêté**, ou le relancer ensuite.
+  **Metro arrêté**, ou le relancer ensuite. Détail de la chaîne d'icônes : `design/README.md`.
 
 ### Règle générale : ne jamais toucher `node_modules` avec Metro allumé
 Vaut pour `npm install/uninstall`, `npx expo install` **et `npm dedupe`**. Metro garde en cache la
@@ -421,6 +508,13 @@ sans `react-native-gesture-handler` ; ⚠️ **iOS uniquement** — sur Android 
 écran mais ne se pince pas. Les pages de texte n'ouvrent pas la visionneuse.
 
 ## Petits modules à connaître
+`src/appVersion.ts` `versionLabel()` — étiquette affichée en bas de `WelcomeScreen` : numéro d'app
+(`app.json`) **+ horodatage et fin d'identifiant de l'EAS Update chargé**. Le numéro de TestFlight
+ne bouge **pas** quand un update remplace le JS : sans ce repère, impossible de dire à un testeur si
+la correction publiée est bien celle qu'il a sous les yeux. Prendre la **fin** de l'`updateId` (UUID
+ordonnés par le temps : leurs premiers caractères sont identiques d'un update à l'autre).
+`Updates.isEmbeddedLaunch` → mention « version intégrée » (bundle gravé dans le build, ou retour
+arrière après un update défaillant) ; en Expo Go `expo-updates` est inerte, d'où le `try/catch` ·
 `src/id.ts` `newId()` (identifiants `timestamp-suffixe`, utilisé pour photos, dossiers et noms de
 fichiers persistés) · `src/mediaLibrary.ts` `saveToPhotoLibrary()` (copie dans l'app Photos, permission
 **écriture seule**, renvoie `false` si refusée — l'ajout à l'album ne doit jamais échouer pour autant)

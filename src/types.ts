@@ -56,6 +56,12 @@ export interface ExportOptions {
   dateAlign: 'left' | 'center' | 'right';
   /** Alignement du texte des pages de texte — pro et familial. */
   textAlign: 'left' | 'center' | 'right';
+  /**
+   * Position verticale du commentaire dans la bande qui lui est réservée sous
+   * la photo — **familial uniquement**. Le gabarit pro dispose la description
+   * en flux (une expertise ne doit jamais la tronquer), il n'a pas de bande.
+   */
+  commentVAlign: 'top' | 'middle' | 'bottom';
 }
 
 /** Critère de tri de la liste des dossiers (écran d'accueil). */
