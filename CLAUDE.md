@@ -178,8 +178,13 @@ d'entrée** (ils pilotent aussi les libellés) :
   (`sendImages` = le rendu mis en page, 1 image/page → ZIP si plusieurs), et **Photos (à réutiliser)**
   (`sendReusablePhotos` → `zipPhotos` dans `albumZip.ts` = ZIP des **fichiers photo affichés** pleine
   résolution + un `contexte.txt` listant commentaire/date/lieu de chaque photo). Chacune ouvre la
-  **feuille de partage native iOS** (`expo-sharing`). Un **ZIP** passe par Mail/AirDrop/Fichiers, **pas**
-  Messenger/WhatsApp.
+  **feuille de partage native iOS** (`expo-sharing`). Un **ZIP** passe par Mail/AirDrop/Fichiers,
+  Messages et WhatsApp (vérifié sur device le 01/10/2026).
+  ⚠️ Envoi WhatsApp qui échoue sur « Impossible d'envoyer le message. Réessayez ou ouvrez WhatsApp » —
+  PDF comme ZIP : c'est le **mode Économie d'énergie** de l'iPhone (l'extension de partage WhatsApp
+  délègue l'envoi à l'app en arrière-plan, que ce mode coupe), **pas** ComClic. `expo-sharing` n'est
+  qu'un `UIActivityViewController` standard. Désactiver le mode, ou partager une photo depuis
+  l'app Photos pour contrôle, avant de chercher dans le code.
 - La 4ᵉ option, **Album ComClic** (`sendComclicAlbum` → `albumBundle.ts`), envoie le `.comclic`
   (ZIP + manifeste) à un ami qui a l'app.
   ⚠️ Le fichier s'appelle en réalité **`Nom.comclic.zip`** (`BUNDLE_EXT`, aussi pour la sauvegarde) :
