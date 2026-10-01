@@ -187,6 +187,12 @@ const fr = {
     },
   },
   backup: {
+    confirmTitle: 'Sauvegarder tous les dossiers ?',
+    confirmBody: (albums: number, photos: number) =>
+      `${albums} dossier${albums > 1 ? 's' : ''} et ${photos} photo${photos > 1 ? 's' : ''} seront réunis dans un seul fichier, à enregistrer ensuite dans Fichiers, iCloud Drive ou un mail.
+
+La préparation peut prendre un moment et ne peut pas être interrompue.`,
+    confirm: 'Sauvegarder',
     building: 'Préparation de la sauvegarde…',
     restoring: 'Restauration en cours…',
     fileBase: 'ComClic sauvegarde',
@@ -473,6 +479,12 @@ const en: Dict = {
     },
   },
   backup: {
+    confirmTitle: 'Back up all folders?',
+    confirmBody: (albums: number, photos: number) =>
+      `${albums} folder${albums > 1 ? 's' : ''} and ${photos} photo${photos > 1 ? 's' : ''} will be gathered into a single file, to save afterwards in Files, iCloud Drive or an email.
+
+Preparing it may take a while and cannot be interrupted.`,
+    confirm: 'Back up',
     building: 'Preparing backup…',
     restoring: 'Restoring…',
     fileBase: 'ComClic backup',

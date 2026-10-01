@@ -86,7 +86,8 @@ en Expo Go `hasShareIntent` reste faux (le provider est no-op) — ce flux ne se
 build EAS.
 
 **Sauvegarde de tous les dossiers** (`src/backup.ts`) : bouton **« 💾 Sauvegarder tout »** de la
-barre d'`HomeScreen` → `buildBackup()` → un **seul `.comclic`** (ZIP + manifeste marqué
+barre d'`HomeScreen` → **confirmation** (`confirmBackup` : la préparation ne s'interrompt pas,
+un appui par mégarde bloquait l'écran) → `buildBackup()` → un **seul `.comclic`** (ZIP + manifeste marqué
 **`comclic-backup`**, à ne pas confondre avec `comclic-album`) contenant **tous** les dossiers, leurs
 entrées (commentaires balisés, lieu, date, ordre, couverture, pages de texte) **et les réglages**
 (langue, tri, options d'export) — puis la feuille de partage native, à l'utilisateur de le déposer

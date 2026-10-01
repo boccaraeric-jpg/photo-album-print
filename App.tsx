@@ -521,6 +521,29 @@ function Root() {
   }, [albums, photos, lang, L, busyLabel]);
 
   /**
+   * Demande confirmation avant de lancer la sauvegarde : une fois partie, la
+   * préparation (voile `busyOverlay`) ne s'interrompt pas, et un appui par
+   * mégarde bloquait l'écran le temps de tout recompresser. Sans dossier, on
+   * passe directement à `backupAll`, qui affiche « Rien à sauvegarder ».
+   */
+  const confirmBackup = useCallback(() => {
+    if (busyLabel) return;
+    if (albums.length === 0) {
+      backupAll();
+      return;
+    }
+    const photoCount = photos.filter((p) => p.kind !== 'text').length;
+    Alert.alert(
+      L.backup.confirmTitle,
+      L.backup.confirmBody(albums.length, photoCount),
+      [
+        { text: L.common.cancel, style: 'cancel' },
+        { text: L.backup.confirm, onPress: () => backupAll() },
+      ],
+    );
+  }, [albums, photos, L, busyLabel, backupAll]);
+
+  /**
    * Ouvre un fichier `.comclic` depuis l'app Fichiers (Mail, Messages, iCloud…).
    *
    * Double du partage système, volontaire : `expo-share-intent` est un module
@@ -759,7 +782,7 @@ function Root() {
         onDuplicate={duplicateAlbum}
         onDelete={deleteAlbum}
         onImportBundle={importBundleFile}
-        onBackup={backupAll}
+        onBackup={confirmBackup}
       />
     );
   }
