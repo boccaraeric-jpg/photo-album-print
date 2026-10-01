@@ -260,7 +260,7 @@ Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un
     pdf: 'PDF',
     albumImages: "Images de l'album",
     reusablePhotos: 'Photos (à réutiliser)',
-    comclicAlbum: 'Album ComClic (pour un ami)',
+    comclicAlbum: 'Album ComClic (pour un contact)',
   },
   alert: {
     deleteAlbumTitle: (name: string) => `Supprimer « ${name} » ?`,
@@ -306,7 +306,7 @@ Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un
       'S’il ne l’a pas encore, envoyez-lui le lien d’installation : il en aura besoin pour ouvrir l’album.',
     already: 'Il l’a déjà',
     send: 'Envoyer le lien',
-    /** Message texte envoyé à l'ami (SMS, WhatsApp, Mail…). */
+    /** Message texte envoyé au contact (SMS, WhatsApp, Mail…). */
     message: (url: string) =>
       `Je vous envoie un album photo réalisé avec ComClic. Installez l’app pour l’ouvrir : ${url}`,
     fail: 'Le partage du lien a échoué.',
@@ -553,7 +553,7 @@ Folders will be ADDED to the ones already there: nothing is replaced. A name alr
     pdf: 'PDF',
     albumImages: 'Album images',
     reusablePhotos: 'Photos (reusable)',
-    comclicAlbum: 'ComClic album (for a friend)',
+    comclicAlbum: 'ComClic album (for a contact)',
   },
   alert: {
     deleteAlbumTitle: (name: string) => `Delete “${name}”?`,
