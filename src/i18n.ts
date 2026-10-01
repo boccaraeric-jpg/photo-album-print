@@ -301,9 +301,10 @@ Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un
     textPageAtEnd: 'À la fin',
   },
   invite: {
-    title: 'Lien d’installation',
+    title: 'Votre destinataire a-t-il ComClic ?',
     body:
-      'Si votre destinataire ne possède pas encore l’app ComClic, envoyez-lui le lien d’installation pour qu’il profite de toutes les fonctionnalités.',
+      'S’il ne l’a pas encore, envoyez-lui le lien d’installation : il en aura besoin pour ouvrir l’album.',
+    already: 'Il l’a déjà',
     send: 'Envoyer le lien',
     /** Message texte envoyé à l'ami (SMS, WhatsApp, Mail…). */
     message: (url: string) =>
@@ -593,9 +594,10 @@ Folders will be ADDED to the ones already there: nothing is replaced. A name alr
     textPageAtEnd: 'At the end',
   },
   invite: {
-    title: 'Install link',
+    title: 'Does your recipient have ComClic?',
     body:
-      'If your recipient doesn’t have the ComClic app yet, send them the install link so they can enjoy all its features.',
+      'If not yet, send them the install link: they will need the app to open the album.',
+    already: 'They already have it',
     send: 'Send the link',
     message: (url: string) =>
       `I’m sending you a photo album made with ComClic. Install the app to open it: ${url}`,

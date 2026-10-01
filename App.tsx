@@ -1526,7 +1526,7 @@ function AlbumScreen({
   const offerInstallLink = useCallback(() => {
     setTimeout(() => {
       Alert.alert(L.invite.title, L.invite.body, [
-        { text: L.common.later, style: 'cancel' },
+        { text: L.invite.already, style: 'cancel' },
         {
           text: L.invite.send,
           onPress: () => {
