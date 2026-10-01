@@ -180,7 +180,12 @@ d'entrée** (ils pilotent aussi les libellés) :
   **feuille de partage native iOS** (`expo-sharing`). Un **ZIP** passe par Mail/AirDrop/Fichiers, **pas**
   Messenger/WhatsApp.
 - La 4ᵉ option, **Album ComClic** (`sendComclicAlbum` → `albumBundle.ts`), envoie le `.comclic`
-  (ZIP + manifeste) à un ami qui a l'app. Les photos sont **redimensionnées/recompressées** via
+  (ZIP + manifeste) à un ami qui a l'app.
+  ⚠️ Le fichier s'appelle en réalité **`Nom.comclic.zip`** (`BUNDLE_EXT`, aussi pour la sauvegarde) :
+  aucun type `.comclic` n'est déclaré dans le build, donc iOS Messages l'affichait en fichier inconnu
+  (ni aperçu ni enregistrement) et WhatsApp le renommait. L'import juge sur le **contenu**
+  (`isZipFile` = signature `PK`, puis manifeste), pas sur le nom. Déclarer un vrai type de document
+  (« Ouvrir avec ComClic ») exigera un **build natif**. Les photos sont **redimensionnées/recompressées** via
   `readPrintBase64()` avec le **même budget adaptatif que le PDF** (`maxEdge`/`quality` selon le
   nombre de photos) — envoyé souvent par SMS/iMessage, la pleine résolution (12 photos ≈ 36 Mo)
   était intransmissible. Contrairement à « Photos (à réutiliser) » (`sendReusablePhotos`), qui

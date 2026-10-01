@@ -70,6 +70,7 @@ import { saveToPhotoLibrary } from './src/mediaLibrary';
 import { zipImages, zipPhotos } from './src/albumZip';
 import {
   buildAlbumBundle,
+  isZipFile,
   looksLikeBundle,
   parseAlbumBundle,
   type ImportedEntry,
@@ -536,7 +537,10 @@ function Root() {
     });
     if (res.canceled || !res.assets?.length) return;
     const file = res.assets[0];
-    if (!looksLikeBundle(file.name) && !looksLikeBundle(file.uri)) {
+    // Contrôle sur le CONTENU, pas sur le nom : WhatsApp renomme le fichier
+    // reçu ou en retire l'extension, et un vrai album était refusé sans être
+    // ouvert (« Fichier non reconnu »).
+    if (!(await isZipFile(file.uri))) {
       Alert.alert(L.alert.importNotBundleTitle, L.alert.importNotBundleBody);
       return;
     }
@@ -597,9 +601,19 @@ function Root() {
     (async () => {
       const files = shareIntent?.files ?? [];
       // 1) Fichier album ComClic (.comclic / .zip contenant un manifeste) ?
-      const bundle = files.find(
-        (f) => looksLikeBundle(f.path) || looksLikeBundle(f.fileName ?? ''),
-      );
+      // Le nom d'abord ; à défaut, tout fichier non-image qui commence comme
+      // un ZIP (nom retiré ou changé par la messagerie d'origine).
+      const findZip = async () => {
+        for (const f of files) {
+          if (f.path && !f.mimeType?.startsWith('image/') && (await isZipFile(f.path))) {
+            return f;
+          }
+        }
+        return undefined;
+      };
+      const bundle =
+        files.find((f) => looksLikeBundle(f.path) || looksLikeBundle(f.fileName ?? '')) ??
+        (await findZip());
       if (bundle) {
         // Une sauvegarde complète porte la même extension qu'un album : on la
         // reconnaît d'abord, sinon elle finirait dans l'alerte « partage

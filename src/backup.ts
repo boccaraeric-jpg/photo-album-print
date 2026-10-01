@@ -6,10 +6,10 @@ import { comparePhotos } from './storage';
 import { fileDateStamp } from './dateFormat';
 import type { Album, AlbumSort, ExportOptions, Photo } from './types';
 import type { Lang } from './i18n';
-import type { ImportedEntry } from './albumBundle';
+import { BUNDLE_EXT, type ImportedEntry } from './albumBundle';
 
 /**
- * Sauvegarde complète : **tous** les dossiers dans un seul fichier `.comclic`,
+ * Sauvegarde complète : **tous** les dossiers dans un seul fichier `.comclic.zip`,
  * que l'utilisateur dépose lui-même dans iCloud Drive / Fichiers / un mail.
  *
  * Pourquoi c'est nécessaire alors que l'iPhone sauvegarde déjà l'app : la
@@ -164,7 +164,7 @@ export async function buildBackup(
   );
 
   const content = await zip.generateAsync({ type: 'base64' });
-  const dest = `${FileSystem.cacheDirectory}${safeName(fileBase)} ${fileDateStamp()}.comclic`;
+  const dest = `${FileSystem.cacheDirectory}${safeName(fileBase)} ${fileDateStamp()}${BUNDLE_EXT}`;
   await FileSystem.writeAsStringAsync(dest, content, {
     encoding: FileSystem.EncodingType.Base64,
   });

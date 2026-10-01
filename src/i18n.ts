@@ -287,7 +287,7 @@ Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un
     duplicateFail: 'La duplication du dossier a échoué.',
     importNotBundleTitle: 'Fichier non reconnu',
     importNotBundleBody:
-      "Choisissez un fichier d'album ComClic (.comclic) reçu par message, mail ou AirDrop.",
+      "Ce fichier n'est pas un album ComClic. Choisissez le fichier .comclic.zip reçu par message, WhatsApp, mail ou AirDrop.",
     importFailBody: "L'ouverture de l'album a échoué.",
     textPageTitle: 'Nouvelle page de texte',
     textPageBody: 'Où placer cette page dans le dossier ?',
@@ -573,7 +573,7 @@ Folders will be ADDED to the ones already there: nothing is replaced. A name alr
     duplicateFail: 'Duplicating the folder failed.',
     importNotBundleTitle: 'File not recognised',
     importNotBundleBody:
-      'Pick a ComClic album file (.comclic) received by message, mail or AirDrop.',
+      'This file is not a ComClic album. Pick the .comclic.zip file received by message, WhatsApp, mail or AirDrop.',
     importFailBody: 'Opening the album failed.',
     textPageTitle: 'New text page',
     textPageBody: 'Where should this page go in the folder?',
