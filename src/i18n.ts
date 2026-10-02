@@ -189,7 +189,7 @@ const fr = {
   backup: {
     confirmTitle: 'Sauvegarder tous les dossiers ?',
     confirmBody: (albums: number, photos: number) =>
-      `${albums} dossier${albums > 1 ? 's' : ''} et ${photos} photo${photos > 1 ? 's' : ''} seront réunis dans un seul fichier, à enregistrer ensuite dans Fichiers, iCloud Drive ou un mail.
+      `${albums} dossier${albums > 1 ? 's' : ''} et ${photos} photo${photos > 1 ? 's' : ''} seront réunis dans un seul fichier, à enregistrer ensuite dans vos fichiers, un stockage en ligne ou un mail.
 
 La préparation peut prendre un moment et ne peut pas être interrompue.`,
     confirm: 'Sauvegarder',
@@ -204,7 +204,7 @@ La préparation peut prendre un moment et ne peut pas être interrompue.`,
       `Cette version sauvegarde jusqu'à 200 photos en un seul fichier, et vous en avez ${n}. Envoyez d'abord quelques dossiers en « Album ComClic » pour alléger l'app.`,
     failTitle: 'Sauvegarde impossible',
     failBody:
-      "Le fichier n'a pas pu être écrit. Vérifiez l'espace libre sur l'iPhone, puis réessayez.",
+      "Le fichier n'a pas pu être écrit. Vérifiez l'espace libre sur le téléphone, puis réessayez.",
     restoreTitle: 'Restaurer cette sauvegarde ?',
     restoreBody: (albums: number, photos: number, date: string) =>
       `Sauvegarde du ${date} : ${albums} dossier${albums > 1 ? 's' : ''}, ${photos} photo${photos > 1 ? 's' : ''}.
@@ -293,7 +293,7 @@ Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un
     duplicateFail: 'La duplication du dossier a échoué.',
     importNotBundleTitle: 'Fichier non reconnu',
     importNotBundleBody:
-      "Ce fichier n'est pas un album ComClic. Choisissez le fichier .comclic.zip reçu par message, WhatsApp, mail ou AirDrop.",
+      "Ce fichier n'est pas un album ComClic. Choisissez le fichier .comclic.zip reçu par message, WhatsApp ou mail.",
     importFailBody: "L'ouverture de l'album a échoué.",
     textPageTitle: 'Nouvelle page de texte',
     textPageBody: 'Où placer cette page dans le dossier ?',
@@ -482,7 +482,7 @@ const en: Dict = {
   backup: {
     confirmTitle: 'Back up all folders?',
     confirmBody: (albums: number, photos: number) =>
-      `${albums} folder${albums > 1 ? 's' : ''} and ${photos} photo${photos > 1 ? 's' : ''} will be gathered into a single file, to save afterwards in Files, iCloud Drive or an email.
+      `${albums} folder${albums > 1 ? 's' : ''} and ${photos} photo${photos > 1 ? 's' : ''} will be gathered into a single file, to save afterwards in your files, online storage or an email.
 
 Preparing it may take a while and cannot be interrupted.`,
     confirm: 'Back up',
@@ -497,7 +497,7 @@ Preparing it may take a while and cannot be interrupted.`,
       `This version backs up to 200 photos in a single file, and you have ${n}. Send a few folders as a ComClic Album first to lighten the app.`,
     failTitle: 'Backup failed',
     failBody:
-      'The file could not be written. Check the free space on your iPhone, then try again.',
+      'The file could not be written. Check the free space on your phone, then try again.',
     restoreTitle: 'Restore this backup?',
     restoreBody: (albums: number, photos: number, date: string) =>
       `Backup from ${date}: ${albums} folder${albums > 1 ? 's' : ''}, ${photos} photo${photos > 1 ? 's' : ''}.
@@ -586,7 +586,7 @@ Folders will be ADDED to the ones already there: nothing is replaced. A name alr
     duplicateFail: 'Duplicating the folder failed.',
     importNotBundleTitle: 'File not recognised',
     importNotBundleBody:
-      'This file is not a ComClic album. Pick the .comclic.zip file received by message, WhatsApp, mail or AirDrop.',
+      'This file is not a ComClic album. Pick the .comclic.zip file received by message, WhatsApp or email.',
     importFailBody: 'Opening the album failed.',
     textPageTitle: 'New text page',
     textPageBody: 'Where should this page go in the folder?',
