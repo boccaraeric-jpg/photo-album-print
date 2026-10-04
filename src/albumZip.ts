@@ -4,6 +4,7 @@ import { albumFileBase } from './pdf';
 import type { Photo } from './types';
 import { formatPhotoDate, photoDate } from './dateFormat';
 import { dict, type Lang } from './i18n';
+import { stripMarks } from './richText';
 
 /**
  * Regroupe des images (pages JPEG du mini album) dans une archive ZIP unique,
@@ -62,13 +63,13 @@ export async function zipPhotos(
   for (const p of entries) {
     if (p.kind === 'text') {
       lines.push(D.textPageMarker);
-      if (p.comment.trim()) lines.push(p.comment.trim());
+      if (p.comment.trim()) lines.push(stripMarks(p.comment).trim());
       lines.push('');
       continue;
     }
     n += 1;
     const num = String(n).padStart(2, '0');
-    const snippet = safeSnippet(p.comment);
+    const snippet = safeSnippet(stripMarks(p.comment));
     const fname = snippet ? `${num} - ${snippet}.jpg` : `${num}.jpg`;
     try {
       const base64 = await FileSystem.readAsStringAsync(p.uri, {
@@ -82,7 +83,8 @@ export async function zipPhotos(
     const date = formatPhotoDate(photoDate(p), 'full', lang);
     if (date) lines.push(`  ${D.date} : ${date}`);
     if (p.place?.trim()) lines.push(`  ${D.place} : ${p.place.trim()}`);
-    if (p.comment.trim()) lines.push(`  ${D.comment} : ${p.comment.trim()}`);
+    if (p.comment.trim())
+      lines.push(`  ${D.comment} : ${stripMarks(p.comment).trim()}`);
     lines.push('');
   }
 

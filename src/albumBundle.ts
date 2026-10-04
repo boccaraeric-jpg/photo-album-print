@@ -4,7 +4,7 @@ import { newId } from './id';
 import { readPrintBase64, writeBase64Image } from './photoFiles';
 import type { Photo } from './types';
 
-// Fichier album ComClic : un ZIP (extension .comclic) contenant les images
+// Fichier album ComClic : un ZIP (extension .comclic.zip, cf. BUNDLE_EXT) contenant les images
 // (redimensionnées/recompressées, même budget que le PDF — cf. plus bas) + un
 // manifeste JSON qui décrit tout (commentaires, lieux, dates, ordre, couverture,
 // pages de texte, nom du dossier). Sert à envoyer un album à un ami qui a
@@ -13,6 +13,17 @@ import type { Photo } from './types';
 
 const MANIFEST = 'manifest.json';
 const MARKER = 'comclic-album';
+
+/**
+ * Extension des fichiers produits (album envoyé **et** sauvegarde).
+ *
+ * `.comclic.zip` et non `.comclic` : iOS ne connaît pas `.comclic` (aucun type
+ * déclaré dans le build), donc Messages l'affichait en fichier inconnu — ni
+ * aperçu, ni « Enregistrer dans Fichiers » — et WhatsApp le renommait ou le
+ * refusait. Terminé par `.zip`, le fichier passe partout comme une archive
+ * ordinaire. Les anciens `.comclic` restent lisibles (cf. `looksLikeBundle`).
+ */
+export const BUNDLE_EXT = '.comclic.zip';
 
 /** Une entrée du manifeste (image ou page de texte). */
 interface BundleEntry {
@@ -91,7 +102,7 @@ export async function buildAlbumBundle(
   zip.file(MANIFEST, JSON.stringify(manifest));
 
   const content = await zip.generateAsync({ type: 'base64' });
-  const dest = `${FileSystem.cacheDirectory}${safeName(albumName)}.comclic`;
+  const dest = `${FileSystem.cacheDirectory}${safeName(albumName)}${BUNDLE_EXT}`;
   await FileSystem.writeAsStringAsync(dest, content, {
     encoding: FileSystem.EncodingType.Base64,
   });
@@ -163,4 +174,25 @@ export async function parseAlbumBundle(
 /** Vrai si le nom de fichier partagé ressemble à un album ComClic. */
 export function looksLikeBundle(pathOrName: string): boolean {
   return /\.comclic$|\.zip$/i.test(pathOrName);
+}
+
+/**
+ * Vrai si le fichier **commence comme un ZIP** (signature `PK\x03\x04`).
+ *
+ * Le nom ne suffit pas : WhatsApp et certaines messageries renomment le
+ * fichier reçu ou en retirent l'extension, et l'import le refusait alors
+ * sans l'ouvrir. Seuls les 4 premiers octets sont lus, pour ne pas charger
+ * en mémoire une vidéo choisie par erreur avant de la rejeter.
+ */
+export async function isZipFile(fileUri: string): Promise<boolean> {
+  try {
+    const head = await FileSystem.readAsStringAsync(fileUri, {
+      encoding: FileSystem.EncodingType.Base64,
+      position: 0,
+      length: 4,
+    });
+    return head.startsWith('UEsDBA');
+  } catch {
+    return false;
+  }
 }

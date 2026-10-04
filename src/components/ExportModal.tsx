@@ -31,6 +31,10 @@ const FRAME_KEYS: FrameStyle[] = ['card', 'border', 'polaroid', 'none'];
 // pas sa place dans un rapport d'expertise.
 const PRO_FRAME_KEYS: FrameStyle[] = FRAME_KEYS.filter((f) => f !== 'polaroid');
 const ALIGN_KEYS: ('left' | 'center' | 'right')[] = ['left', 'center', 'right'];
+// Position verticale du commentaire : familial seulement. Le gabarit pro dispose
+// sa fiche en flux (la description ne doit jamais être tronquée), il n'a pas de
+// bande de commentaire où placer quoi que ce soit.
+const COMMENT_POS_KEYS: ('top' | 'middle' | 'bottom')[] = ['top', 'middle', 'bottom'];
 const DATE_FORMAT_KEYS: DateFormat[] = ['short', 'shortTime', 'long', 'full', 'none'];
 
 const BACKGROUNDS = [
@@ -236,6 +240,24 @@ export function ExportModal({
                     selected={options.dateAlign === value}
                     label={L.export.aligns[value]}
                     onPress={() => setOptions((o) => ({ ...o, dateAlign: value }))}
+                  />
+                ))}
+              </View>
+            </>
+          )}
+
+          {!isPro && (
+            <>
+              <Text style={styles.label}>{L.export.commentPosLabel}</Text>
+              <View style={styles.chips}>
+                {COMMENT_POS_KEYS.map((value) => (
+                  <Chip
+                    key={value}
+                    selected={options.commentVAlign === value}
+                    label={L.export.commentPos[value]}
+                    onPress={() =>
+                      setOptions((o) => ({ ...o, commentVAlign: value }))
+                    }
                   />
                 ))}
               </View>

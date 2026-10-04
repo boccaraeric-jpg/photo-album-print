@@ -17,6 +17,7 @@ import {
 } from '@shopify/react-native-skia';
 import { C, F } from '../theme';
 import { useLang } from '../i18n';
+import { versionLabel } from '../appVersion';
 
 interface Props {
   /** L'utilisateur entre dans l'app (bouton « Commencer »). */
@@ -26,7 +27,7 @@ interface Props {
 /** Écran d'accueil « Chambre Claire » : halo + reflet symétrique (Skia), logo,
  *  titre CLICMEMO et bouton d'entrée. */
 export function WelcomeScreen({ onEnter }: Props) {
-  const { L } = useLang();
+  const { L, lang } = useLang();
   const insets = useSafeAreaInsets();
   const { width: W, height: H } = useWindowDimensions();
 
@@ -83,9 +84,14 @@ export function WelcomeScreen({ onEnter }: Props) {
           <Text style={styles.kicker}>{L.welcome.kicker}</Text>
         </View>
 
-        <Pressable style={styles.cta} onPress={onEnter}>
-          <Text style={styles.ctaText}>{L.welcome.start}</Text>
-        </Pressable>
+        <View style={styles.footer}>
+          <Pressable style={styles.cta} onPress={onEnter}>
+            <Text style={styles.ctaText}>{L.welcome.start}</Text>
+          </Pressable>
+          {/* Version du JS réellement chargé : le numéro de build de TestFlight
+              ne bouge pas quand un EAS Update remplace le JavaScript. */}
+          <Text style={styles.version}>{versionLabel(lang)}</Text>
+        </View>
       </View>
     </View>
   );
@@ -140,6 +146,14 @@ const styles = StyleSheet.create({
     backgroundColor: C.sienna,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  footer: { width: '100%', alignItems: 'center' },
+  version: {
+    fontFamily: F.mono,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    color: C.muted,
+    marginTop: 12,
   },
   ctaText: {
     fontFamily: F.monoBold,

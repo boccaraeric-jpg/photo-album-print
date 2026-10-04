@@ -78,6 +78,11 @@ const fr = {
     placeLabel: 'Lieu',
     placePlaceholder: 'Lieu de la prise de vue…',
     checkButton: '✓ Vérifier orthographe & grammaire',
+    boldLabel: 'Gras',
+    underlineLabel: 'Souligné',
+    formatSelection: 'appliqué au texte sélectionné',
+    formatAll: 'appliqué à tout le texte',
+    tapToEdit: 'Toucher pour modifier',
     spellTitle: 'Orthographe',
     spellNone: 'Aucune faute détectée.',
     spellUnavailableTitle: 'Correcteur indisponible',
@@ -90,6 +95,10 @@ const fr = {
     micFailedTitle: 'Dictée indisponible',
     micFailedBody:
       'La reconnaissance vocale hors ligne n’a pas démarré. Vérifie que la dictée est activée dans Réglages → Général → Clavier, avec la langue de l’app installée.',
+  },
+  version: {
+    embedded: 'version intégrée',
+    update: 'maj',
   },
   spell: {
     progress: (i: number, n: number) => `Faute ${i} sur ${n}`,
@@ -148,6 +157,7 @@ const fr = {
     dateLabel: 'Date sous les photos',
     datePosLabel: 'Position de la date',
     textAlignLabel: 'Alignement du texte (pages de texte)',
+    commentPosLabel: 'Position du commentaire',
     previewBtn: 'Aperçu',
     yes: 'Oui',
     no: 'Non',
@@ -160,6 +170,7 @@ const fr = {
     },
     frames: { card: 'Cadre', border: 'Bordure', polaroid: 'Polaroïd', none: 'Sans cadre' },
     aligns: { left: 'Gauche', center: 'Centre', right: 'Droite' },
+    commentPos: { top: 'Haut', middle: 'Centre', bottom: 'Bas' },
     dateFormats: {
       short: 'Simple',
       shortTime: 'Simple + heure',
@@ -175,6 +186,35 @@ const fr = {
       none: 'sans date',
     },
   },
+  backup: {
+    confirmTitle: 'Sauvegarder tous les dossiers ?',
+    confirmBody: (albums: number, photos: number) =>
+      `${albums} dossier${albums > 1 ? 's' : ''} et ${photos} photo${photos > 1 ? 's' : ''} seront réunis dans un seul fichier, à enregistrer ensuite dans vos fichiers, un stockage en ligne ou un mail.
+
+La préparation peut prendre un moment et ne peut pas être interrompue.`,
+    confirm: 'Sauvegarder',
+    building: 'Préparation de la sauvegarde…',
+    restoring: 'Restauration en cours…',
+    fileBase: 'ComClic sauvegarde',
+    shareTitle: 'Sauvegarde ComClic',
+    emptyTitle: 'Rien à sauvegarder',
+    emptyBody: 'Créez au moins un dossier avant de lancer une sauvegarde.',
+    tooLargeTitle: 'Sauvegarde trop volumineuse',
+    tooLargeBody: (n: number) =>
+      `Cette version sauvegarde jusqu'à 200 photos en un seul fichier, et vous en avez ${n}. Envoyez d'abord quelques dossiers en « Album ComClic » pour alléger l'app.`,
+    failTitle: 'Sauvegarde impossible',
+    failBody:
+      "Le fichier n'a pas pu être écrit. Vérifiez l'espace libre sur le téléphone, puis réessayez.",
+    restoreTitle: 'Restaurer cette sauvegarde ?',
+    restoreBody: (albums: number, photos: number, date: string) =>
+      `Sauvegarde du ${date} : ${albums} dossier${albums > 1 ? 's' : ''}, ${photos} photo${photos > 1 ? 's' : ''}.
+
+Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un nom déjà utilisé donnera un dossier en double.`,
+    restoreConfirm: 'Restaurer',
+    doneTitle: 'Restauration terminée',
+    doneBody: (albums: number, photos: number) =>
+      `${albums} dossier${albums > 1 ? 's' : ''} et ${photos} photo${photos > 1 ? 's' : ''} restaurés. Vos réglages sont revenus ; le tri de la liste s'appliquera au prochain lancement.`,
+  },
   home: {
     kicker: 'ALBUM PHOTO',
     title: 'Mes dossiers',
@@ -189,7 +229,8 @@ const fr = {
     noMatchTitle: 'Aucun dossier trouvé',
     noMatchText: 'Essayez un autre mot : la recherche porte sur le nom du dossier.',
     newFolder: '＋  Nouveau dossier',
-    importAlbum: '⤓  Importer un album reçu',
+    importAlbum: '⤓  Importer / restaurer',
+    backupAll: '💾  Sauvegarder tout',
     createTitle: 'Nouveau dossier',
     createSubmit: 'Créer',
     renameTitle: 'Renommer le dossier',
@@ -219,7 +260,7 @@ const fr = {
     pdf: 'PDF',
     albumImages: "Images de l'album",
     reusablePhotos: 'Photos (à réutiliser)',
-    comclicAlbum: 'Album ComClic (pour un ami)',
+    comclicAlbum: 'Album ComClic (pour un contact)',
   },
   alert: {
     deleteAlbumTitle: (name: string) => `Supprimer « ${name} » ?`,
@@ -252,7 +293,7 @@ const fr = {
     duplicateFail: 'La duplication du dossier a échoué.',
     importNotBundleTitle: 'Fichier non reconnu',
     importNotBundleBody:
-      "Choisissez un fichier d'album ComClic (.comclic) reçu par message, mail ou AirDrop.",
+      "Ce fichier n'est pas un album ComClic. Choisissez le fichier .comclic.zip reçu par message, WhatsApp ou mail.",
     importFailBody: "L'ouverture de l'album a échoué.",
     textPageTitle: 'Nouvelle page de texte',
     textPageBody: 'Où placer cette page dans le dossier ?',
@@ -260,11 +301,12 @@ const fr = {
     textPageAtEnd: 'À la fin',
   },
   invite: {
-    title: 'Lien d’installation',
+    title: 'Votre destinataire a-t-il ComClic ?',
     body:
-      'Si votre destinataire ne possède pas encore l’app ComClic, envoyez-lui le lien d’installation pour qu’il profite de toutes les fonctionnalités.',
+      'S’il ne l’a pas encore, envoyez-lui le lien d’installation : il en aura besoin pour ouvrir l’album.',
+    already: 'Il l’a déjà',
     send: 'Envoyer le lien',
-    /** Message texte envoyé à l'ami (SMS, WhatsApp, Mail…). */
+    /** Message texte envoyé au contact (SMS, WhatsApp, Mail…). */
     message: (url: string) =>
       `Je vous envoie un album photo réalisé avec ComClic. Installez l’app pour l’ouvrir : ${url}`,
     fail: 'Le partage du lien a échoué.',
@@ -329,6 +371,11 @@ const en: Dict = {
     placeLabel: 'Location',
     placePlaceholder: 'Where it was taken…',
     checkButton: '✓ Check spelling & grammar',
+    boldLabel: 'Bold',
+    underlineLabel: 'Underline',
+    formatSelection: 'applies to the selected text',
+    formatAll: 'applies to the whole caption',
+    tapToEdit: 'Tap to edit',
     spellTitle: 'Spelling',
     spellNone: 'No mistakes found.',
     spellUnavailableTitle: 'Checker unavailable',
@@ -341,6 +388,10 @@ const en: Dict = {
     micFailedTitle: 'Dictation unavailable',
     micFailedBody:
       'On-device speech recognition did not start. Check that dictation is enabled in Settings → General → Keyboard, with the app language installed.',
+  },
+  version: {
+    embedded: 'built-in version',
+    update: 'upd',
   },
   spell: {
     progress: (i: number, n: number) => `Mistake ${i} of ${n}`,
@@ -399,6 +450,7 @@ const en: Dict = {
     dateLabel: 'Date under photos',
     datePosLabel: 'Date position',
     textAlignLabel: 'Text alignment (text pages)',
+    commentPosLabel: 'Caption position',
     previewBtn: 'Preview',
     yes: 'Yes',
     no: 'No',
@@ -411,6 +463,7 @@ const en: Dict = {
     },
     frames: { card: 'Card', border: 'Border', polaroid: 'Polaroid', none: 'No frame' },
     aligns: { left: 'Left', center: 'Center', right: 'Right' },
+    commentPos: { top: 'Top', middle: 'Middle', bottom: 'Bottom' },
     dateFormats: {
       short: 'Simple',
       shortTime: 'Simple + time',
@@ -426,6 +479,35 @@ const en: Dict = {
       none: 'no date',
     },
   },
+  backup: {
+    confirmTitle: 'Back up all folders?',
+    confirmBody: (albums: number, photos: number) =>
+      `${albums} folder${albums > 1 ? 's' : ''} and ${photos} photo${photos > 1 ? 's' : ''} will be gathered into a single file, to save afterwards in your files, online storage or an email.
+
+Preparing it may take a while and cannot be interrupted.`,
+    confirm: 'Back up',
+    building: 'Preparing backup…',
+    restoring: 'Restoring…',
+    fileBase: 'ComClic backup',
+    shareTitle: 'ComClic backup',
+    emptyTitle: 'Nothing to back up',
+    emptyBody: 'Create at least one folder before running a backup.',
+    tooLargeTitle: 'Backup too large',
+    tooLargeBody: (n: number) =>
+      `This version backs up to 200 photos in a single file, and you have ${n}. Send a few folders as a ComClic Album first to lighten the app.`,
+    failTitle: 'Backup failed',
+    failBody:
+      'The file could not be written. Check the free space on your phone, then try again.',
+    restoreTitle: 'Restore this backup?',
+    restoreBody: (albums: number, photos: number, date: string) =>
+      `Backup from ${date}: ${albums} folder${albums > 1 ? 's' : ''}, ${photos} photo${photos > 1 ? 's' : ''}.
+
+Folders will be ADDED to the ones already there: nothing is replaced. A name already in use creates a duplicate folder.`,
+    restoreConfirm: 'Restore',
+    doneTitle: 'Restore complete',
+    doneBody: (albums: number, photos: number) =>
+      `${albums} folder${albums > 1 ? 's' : ''} and ${photos} photo${photos > 1 ? 's' : ''} restored. Your settings are back; the list sorting applies at next launch.`,
+  },
   home: {
     kicker: 'PHOTO ALBUM',
     title: 'My folders',
@@ -440,7 +522,8 @@ const en: Dict = {
     noMatchTitle: 'No folder found',
     noMatchText: 'Try another word: the search looks at folder names.',
     newFolder: '＋  New folder',
-    importAlbum: '⤓  Import a received album',
+    importAlbum: '⤓  Import / restore',
+    backupAll: '💾  Back up all',
     createTitle: 'New folder',
     createSubmit: 'Create',
     renameTitle: 'Rename folder',
@@ -470,7 +553,7 @@ const en: Dict = {
     pdf: 'PDF',
     albumImages: 'Album images',
     reusablePhotos: 'Photos (reusable)',
-    comclicAlbum: 'ComClic album (for a friend)',
+    comclicAlbum: 'ComClic album (for a contact)',
   },
   alert: {
     deleteAlbumTitle: (name: string) => `Delete “${name}”?`,
@@ -503,7 +586,7 @@ const en: Dict = {
     duplicateFail: 'Duplicating the folder failed.',
     importNotBundleTitle: 'File not recognised',
     importNotBundleBody:
-      'Pick a ComClic album file (.comclic) received by message, mail or AirDrop.',
+      'This file is not a ComClic album. Pick the .comclic.zip file received by message, WhatsApp or email.',
     importFailBody: 'Opening the album failed.',
     textPageTitle: 'New text page',
     textPageBody: 'Where should this page go in the folder?',
@@ -511,9 +594,10 @@ const en: Dict = {
     textPageAtEnd: 'At the end',
   },
   invite: {
-    title: 'Install link',
+    title: 'Does your recipient have ComClic?',
     body:
-      'If your recipient doesn’t have the ComClic app yet, send them the install link so they can enjoy all its features.',
+      'If not yet, send them the install link: they will need the app to open the album.',
+    already: 'They already have it',
     send: 'Send the link',
     message: (url: string) =>
       `I’m sending you a photo album made with ComClic. Install the app to open it: ${url}`,

@@ -14,7 +14,10 @@ import {
   View,
 } from 'react-native';
 import { type ComponentType } from 'react';
+import { MaterialIcons } from '@expo/vector-icons';
 import { F } from '../theme';
+import { hasMarks, toggleMark, type Selection } from '../richText';
+import { RichText } from './RichText';
 import { useLang } from '../i18n';
 import type { Photo } from '../types';
 import { checkSpelling, type SpellMatch } from '../spellcheck';
@@ -59,6 +62,22 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
   const [text, setText] = useState('');
   const [place, setPlace] = useState('');
   const [checking, setChecking] = useState(false);
+  // Sélection courante du champ + sélection à réimposer après une mise en forme
+  // (sans quoi le curseur retomberait à la fin du texte après chaque bouton).
+  // Vrai pendant la saisie. Hors saisie, un commentaire mis en forme est affiché
+  // **rendu** (et non avec ses balises) : une seule zone de texte à l'écran,
+  // jamais le champ et un aperçu côte à côte.
+  const [editing, setEditing] = useState(false);
+  const [sel, setSel] = useState<Selection>({ start: 0, end: 0 });
+  const [forceSel, setForceSel] = useState<Selection | undefined>();
+  // ⚠️ iOS ANNULE la sélection avant que le bouton de mise en forme ne réagisse :
+  // le champ signale une sélection vide en perdant le focus, et le menu natif
+  // (Couper/Copier/Coller) mange le premier appui. On retenait alors « rien de
+  // sélectionné » et la marque partait sur tout le texte. D'où cette mémoire de
+  // la dernière plage réellement sélectionnée, remise à zéro dès que le texte
+  // change (les offsets ne voudraient plus rien dire). En état (et non en ref) :
+  // la barre annonce sa cible, ce qui lève toute ambiguïté pour l'utilisateur.
+  const [remembered, setRemembered] = useState<Selection | null>(null);
   const [matches, setMatches] = useState<SpellMatch[]>([]);
   const [spellVisible, setSpellVisible] = useState(false);
 
@@ -68,6 +87,10 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
   useEffect(() => {
     setText(photo?.comment ?? '');
     setPlace(photo?.place ?? '');
+    setSel({ start: 0, end: 0 });
+    setForceSel(undefined);
+    setRemembered(null);
+    setEditing(false);
   }, [photo?.id]);
 
   // Lieu résolu en arrière-plan (géocodage) après l'ouverture : le remplir s'il
@@ -99,6 +122,33 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
 
   const isText = photo?.kind === 'text';
 
+  // Gras / souligné : les marques (**…** / __…__) vivent dans le texte lui-même
+  // (cf. `src/richText.ts`). Le champ les montre telles quelles — React Native
+  // ne sait pas afficher une graisse partielle dans un `TextInput` — et
+  // l'aperçu juste en dessous donne le rendu réel.
+  // Plage que les boutons vont mettre en forme : la sélection du champ si elle
+  // tient encore, sinon la dernière mémorisée. `null` = tout le commentaire.
+  const target =
+    sel.end > sel.start
+      ? sel
+      : remembered && remembered.end <= text.length
+        ? remembered
+        : null;
+
+  const applyMark = (mark: 'bold' | 'underline') => {
+    const next = toggleMark(text, target ?? sel, mark);
+    setText(next.text);
+    setSel(next.selection);
+    setForceSel(next.selection);
+    // La plage marquée reste la cible : enchaîner gras puis souligné sur le même
+    // mot doit marcher, et le champ la montre encore sélectionnée.
+    setRemembered(next.selection);
+  };
+  // Le texte rendu remplace le champ **seulement** s'il y a de la mise en forme
+  // à montrer et qu'on n'est pas en train de taper : sans marque, rien ne change
+  // pour qui n'utilise pas les boutons B/U.
+  const showRendered = !isText && !editing && hasMarks(text);
+
   return (
     <Modal
       visible={photo !== null}
@@ -129,10 +179,74 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
             <Text style={styles.label}>
               {isText ? L.comment.textLabel : L.comment.commentLabel}
             </Text>
+            {/* Mise en forme : réservée au commentaire d'une photo (les pages de
+                texte gardent un rendu uniforme). La barre est AU-DESSUS du champ :
+                le menu natif d'iOS s'ouvre sous le mot sélectionné et recouvrait
+                les boutons placés en dessous. */}
+            {!isText && (
+              <View style={styles.formatRow}>
+                <Pressable
+                  style={styles.formatBtn}
+                  // `onPressIn` et non `onPress` : l'appui-bas précède la perte
+                  // de focus du champ, donc la sélection est encore vivante.
+                  onPressIn={() => applyMark('bold')}
+                  accessibilityRole="button"
+                  accessibilityLabel={L.comment.boldLabel}
+                >
+                  <MaterialIcons name="format-bold" size={22} color="#A64B24" />
+                </Pressable>
+                <Pressable
+                  style={styles.formatBtn}
+                  onPressIn={() => applyMark('underline')}
+                  accessibilityRole="button"
+                  accessibilityLabel={L.comment.underlineLabel}
+                >
+                  <MaterialIcons
+                    name="format-underlined"
+                    size={22}
+                    color="#A64B24"
+                  />
+                </Pressable>
+                <Text style={styles.formatHint} numberOfLines={2}>
+                  {target ? L.comment.formatSelection : L.comment.formatAll}
+                </Text>
+              </View>
+            )}
+            {showRendered ? (
+              // Commentaire mis en forme, hors saisie : on montre le texte
+              // DÉFINITIF (gras/souligné rendus, balises invisibles). Toucher
+              // la zone repasse en saisie, là où les balises sont nécessaires.
+              <Pressable
+                style={[styles.input, styles.rendered]}
+                onPress={() => setEditing(true)}
+                accessibilityRole="button"
+                accessibilityLabel={L.comment.tapToEdit}
+              >
+                <RichText text={text} style={styles.renderedText} />
+                <Text style={styles.renderedHint}>{L.comment.tapToEdit}</Text>
+              </Pressable>
+            ) : (
             <TextInput
               style={[styles.input, isText && styles.inputText]}
+              autoFocus={editing}
+              onFocus={() => setEditing(true)}
+              // Fin de saisie → retour au texte rendu (cf. `showRendered`).
+              onBlur={() => setEditing(false)}
               value={text}
-              onChangeText={setText}
+              onChangeText={(t) => {
+                setForceSel(undefined);
+                setRemembered(null);
+                setText(t);
+              }}
+              selection={forceSel}
+              onSelectionChange={(e) => {
+                const next = e.nativeEvent.selection;
+                setSel(next);
+                // Seules les plages NON vides sont mémorisées : le signal de
+                // sélection vide émis à la perte du focus ne doit pas l'effacer.
+                if (next.end > next.start) setRemembered(next);
+                setForceSel(undefined);
+              }}
               placeholder={
                 isText ? L.comment.textPlaceholder : L.comment.commentPlaceholder
               }
@@ -148,6 +262,7 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
               autoCapitalize="sentences"
               keyboardType="default"
             />
+            )}
             {VoiceButton && (
               <VoiceButton value={text} onChangeText={setText} />
             )}
@@ -280,6 +395,26 @@ const styles = StyleSheet.create({
     fontFamily: F.mono,
     fontSize: 16,
     color: '#201B14',
+  },
+  formatRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  formatBtn: {
+    width: 42,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EADDC4',
+  },
+  formatHint: { flex: 1, fontFamily: F.mono, fontSize: 12, color: '#9ca3af' },
+  // Même gabarit que `input` (bordure, rayon, hauteur) : passer de la lecture à
+  // la saisie ne doit pas faire sauter la mise en page.
+  rendered: { justifyContent: 'space-between', backgroundColor: '#faf7f1' },
+  renderedText: { fontFamily: F.mono, fontSize: 16, color: '#201B14' },
+  renderedHint: {
+    fontFamily: F.mono,
+    fontSize: 11,
+    color: '#9ca3af',
+    marginTop: 10,
   },
   spellBtn: {
     alignSelf: 'flex-start',

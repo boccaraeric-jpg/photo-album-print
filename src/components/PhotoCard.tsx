@@ -1,5 +1,6 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { RichText } from './RichText';
 import type { Photo } from '../types';
 import { C, F } from '../theme';
 import { useLang } from '../i18n';
@@ -74,16 +75,27 @@ export function PhotoCard({
         </Pressable>
       )}
       <View style={styles.body}>
-        <Text
-          style={[styles.comment, !hasComment && styles.commentEmpty]}
-          numberOfLines={3}
-        >
-          {hasComment
-            ? photo.comment
-            : isText
-              ? L.photoCard.tapWriteText
-              : L.photoCard.tapAddComment}
-        </Text>
+        {hasComment && !isText ? (
+          // Le commentaire d'une photo peut porter du gras / du souligné : la
+          // carte le montre tel qu'il sortira à l'export.
+          <RichText
+            text={photo.comment}
+            style={styles.comment}
+            boldStyle={styles.commentBold}
+            numberOfLines={3}
+          />
+        ) : (
+          <Text
+            style={[styles.comment, !hasComment && styles.commentEmpty]}
+            numberOfLines={3}
+          >
+            {hasComment
+              ? photo.comment
+              : isText
+                ? L.photoCard.tapWriteText
+                : L.photoCard.tapAddComment}
+          </Text>
+        )}
         <Text style={styles.hint}>
           {isText ? L.photoCard.textPage : L.photoCard.edit}
         </Text>
@@ -187,6 +199,9 @@ const styles = StyleSheet.create({
     color: C.ink,
     lineHeight: 20,
   },
+  // Le style `comment` n'impose pas de famille : la police système comprend,
+  // elle, les graisses — d'où `fontWeight` plutôt qu'une famille bold.
+  commentBold: { fontWeight: '700' },
   commentEmpty: {
     color: C.muted,
     fontStyle: 'italic',
