@@ -87,6 +87,7 @@ import {
   buildAlbumHtml,
   DEFAULT_EXPORT_OPTIONS,
   htmlToPdfFile,
+  sanitizeExportOptions,
   shareFile,
 } from './src/pdf';
 import { buildAlbumImages } from './src/pageImages';
@@ -1110,11 +1111,12 @@ function AlbumScreen({
   const defaultCoverId =
     album.coverPhotoId ?? orderedPhotos.find((p) => p.kind !== 'text')?.id;
 
-  // Repart des dernières options d'export choisies (fusionnées aux défauts
-  // pour absorber les nouveaux réglages absents des anciennes sauvegardes).
+  // Repart des dernières options d'export choisies. `sanitizeExportOptions`
+  // complète les réglages absents des anciennes sauvegardes par les défauts,
+  // et neutralise une valeur piégée déjà enregistrée (cf. sa documentation).
   useEffect(() => {
     loadExportOptions().then((stored) => {
-      if (stored) setExportOptions({ ...DEFAULT_EXPORT_OPTIONS, ...stored });
+      if (stored) setExportOptions(sanitizeExportOptions(stored));
     });
   }, []);
 

@@ -2,10 +2,11 @@ import JSZip from 'jszip';
 import * as FileSystem from 'expo-file-system/legacy';
 import { newId } from './id';
 import { readPrintBase64, writeBase64Image } from './photoFiles';
-import { comparePhotos } from './storage';
+import { ALBUM_SORTS, comparePhotos } from './storage';
 import { fileDateStamp } from './dateFormat';
+import { sanitizeExportOptions } from './pdf';
 import type { Album, AlbumSort, ExportOptions, Photo } from './types';
-import type { Lang } from './i18n';
+import { SUPPORTED, type Lang } from './i18n';
 import { BUNDLE_EXT, type ImportedEntry } from './albumBundle';
 
 /**
@@ -39,6 +40,30 @@ export interface BackupSettings {
   lang?: Lang;
   sort?: AlbumSort;
   exportOptions?: ExportOptions;
+}
+
+/**
+ * Réglages d'une sauvegarde, réduits à des valeurs connues.
+ *
+ * ⚠️ Sécurité : une « sauvegarde » peut venir d'un tiers (même bouton que les
+ * albums reçus). Ses réglages étaient appliqués tels quels, et les options
+ * d'export finissent interpolées dans le HTML de l'aperçu et du PDF : un
+ * fichier piégé y injectait un script. Une valeur inconnue est simplement
+ * abandonnée — le réglage de l'utilisateur reste alors inchangé.
+ */
+function sanitizeSettings(raw: unknown): BackupSettings {
+  const s = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const out: BackupSettings = {};
+  if (typeof s.lang === 'string' && (SUPPORTED as string[]).includes(s.lang)) {
+    out.lang = s.lang as Lang;
+  }
+  if (typeof s.sort === 'string' && (ALBUM_SORTS as string[]).includes(s.sort)) {
+    out.sort = s.sort as AlbumSort;
+  }
+  if (s.exportOptions && typeof s.exportOptions === 'object') {
+    out.exportOptions = sanitizeExportOptions(s.exportOptions);
+  }
+  return out;
 }
 
 interface BackupEntry {
@@ -267,7 +292,7 @@ export async function parseBackup(fileUri: string): Promise<ParsedBackup | null>
       createdAt:
         typeof manifest.createdAt === 'number' ? manifest.createdAt : Date.now(),
       albums: out,
-      settings: (manifest.settings ?? {}) as BackupSettings,
+      settings: sanitizeSettings(manifest.settings),
     };
   } catch {
     return null;

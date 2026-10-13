@@ -62,6 +62,12 @@ export function PreviewModal({
             <WebView
               originWhitelist={['*']}
               source={{ html }}
+              // Défense en profondeur : l'aperçu est un document statique. Aucun
+              // script n'y est utile, et aucune navigation vers le web ne doit
+              // en partir (une valeur injectée dans le HTML ne pourrait alors ni
+              // exécuter de code ni envoyer la page ailleurs).
+              javaScriptEnabled={false}
+              onShouldStartLoadWithRequest={(req) => !/^https?:/i.test(req.url)}
               style={styles.web}
               scrollEnabled
               showsVerticalScrollIndicator
