@@ -17,6 +17,20 @@ const MONTSERRAT_FACE = `
   @font-face { font-family: 'Montserrat'; font-weight: 800; font-style: normal;
     src: url(data:font/ttf;base64,${MONTSERRAT_800}) format('truetype'); }`;
 
+/**
+ * Politique de sécurité du document (aperçu WebView **et** PDF `expo-print`).
+ *
+ * Le HTML ne contient que du statique : styles en ligne, polices et photos en
+ * `data:`. Tout le reste est interdit — aucun script, aucune connexion réseau,
+ * aucune ressource externe. Défense en profondeur : si une valeur non échappée
+ * se glissait un jour dans le document, elle ne pourrait ni s'exécuter ni
+ * envoyer l'album ailleurs. ⚠️ Ajouter une ressource non `data:` au gabarit
+ * exige d'élargir cette règle, sinon elle ne s'affichera pas.
+ */
+const CSP_META =
+  '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; ' +
+  "img-src data:; font-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\" />";
+
 /** Tronque un texte à `n` mots (pour la légende en pleine page). */
 function limitWords(text: string, n: number): string {
   const words = text.trim().split(/\s+/).filter(Boolean);
@@ -541,6 +555,7 @@ export async function buildAlbumHtml(
     <html lang="${lang}">
       <head>
         <meta charset="utf-8" />
+        ${CSP_META}
         <!-- width = largeur de page A4 en points : l'aperçu WebView met la page
              à l'échelle de l'écran ; ignoré par expo-print (dimensions fournies). -->
         <meta name="viewport" content="width=${PAGE_WIDTH}, initial-scale=1" />
@@ -685,6 +700,7 @@ function buildProDocument(
     <html lang="${lang}">
       <head>
         <meta charset="utf-8" />
+        ${CSP_META}
         <meta name="viewport" content="width=${PAGE_WIDTH}, initial-scale=1" />
         <style>${styles}</style>
       </head>

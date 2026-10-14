@@ -121,6 +121,38 @@ export interface ImportedEntry {
   cover?: boolean;
 }
 
+/** Entrée de manifeste dont chaque champ a le type attendu. */
+export interface CheckedEntry {
+  kind: 'photo' | 'text';
+  file?: string;
+  comment: string;
+  place?: string;
+  takenAt?: number;
+  order?: number;
+  cover?: boolean;
+}
+
+/**
+ * Lit une entrée de manifeste (album reçu **ou** sauvegarde) en vérifiant le
+ * type de chaque champ. Le fichier vient d'un tiers : un `comment` remplacé par
+ * un objet faisait planter l'export (`escapeHtml` sur un non-texte). Un champ
+ * au mauvais type est ignoré ; une entrée qui n'est pas un objet donne `null`.
+ */
+export function checkEntry(raw: unknown): CheckedEntry | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const e = raw as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  return {
+    kind: e.kind === 'text' ? 'text' : 'photo',
+    file: typeof e.file === 'string' ? e.file : undefined,
+    comment: typeof e.comment === 'string' ? e.comment : '',
+    place: typeof e.place === 'string' ? e.place : undefined,
+    takenAt: num(e.takenAt),
+    order: num(e.order),
+    cover: e.cover === true,
+  };
+}
+
 /**
  * Lit un fichier partagé et, s'il s'agit d'un album ComClic valide, extrait ses
  * images dans le stockage de l'app et retourne le nom + les entrées reconstruites.
@@ -144,9 +176,11 @@ export async function parseAlbumBundle(
     }
 
     const out: ImportedEntry[] = [];
-    for (const e of manifest.entries as BundleEntry[]) {
+    for (const raw of manifest.entries as unknown[]) {
+      const e = checkEntry(raw);
+      if (!e) continue;
       if (e.kind === 'text') {
-        out.push({ kind: 'text', comment: e.comment ?? '', order: e.order });
+        out.push({ kind: 'text', comment: e.comment, order: e.order });
         continue;
       }
       let uri: string | undefined;
@@ -158,7 +192,7 @@ export async function parseAlbumBundle(
       out.push({
         kind: 'photo',
         uri,
-        comment: e.comment ?? '',
+        comment: e.comment,
         place: e.place,
         takenAt: e.takenAt,
         order: e.order,

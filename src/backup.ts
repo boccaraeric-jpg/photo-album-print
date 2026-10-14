@@ -7,7 +7,7 @@ import { fileDateStamp } from './dateFormat';
 import { sanitizeExportOptions } from './pdf';
 import type { Album, AlbumSort, ExportOptions, Photo } from './types';
 import { SUPPORTED, type Lang } from './i18n';
-import { BUNDLE_EXT, type ImportedEntry } from './albumBundle';
+import { BUNDLE_EXT, checkEntry, type ImportedEntry } from './albumBundle';
 
 /**
  * Sauvegarde complète : **tous** les dossiers dans un seul fichier `.comclic.zip`,
@@ -227,7 +227,11 @@ export async function peekBackup(
         typeof manifest.createdAt === 'number' ? manifest.createdAt : Date.now(),
       albums: list.length,
       photos: list.reduce(
-        (sum, a) => sum + (a.entries ?? []).filter((e) => e.kind === 'photo').length,
+        (sum, a) =>
+          sum +
+          (a && Array.isArray(a.entries) ? a.entries : []).filter(
+            (e) => checkEntry(e)?.kind === 'photo',
+          ).length,
         0,
       ),
     };
@@ -257,10 +261,15 @@ export async function parseBackup(fileUri: string): Promise<ParsedBackup | null>
 
     const out: RestoredAlbum[] = [];
     for (const a of manifest.albums as BackupAlbum[]) {
+      // Fichier venu peut-être d'un tiers : un dossier ou une entrée mal formés
+      // sont sautés, chaque champ est vérifié (`checkEntry`).
+      if (!a || typeof a !== 'object') continue;
       const entries: ImportedEntry[] = [];
-      for (const e of a.entries ?? []) {
+      for (const raw of Array.isArray(a.entries) ? (a.entries as unknown[]) : []) {
+        const e = checkEntry(raw);
+        if (!e) continue;
         if (e.kind === 'text') {
-          entries.push({ kind: 'text', comment: e.comment ?? '', order: e.order });
+          entries.push({ kind: 'text', comment: e.comment, order: e.order });
           continue;
         }
         let uri: string | undefined;
@@ -274,7 +283,7 @@ export async function parseBackup(fileUri: string): Promise<ParsedBackup | null>
         entries.push({
           kind: 'photo',
           uri,
-          comment: e.comment ?? '',
+          comment: e.comment,
           place: e.place,
           takenAt: e.takenAt,
           order: e.order,
