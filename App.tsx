@@ -568,6 +568,9 @@ function Root() {
       Alert.alert(L.alert.importNotBundleTitle, L.alert.importNotBundleBody);
       return;
     }
+    // Lecture du ZIP + extraction des photos : plusieurs secondes pour un gros
+    // album, pendant lesquelles l'écran restait figé sans explication.
+    setBusyLabel(L.shareImport.opening);
     try {
       // Une SAUVEGARDE complète et un ALBUM reçu d'un ami sont deux .comclic :
       // seul le marqueur du manifeste les distingue. On regarde d'abord la
@@ -575,6 +578,7 @@ function Root() {
       // l'accord de l'utilisateur laisserait des fichiers orphelins s'il annule.
       const peek = await peekBackup(file.uri);
       if (peek) {
+        setBusyLabel(null);
         const when = new Date(peek.createdAt).toLocaleDateString(localeTag(lang));
         Alert.alert(
           L.backup.restoreTitle,
@@ -602,6 +606,7 @@ function Root() {
       }
 
       const parsed = await parseAlbumBundle(file.uri);
+      setBusyLabel(null);
       if (!parsed) {
         Alert.alert(L.alert.importNotBundleTitle, L.alert.importNotBundleBody);
         return;
@@ -613,6 +618,7 @@ function Root() {
         run: (albumId) => runAlbumImport(parsed.entries, albumId),
       });
     } catch {
+      setBusyLabel(null);
       Alert.alert(L.common.error, L.alert.importFailBody);
     }
   }, [runAlbumImport, runBackupRestore, lang, L]);
@@ -642,7 +648,16 @@ function Root() {
         // Une sauvegarde complète porte la même extension qu'un album : on la
         // reconnaît d'abord, sinon elle finirait dans l'alerte « partage
         // inexploitable » alors que le fichier vient de l'app elle-même.
-        const peek = await peekBackup(bundle.path);
+        // Voile d'attente pendant la lecture (cf. `importBundleFile`).
+        setBusyLabel(L.shareImport.opening);
+        let peek: Awaited<ReturnType<typeof peekBackup>> = null;
+        let parsed: Awaited<ReturnType<typeof parseAlbumBundle>> = null;
+        try {
+          peek = await peekBackup(bundle.path);
+          if (!peek) parsed = await parseAlbumBundle(bundle.path);
+        } finally {
+          setBusyLabel(null);
+        }
         if (peek && !cancelled) {
           setShowWelcome(false);
           const when = new Date(peek.createdAt).toLocaleDateString(localeTag(lang));
@@ -677,7 +692,6 @@ function Root() {
           );
           return;
         }
-        const parsed = await parseAlbumBundle(bundle.path);
         if (parsed && !cancelled) {
           const photoCount = parsed.entries.filter((e) => e.kind === 'photo').length;
           setShowWelcome(false);

@@ -315,6 +315,7 @@ Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un
     title: (n: number) => `Importer ${n} photo${n > 1 ? 's' : ''} dans…`,
     hint: 'Choisis le dossier de destination',
     newFolder: '＋  Nouveau dossier',
+    opening: "Ouverture de l'album reçu…",
   },
   doc: {
     imageUnavailable: 'Image indisponible',
@@ -607,6 +608,7 @@ Folders will be ADDED to the ones already there: nothing is replaced. A name alr
     title: (n: number) => `Import ${n} photo${n > 1 ? 's' : ''} into…`,
     hint: 'Choose the destination folder',
     newFolder: '＋  New folder',
+    opening: 'Opening the received album…',
   },
   doc: {
     imageUnavailable: 'Image unavailable',
