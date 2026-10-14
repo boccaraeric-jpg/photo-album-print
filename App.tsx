@@ -1111,6 +1111,7 @@ function AlbumScreen({
   const [exportVisible, setExportVisible] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendProgress, setSendProgress] = useState<string | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [exportOptions, setExportOptions] = useState<ExportOptions>(
@@ -1524,15 +1525,22 @@ function AlbumScreen({
         Alert.alert(L.alert.noPhotoTitle, L.alert.noPhotoBody);
         return;
       }
-      const zip = await zipPhotos(orderedPhotos, albumTitle, lang);
+      // Pleine résolution : plusieurs dizaines de secondes pour un gros album,
+      // d'où l'avancement affiché sur le bouton d'envoi.
+      setSendProgress(L.preview.photoProgress(0, images.length));
+      const zip = await zipPhotos(orderedPhotos, albumTitle, lang, (done, total) =>
+        setSendProgress(L.preview.photoProgress(done, total)),
+      );
+      setSendProgress(null);
       await shareFile(zip, albumTitle, 'application/zip', 'public.zip-archive');
       setPreviewVisible(false);
     } catch {
       Alert.alert(L.common.error, L.alert.photosPrepFail);
     } finally {
+      setSendProgress(null);
       setSending(false);
     }
-  }, [orderedPhotos, albumTitle]);
+  }, [orderedPhotos, albumTitle, lang, L]);
 
   // Le destinataire d'un album ComClic a besoin de l'app pour l'ouvrir : on lui
   // propose le lien d'installation dans un message texte séparé (la feuille de
@@ -1764,6 +1772,7 @@ function AlbumScreen({
         html={previewHtml}
         sending={sending}
         sendLabel={sendLabel}
+        progress={sendProgress}
         onBackToAlbum={() => {
           setPreviewVisible(false);
           setExportVisible(false);

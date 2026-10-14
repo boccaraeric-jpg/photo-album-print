@@ -20,6 +20,8 @@ interface Props {
   sending: boolean;
   /** Libellé du bouton d'envoi (« Partager l'album » ou « Envoyer »). */
   sendLabel: string;
+  /** Avancement affiché pendant un envoi long (« Photos 12/50… »), sinon null. */
+  progress?: string | null;
   /** Revenir à l'album pour en modifier le contenu (photos, ordre, textes). */
   onBackToAlbum: () => void;
   /** Revenir aux options de mise en page. */
@@ -39,6 +41,7 @@ export function PreviewModal({
   html,
   sending,
   sendLabel,
+  progress,
   onBackToAlbum,
   onEditLayout,
   onSend,
@@ -93,7 +96,10 @@ export function PreviewModal({
             disabled={sending || !html}
           >
             {sending ? (
-              <ActivityIndicator color="#fff" />
+              <View style={styles.progressRow}>
+                <ActivityIndicator color="#fff" />
+                {progress ? <Text style={styles.btnPrimaryText}>{progress}</Text> : null}
+              </View>
             ) : (
               <Text style={styles.btnPrimaryText}>{sendLabel} →</Text>
             )}
@@ -138,4 +144,5 @@ const styles = StyleSheet.create({
   btnPrimary: { backgroundColor: '#A64B24' },
   btnPrimaryText: { fontFamily: F.monoBold, color: '#fff', fontSize: 16 },
   btnDisabled: { opacity: 0.6 },
+  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 });

@@ -146,6 +146,7 @@ const fr = {
     title: 'Aperçu avant envoi',
     subtitle: 'Faites défiler pour vérifier chaque page',
     layout: 'Mise en page',
+    photoProgress: (done: number, total: number) => `Photos ${done}/${total}…`,
   },
   export: {
     title: 'Mise en page',
@@ -440,6 +441,7 @@ const en: Dict = {
     title: 'Preview before sending',
     subtitle: 'Scroll to check each page',
     layout: 'Layout',
+    photoProgress: (done: number, total: number) => `Photos ${done}/${total}…`,
   },
   export: {
     title: 'Layout',
