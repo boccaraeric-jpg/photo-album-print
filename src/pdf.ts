@@ -4,7 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import type { ExportOptions, Photo } from './types';
 import { readPrintBase64 } from './photoFiles';
 import { fileDateStamp, formatPhotoDate, photoDate } from './dateFormat';
-import { dict, localeTag, type Lang } from './i18n';
+import { dict, localeTag, SUPPORTED, type Lang } from './i18n';
 import { paginateEntries, PER_PAGE } from './paginate';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { richToHtml } from './richText';
@@ -16,6 +16,20 @@ const MONTSERRAT_FACE = `
     src: url(data:font/ttf;base64,${MONTSERRAT_500}) format('truetype'); }
   @font-face { font-family: 'Montserrat'; font-weight: 800; font-style: normal;
     src: url(data:font/ttf;base64,${MONTSERRAT_800}) format('truetype'); }`;
+
+/**
+ * Politique de sécurité du document (aperçu WebView **et** PDF `expo-print`).
+ *
+ * Le HTML ne contient que du statique : styles en ligne, polices et photos en
+ * `data:`. Tout le reste est interdit — aucun script, aucune connexion réseau,
+ * aucune ressource externe. Défense en profondeur : si une valeur non échappée
+ * se glissait un jour dans le document, elle ne pourrait ni s'exécuter ni
+ * envoyer l'album ailleurs. ⚠️ Ajouter une ressource non `data:` au gabarit
+ * exige d'élargir cette règle, sinon elle ne s'affichera pas.
+ */
+const CSP_META =
+  '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; ' +
+  "img-src data:; font-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\" />";
 
 /** Tronque un texte à `n` mots (pour la légende en pleine page). */
 function limitWords(text: string, n: number): string {
@@ -35,6 +49,49 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   textAlign: 'center',
   commentVAlign: 'top',
 };
+
+/** Garde la valeur si elle fait partie des choix connus, sinon le défaut. */
+function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value)
+    ? (value as T)
+    : fallback;
+}
+
+/**
+ * Ramène des options d'export de provenance incertaine à des valeurs connues.
+ *
+ * ⚠️ Sécurité : ces options sont **interpolées telles quelles** dans le
+ * `<style>` du HTML (aperçu WebView et PDF). Or elles peuvent venir d'une
+ * **sauvegarde reçue d'un tiers** (`parseBackup`) : un `background` du genre
+ * `#fff}</style><script>…` injectait un script qui lisait la page — photos,
+ * commentaires, lieux — et l'envoyait sur le réseau. Chaque champ est donc
+ * restreint à sa liste fermée (couleur = hex à 6 chiffres), toute autre valeur
+ * retombant sur le défaut.
+ */
+export function sanitizeExportOptions(raw: unknown): ExportOptions {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const d = DEFAULT_EXPORT_OPTIONS;
+  const align = ['left', 'center', 'right'] as const;
+  return {
+    style: oneOf(o.style, ['family', 'pro'] as const, d.style),
+    photoSize: oneOf(o.photoSize, ['small', 'medium', 'large', 'full'] as const, d.photoSize),
+    background:
+      typeof o.background === 'string' && /^#[0-9a-f]{6}$/i.test(o.background)
+        ? o.background
+        : d.background,
+    frame: oneOf(o.frame, ['card', 'border', 'polaroid', 'none'] as const, d.frame),
+    liseret: typeof o.liseret === 'boolean' ? o.liseret : d.liseret,
+    showPlace: typeof o.showPlace === 'boolean' ? o.showPlace : d.showPlace,
+    dateFormat: oneOf(
+      o.dateFormat,
+      ['short', 'shortTime', 'long', 'full', 'none'] as const,
+      d.dateFormat,
+    ),
+    dateAlign: oneOf(o.dateAlign, align, d.dateAlign),
+    textAlign: oneOf(o.textAlign, align, d.textAlign),
+    commentVAlign: oneOf(o.commentVAlign, ['top', 'middle', 'bottom'] as const, d.commentVAlign),
+  };
+}
 
 function escapeHtml(input: string): string {
   return input
@@ -422,6 +479,11 @@ export async function buildAlbumHtml(
   coverPhotoId?: string,
   lang: Lang = 'fr',
 ): Promise<string> {
+  // Point d'entrée unique du HTML (familial ET pro) : les réglages et la langue
+  // y sont filtrés une fois pour toutes avant d'être interpolés dans le
+  // document (cf. `sanitizeExportOptions`).
+  options = sanitizeExportOptions(options);
+  if (!SUPPORTED.includes(lang)) lang = 'fr';
   // Budget adaptatif : plus il y a de photos, plus on réduit chacune pour que le
   // PDF final reste transmissible (cible ~10 Mo). À 1600 px / q0.72 une photo
   // pèse ~0,3 Mo, donc ~3 Mo pour 9 photos (contre ~190 Mo en original brut).
@@ -493,6 +555,7 @@ export async function buildAlbumHtml(
     <html lang="${lang}">
       <head>
         <meta charset="utf-8" />
+        ${CSP_META}
         <!-- width = largeur de page A4 en points : l'aperçu WebView met la page
              à l'échelle de l'écran ; ignoré par expo-print (dimensions fournies). -->
         <meta name="viewport" content="width=${PAGE_WIDTH}, initial-scale=1" />
@@ -637,6 +700,7 @@ function buildProDocument(
     <html lang="${lang}">
       <head>
         <meta charset="utf-8" />
+        ${CSP_META}
         <meta name="viewport" content="width=${PAGE_WIDTH}, initial-scale=1" />
         <style>${styles}</style>
       </head>

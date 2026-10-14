@@ -146,6 +146,7 @@ const fr = {
     title: 'Aperçu avant envoi',
     subtitle: 'Faites défiler pour vérifier chaque page',
     layout: 'Mise en page',
+    photoProgress: (done: number, total: number) => `Photos ${done}/${total}…`,
   },
   export: {
     title: 'Mise en page',
@@ -315,6 +316,7 @@ Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un
     title: (n: number) => `Importer ${n} photo${n > 1 ? 's' : ''} dans…`,
     hint: 'Choisis le dossier de destination',
     newFolder: '＋  Nouveau dossier',
+    opening: "Ouverture de l'album reçu…",
   },
   doc: {
     imageUnavailable: 'Image indisponible',
@@ -439,6 +441,7 @@ const en: Dict = {
     title: 'Preview before sending',
     subtitle: 'Scroll to check each page',
     layout: 'Layout',
+    photoProgress: (done: number, total: number) => `Photos ${done}/${total}…`,
   },
   export: {
     title: 'Layout',
@@ -607,6 +610,7 @@ Folders will be ADDED to the ones already there: nothing is replaced. A name alr
     title: (n: number) => `Import ${n} photo${n > 1 ? 's' : ''} into…`,
     hint: 'Choose the destination folder',
     newFolder: '＋  New folder',
+    opening: 'Opening the received album…',
   },
   doc: {
     imageUnavailable: 'Image unavailable',

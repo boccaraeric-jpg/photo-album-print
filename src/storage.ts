@@ -136,7 +136,7 @@ export async function saveLang(lang: Lang): Promise<void> {
 
 // Un tri persisté inconnu (ex. l'ancien 'count') est ignoré : `loadAlbumSort`
 // renvoie null et l'accueil repart sur « Récents ».
-const ALBUM_SORTS: AlbumSort[] = ['recent', 'name', 'size'];
+export const ALBUM_SORTS: AlbumSort[] = ['recent', 'name', 'size'];
 
 /** Tri des dossiers choisi par l'utilisateur, ou null s'il n'a jamais choisi. */
 export async function loadAlbumSort(): Promise<AlbumSort | null> {

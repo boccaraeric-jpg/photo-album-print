@@ -2,11 +2,12 @@ import JSZip from 'jszip';
 import * as FileSystem from 'expo-file-system/legacy';
 import { newId } from './id';
 import { readPrintBase64, writeBase64Image } from './photoFiles';
-import { comparePhotos } from './storage';
+import { ALBUM_SORTS, comparePhotos } from './storage';
 import { fileDateStamp } from './dateFormat';
+import { sanitizeExportOptions } from './pdf';
 import type { Album, AlbumSort, ExportOptions, Photo } from './types';
-import type { Lang } from './i18n';
-import { BUNDLE_EXT, type ImportedEntry } from './albumBundle';
+import { SUPPORTED, type Lang } from './i18n';
+import { BUNDLE_EXT, checkEntry, type ImportedEntry } from './albumBundle';
 
 /**
  * Sauvegarde complète : **tous** les dossiers dans un seul fichier `.comclic.zip`,
@@ -39,6 +40,30 @@ export interface BackupSettings {
   lang?: Lang;
   sort?: AlbumSort;
   exportOptions?: ExportOptions;
+}
+
+/**
+ * Réglages d'une sauvegarde, réduits à des valeurs connues.
+ *
+ * ⚠️ Sécurité : une « sauvegarde » peut venir d'un tiers (même bouton que les
+ * albums reçus). Ses réglages étaient appliqués tels quels, et les options
+ * d'export finissent interpolées dans le HTML de l'aperçu et du PDF : un
+ * fichier piégé y injectait un script. Une valeur inconnue est simplement
+ * abandonnée — le réglage de l'utilisateur reste alors inchangé.
+ */
+function sanitizeSettings(raw: unknown): BackupSettings {
+  const s = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const out: BackupSettings = {};
+  if (typeof s.lang === 'string' && (SUPPORTED as string[]).includes(s.lang)) {
+    out.lang = s.lang as Lang;
+  }
+  if (typeof s.sort === 'string' && (ALBUM_SORTS as string[]).includes(s.sort)) {
+    out.sort = s.sort as AlbumSort;
+  }
+  if (s.exportOptions && typeof s.exportOptions === 'object') {
+    out.exportOptions = sanitizeExportOptions(s.exportOptions);
+  }
+  return out;
 }
 
 interface BackupEntry {
@@ -202,7 +227,11 @@ export async function peekBackup(
         typeof manifest.createdAt === 'number' ? manifest.createdAt : Date.now(),
       albums: list.length,
       photos: list.reduce(
-        (sum, a) => sum + (a.entries ?? []).filter((e) => e.kind === 'photo').length,
+        (sum, a) =>
+          sum +
+          (a && Array.isArray(a.entries) ? a.entries : []).filter(
+            (e) => checkEntry(e)?.kind === 'photo',
+          ).length,
         0,
       ),
     };
@@ -232,10 +261,15 @@ export async function parseBackup(fileUri: string): Promise<ParsedBackup | null>
 
     const out: RestoredAlbum[] = [];
     for (const a of manifest.albums as BackupAlbum[]) {
+      // Fichier venu peut-être d'un tiers : un dossier ou une entrée mal formés
+      // sont sautés, chaque champ est vérifié (`checkEntry`).
+      if (!a || typeof a !== 'object') continue;
       const entries: ImportedEntry[] = [];
-      for (const e of a.entries ?? []) {
+      for (const raw of Array.isArray(a.entries) ? (a.entries as unknown[]) : []) {
+        const e = checkEntry(raw);
+        if (!e) continue;
         if (e.kind === 'text') {
-          entries.push({ kind: 'text', comment: e.comment ?? '', order: e.order });
+          entries.push({ kind: 'text', comment: e.comment, order: e.order });
           continue;
         }
         let uri: string | undefined;
@@ -249,7 +283,7 @@ export async function parseBackup(fileUri: string): Promise<ParsedBackup | null>
         entries.push({
           kind: 'photo',
           uri,
-          comment: e.comment ?? '',
+          comment: e.comment,
           place: e.place,
           takenAt: e.takenAt,
           order: e.order,
@@ -267,7 +301,7 @@ export async function parseBackup(fileUri: string): Promise<ParsedBackup | null>
       createdAt:
         typeof manifest.createdAt === 'number' ? manifest.createdAt : Date.now(),
       albums: out,
-      settings: (manifest.settings ?? {}) as BackupSettings,
+      settings: sanitizeSettings(manifest.settings),
     };
   } catch {
     return null;
