@@ -82,7 +82,7 @@ export const COVER_H = 842;
 
 /** Nombre minimal de photos pour qu'un montage ait de l'allure. */
 const COVER_MIN: Record<CoverStyle, number> = { classic: 1, scatter: 3, filmstrip: 4 };
-const COVER_MAX: Record<CoverStyle, number> = { classic: 1, scatter: 7, filmstrip: 9 };
+const COVER_MAX: Record<CoverStyle, number> = { classic: 1, scatter: 9, filmstrip: 9 };
 
 /**
  * Style de couverture réellement rendu : un montage sans assez de photos
@@ -93,19 +93,41 @@ export function effectiveCover(style: CoverStyle, photoCount: number): CoverStyl
 }
 
 /**
- * Photos d'un montage de couverture : la photo étoilée ★ d'abord, puis les
- * suivantes dans l'ordre du dossier. Les pages de texte sont exclues.
+ * Choix du pêle-mêle réellement utilisable : identifiants encore présents dans
+ * le dossier (une photo supprimée depuis disparaît), sans page de texte, dans
+ * l'ordre choisi, plafonnés à 9. Moins de 3 → `[]`, c'est-à-dire « automatique ».
+ */
+export function validScatterPicks(photos: Photo[], ids: string[] | undefined): Photo[] {
+  if (!ids?.length) return [];
+  const byId = new Map(photos.filter((p) => p.kind !== 'text').map((p) => [p.id, p]));
+  const picked = [...new Set(ids)]
+    .map((id) => byId.get(id))
+    .filter((p): p is Photo => !!p)
+    .slice(0, SCATTER_MAX);
+  return picked.length >= SCATTER_MIN ? picked : [];
+}
+
+/**
+ * Photos d'un montage de couverture. Pêle-mêle : la sélection de
+ * l'utilisateur si elle est valable (la 1ʳᵉ choisie au centre). Sinon, et pour
+ * la grille : la photo étoilée ★ d'abord, puis les suivantes dans l'ordre du
+ * dossier. Les pages de texte sont exclues.
  */
 export function coverPicks(
   photos: Photo[],
   style: CoverStyle,
   coverPhotoId?: string,
+  scatterIds?: string[],
 ): Photo[] {
+  if (style === 'scatter') {
+    const chosen = validScatterPicks(photos, scatterIds);
+    if (chosen.length) return chosen;
+  }
   const entries = photos.filter((p) => p.kind !== 'text');
   const star = entries.find((p) => p.id === coverPhotoId);
   const ordered = star ? [star, ...entries.filter((p) => p !== star)] : entries;
   if (style === 'filmstrip') return ordered.slice(0, gridShape(ordered.length).count);
-  return ordered.slice(0, COVER_MAX[style]);
+  return ordered.slice(0, style === 'scatter' ? SCATTER_AUTO : COVER_MAX[style]);
 }
 
 /** Cadre polaroïd : marge blanche autour de la photo, plus large en bas. */
@@ -154,45 +176,62 @@ export function seedOf(ids: string[]): number {
   return h >>> 0;
 }
 
-/**
- * Emplacements des photos secondaires du pêle-mêle, selon leur nombre. Placés
- * à la main pour laisser libre le bandeau du titre (haut de page) et rester
- * dans la feuille malgré l'inclinaison ; la photo étoilée occupe le centre.
- */
-const SCATTER_SPOTS: Record<number, [number, number][]> = {
-  2: [[165, 375], [430, 640]],
-  3: [[160, 350], [435, 350], [297, 690]],
-  4: [[160, 340], [435, 335], [165, 665], [430, 670]],
-  5: [[155, 330], [297, 300], [440, 330], [175, 680], [420, 680]],
-  6: [[150, 325], [297, 295], [445, 325], [150, 685], [297, 715], [445, 685]],
-};
-const SCATTER_HERO: [number, number] = [297, 505];
+/** Nombre de photos du pêle-mêle : bornes du choix de l'utilisateur. */
+export const SCATTER_MIN = 3;
+export const SCATTER_MAX = 9;
+/** Nombre retenu quand l'utilisateur n'a rien choisi. */
+const SCATTER_AUTO = 7;
 
-/** Gabarit du pêle-mêle : l'indice 0 est la photo étoilée (au centre, au-dessus). */
+/**
+ * Gabarits du pêle-mêle, un par nombre de photos : `[cx, cy, côté]` en points
+ * A4. La première entrée est la photo principale (au centre, au-dessus des
+ * autres). Placés à la main pour **remplir** la zone sous le titre
+ * (≈ y 190 → 825, x 20 → 575) sans sortir de la feuille malgré l'inclinaison :
+ * moins il y a de photos, plus elles sont grandes. Une taille unique laissait
+ * la page à moitié vide dès 7 photos.
+ */
+const SCATTER_LAYOUTS: Record<number, [number, number, number][]> = {
+  3: [[300, 680, 250], [175, 385, 228], [420, 415, 228]],
+  4: [[420, 680, 220], [170, 370, 212], [425, 355, 212], [175, 695, 212]],
+  5: [[297, 510, 200], [155, 335, 185], [440, 330, 185], [160, 690, 185], [435, 695, 185]],
+  6: [[297, 505, 190], [140, 320, 170], [297, 300, 170], [455, 320, 170], [175, 690, 170], [420, 695, 170]],
+  7: [[297, 515, 185], [165, 315, 165], [430, 305, 165], [118, 515, 165], [477, 520, 165], [175, 715, 165], [425, 710, 165]],
+  8: [[297, 510, 180], [130, 310, 155], [297, 300, 155], [465, 310, 155], [110, 510, 155], [485, 510, 155], [185, 715, 155], [410, 715, 155]],
+  9: [[297, 512, 175], [130, 315, 150], [297, 300, 150], [465, 315, 150], [108, 512, 150], [487, 512, 150], [130, 712, 150], [297, 725, 150], [465, 712, 150]],
+};
+
+/** Gabarit du pêle-mêle : l'indice 0 est la photo principale (au centre, au-dessus). */
 export function scatterSlots(count: number, seed: number): PolaroidSlot[] {
   const rand = rng(seed);
   const jitter = (n: number) => (rand() * 2 - 1) * n;
-  const spots = SCATTER_SPOTS[count - 1] ?? [];
-  const others = spots.map(([cx, cy], i): PolaroidSlot => {
+  const n = Math.min(SCATTER_MAX, Math.max(SCATTER_MIN, count));
+  // Recalage commun des gabarits : remontés vers le titre et légèrement
+  // agrandis — une bande vide de ~100 pt séparait le titre des photos.
+  const [hero, ...others] = SCATTER_LAYOUTS[n].map(
+    ([cx, cy, size]): [number, number, number] => [cx, cy - 18, Math.round(size * 1.06)],
+  );
+  const slots = others.map(([cx, cy, size], i): PolaroidSlot => {
     // Inclinaison franche (3° à 9°), sens alterné : un angle quasi nul
     // ressemblait à une erreur de placement plutôt qu'à un geste.
     const sign = i % 2 === 0 ? -1 : 1;
     return {
-      cx: cx + jitter(10),
-      cy: cy + jitter(10),
-      size: 150,
+      cx: cx + jitter(8),
+      cy: cy + jitter(8),
+      size,
       rot: sign * (3 + rand() * 6),
       z: i + 1,
     };
   });
-  const hero: PolaroidSlot = {
-    cx: SCATTER_HERO[0] + jitter(6),
-    cy: SCATTER_HERO[1] + jitter(6),
-    size: 176,
-    rot: jitter(3),
-    z: others.length + 1,
-  };
-  return [hero, ...others];
+  return [
+    {
+      cx: hero[0] + jitter(5),
+      cy: hero[1] + jitter(5),
+      size: hero[2],
+      rot: jitter(3),
+      z: slots.length + 1,
+    },
+    ...slots,
+  ].slice(0, count);
 }
 
 /** Bandeau du titre des couvertures montées (pêle-mêle). */

@@ -549,6 +549,7 @@ export async function buildAlbumHtml(
   options: ExportOptions,
   coverPhotoId?: string,
   lang: Lang = 'fr',
+  scatterIds?: string[],
 ): Promise<string> {
   // Point d'entrée unique du HTML (familial ET pro) : les réglages et la langue
   // y sont filtrés une fois pour toutes avant d'être interpolés dans le
@@ -614,7 +615,7 @@ export async function buildAlbumHtml(
 
   let coverHtml: string;
   if (coverStyle === 'scatter') {
-    const picks = coverPicks(photoEntries, 'scatter', coverPhotoId);
+    const picks = coverPicks(photoEntries, 'scatter', coverPhotoId, scatterIds);
     const slots = scatterSlots(picks.length, seedOf(picks.map((p) => p.id)));
     const polas = picks
       .map((p, i) => {

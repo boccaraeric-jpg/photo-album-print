@@ -234,6 +234,15 @@ function Root() {
     );
   }, []);
 
+  // Sélection du pêle-mêle : `[]` revient à la sélection automatique.
+  const setAlbumScatter = useCallback((id: string, ids: string[]) => {
+    setAlbums((prev) =>
+      prev.map((a) =>
+        a.id === id ? { ...a, scatterPhotoIds: ids.length ? ids : undefined } : a,
+      ),
+    );
+  }, []);
+
   // Duplique un dossier : nouveau dossier « Copie de … » + copie **de fichier**
   // pour chaque photo. Les copies sont indépendantes (supprimer une photo de la
   // copie n'efface pas l'original, cf. `deleteImage` qui supprime le fichier).
@@ -255,6 +264,8 @@ function Root() {
                 const copyId = newId();
                 const created: Photo[] = [];
                 let coverId: string | undefined;
+                // Ancien id → id de la copie, pour reporter la sélection du pêle-mêle.
+                const idMap = new Map<string, string>();
                 for (const p of albumPhotos) {
                   const id = newId();
                   if (p.kind === 'text') {
@@ -270,12 +281,16 @@ function Root() {
                     created.push({ ...p, id, albumId: copyId, uri, originalUri });
                   }
                   if (p.id === album.coverPhotoId) coverId = id;
+                  idMap.set(p.id, id);
                 }
                 const copy: Album = {
                   id: copyId,
                   name: L.album.copyName(album.name.trim() || L.album.noName),
                   createdAt: Date.now(),
                   coverPhotoId: coverId,
+                  scatterPhotoIds: album.scatterPhotoIds
+                    ?.map((old) => idMap.get(old))
+                    .filter((id): id is string => !!id),
                 };
                 setAlbums((prev) => [...prev, copy]);
                 if (created.length) setPhotos((prev) => [...prev, ...created]);
@@ -785,6 +800,7 @@ function Root() {
         setPhotos={setPhotos}
         onRename={(name) => renameAlbum(openAlbum.id, name)}
         onSetCover={(photoId) => setAlbumCover(openAlbum.id, photoId)}
+        onSetScatter={(ids) => setAlbumScatter(openAlbum.id, ids)}
         onBack={() => setOpenAlbumId(null)}
         initialEditPhotoId={editOnOpen}
         onEditConsumed={() => setEditOnOpen(null)}
@@ -1087,6 +1103,8 @@ interface AlbumProps {
   setPhotos: React.Dispatch<React.SetStateAction<Photo[]>>;
   onRename: (name: string) => void;
   onSetCover: (photoId: string) => void;
+  /** Enregistre les photos choisies pour la couverture pêle-mêle (`[]` = automatique). */
+  onSetScatter: (ids: string[]) => void;
   onBack: () => void;
   /** Photo à ouvrir en édition à l'arrivée (import d'une photo partagée). */
   initialEditPhotoId?: string | null;
@@ -1100,7 +1118,8 @@ function AlbumScreen({
   setPhotos,
   onRename,
   onSetCover,
-  onBack,
+  onSetScatter,
+onBack,
   initialEditPhotoId,
   onEditConsumed,
 }: AlbumProps) {
@@ -1442,10 +1461,11 @@ function AlbumScreen({
 
   // Étape 1 : prépare l'aperçu (même HTML que le PDF) à partir des options.
   const openPreview = useCallback(
-    async (options: ExportOptions) => {
+    async (options: ExportOptions, scatterIds: string[]) => {
       if (photos.length === 0) return;
       setExportOptions(options);
       saveExportOptions(options);
+      onSetScatter(scatterIds);
       setPreparing(true);
       try {
         const html = await buildAlbumHtml(
@@ -1454,6 +1474,7 @@ function AlbumScreen({
           options,
           defaultCoverId,
           lang,
+          scatterIds,
         );
         setPreviewHtml(html);
         setExportVisible(false);
@@ -1464,7 +1485,7 @@ function AlbumScreen({
         setPreparing(false);
       }
     },
-    [photos.length, orderedPhotos, albumTitle, defaultCoverId],
+    [photos.length, orderedPhotos, albumTitle, defaultCoverId, onSetScatter],
   );
 
   // Étape 2a : PDF prêt à imprimer, nommé, puis feuille de partage. Reconstruit
@@ -1479,6 +1500,7 @@ function AlbumScreen({
         exportOptions,
         defaultCoverId,
         lang,
+        album.scatterPhotoIds,
       );
       const uri = await htmlToPdfFile(html, albumTitle);
       await shareFile(uri, albumTitle, 'application/pdf', 'com.adobe.pdf');
@@ -1488,7 +1510,7 @@ function AlbumScreen({
     } finally {
       setSending(false);
     }
-  }, [orderedPhotos, albumTitle, exportOptions, defaultCoverId]);
+  }, [orderedPhotos, albumTitle, exportOptions, defaultCoverId, album.scatterPhotoIds]);
 
   // Étape 2b : une image JPEG par page, partagée via la feuille d'envoi. Une
   // seule page → l'image directement ; plusieurs → un ZIP unique (expo-sharing
@@ -1502,6 +1524,7 @@ function AlbumScreen({
         exportOptions,
         defaultCoverId,
         lang,
+        album.scatterPhotoIds,
       );
       if (uris.length === 0) throw new Error('aucune page générée');
       if (uris.length === 1) {
@@ -1516,7 +1539,7 @@ function AlbumScreen({
     } finally {
       setSending(false);
     }
-  }, [orderedPhotos, albumTitle, exportOptions, defaultCoverId]);
+  }, [orderedPhotos, albumTitle, exportOptions, defaultCoverId, album.scatterPhotoIds]);
 
   // Étape 2c : les photos AFFICHÉES (fichiers d'origine réutilisables) + un
   // fichier de contexte, dans un ZIP — pour que le destinataire retravaille les
@@ -1766,7 +1789,8 @@ function AlbumScreen({
       <ExportModal
         visible={exportVisible}
         initial={exportOptions}
-        photoCount={orderedPhotos.filter((p) => p.kind !== 'text').length}
+        photos={orderedPhotos}
+        scatterIds={album.scatterPhotoIds}
         preparing={preparing}
         onPreview={openPreview}
         onClose={() => setExportVisible(false)}

@@ -221,6 +221,12 @@ d'entrée** (ils pilotent aussi les libellés) :
   `W / COVER_W`). Retoucher un placement là, jamais dans un seul moteur. Le pêle-mêle tire son
   désordre d'une **graine** (`seedOf` des ids) : jamais `Math.random`, sinon PDF et JPEG divergent.
   Montage sans assez de photos (< 3 pêle-mêle, < 4 grille) → `effectiveCover` retombe sur `classic`.
+  Pêle-mêle : **un gabarit par nombre** (3 → 9, `SCATTER_LAYOUTS`), photos d'autant plus grandes
+  qu'elles sont peu nombreuses. Les photos se choisissent **par dossier** (`Album.scatterPhotoIds`,
+  ordre = ordre de choix, la 1ʳᵉ au centre) dans un panneau d'`ExportModal` — surcouche `<View>`,
+  pas `<Modal>`. Sans choix valable (`validScatterPicks`) : automatique, ★ + suivantes, 7 au plus.
+  Reporté par `duplicateAlbum` ; **pas** porté par la sauvegarde ni le `.comclic` (retour à
+  l'automatique).
   Les montages **gardent** la photo ★ dans les pages (la règle d'exclusion ne vaut qu'en `classic`).
   En `script`, les textes longs (pages de texte, date) restent en Lora : Caveat illisible au long cours.
   Contrôle visuel possible **sur PC** : `buildAlbumHtml` tourne sous node (sucrase + bouchons des

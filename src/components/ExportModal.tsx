@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -11,12 +13,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, F } from '../theme';
 import { useLang } from '../i18n';
-import { effectiveCover } from '../albumStyle';
+import { effectiveCover, SCATTER_MAX, SCATTER_MIN, validScatterPicks } from '../albumStyle';
 import type {
   CoverStyle,
   DateFormat,
   ExportOptions,
   FrameStyle,
+  Photo,
   PhotoSize,
   Typeface,
 } from '../types';
@@ -25,12 +28,14 @@ interface Props {
   visible: boolean;
   /** Options pré-sélectionnées (dernier export). */
   initial: ExportOptions;
-  /** Photos du dossier (hors pages de texte) : un montage de couverture en exige un minimum. */
-  photoCount: number;
+  /** Entrées du dossier, dans l'ordre : nombre minimal d'un montage et choix du pêle-mêle. */
+  photos: Photo[];
+  /** Photos déjà choisies pour le pêle-mêle (absent = automatique). */
+  scatterIds?: string[];
   /** Vrai pendant la préparation de l'aperçu (lecture des images). */
   preparing: boolean;
-  /** Ouvre l'aperçu avant envoi avec les options choisies. */
-  onPreview: (options: ExportOptions) => void;
+  /** Ouvre l'aperçu avant envoi avec les options et la sélection du pêle-mêle (`[]` = automatique). */
+  onPreview: (options: ExportOptions, scatterIds: string[]) => void;
   onClose: () => void;
 }
 
@@ -178,7 +183,8 @@ function CoverSketch({ kind }: { kind: CoverStyle }) {
 export function ExportModal({
   visible,
   initial,
-  photoCount,
+  photos,
+  scatterIds,
   preparing,
   onPreview,
   onClose,
@@ -186,6 +192,19 @@ export function ExportModal({
   const { L } = useLang();
   const insets = useSafeAreaInsets();
   const [options, setOptions] = useState<ExportOptions>(initial);
+  const images = photos.filter((p) => p.kind !== 'text');
+  const photoCount = images.length;
+  // Sélection du pêle-mêle validée, et brouillon pendant le choix. Le
+  // brouillon ne remplace la sélection qu'à « Valider » : fermer le panneau
+  // ne perd rien.
+  const [picked, setPicked] = useState<string[]>([]);
+  const [draft, setDraft] = useState<string[] | null>(null);
+  const toggleDraft = (id: string) =>
+    setDraft((d) => {
+      const cur = d ?? [];
+      if (cur.includes(id)) return cur.filter((x) => x !== id);
+      return cur.length >= SCATTER_MAX ? cur : [...cur, id];
+    });
   const isPro = options.style === 'pro';
   // En pro les sections sont peu nombreuses : on les aère davantage.
   const labelStyle = isPro ? [styles.label, styles.labelSpaced] : styles.label;
@@ -200,6 +219,12 @@ export function ExportModal({
         ? { ...initial, frame: 'border' }
         : initial,
     );
+    // Une photo supprimée depuis le dernier choix sort de la sélection.
+    setPicked(validScatterPicks(photos, scatterIds).map((p) => p.id));
+    setDraft(null);
+    // `photos` change à chaque édition du dossier : la sélection n'est relue
+    // qu'à l'ouverture, pas pendant le réglage.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, initial]);
 
   return (
@@ -269,6 +294,25 @@ export function ExportModal({
               </View>
               {effectiveCover(options.cover, photoCount) !== options.cover && (
                 <Text style={styles.note}>{L.export.coverFallback(photoCount)}</Text>
+              )}
+              {options.cover === 'scatter' && photoCount >= SCATTER_MIN && (
+                <View style={styles.pickRow}>
+                  <View style={styles.pickInfo}>
+                    <Text style={styles.pickTitle}>{L.export.scatterPhotosLabel}</Text>
+                    <Text style={styles.note}>
+                      {picked.length
+                        ? L.export.scatterChosen(picked.length)
+                        : L.export.scatterAuto}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={styles.pickBtn}
+                    onPress={() => setDraft(picked)}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.pickBtnText}>{L.export.scatterChoose}</Text>
+                  </Pressable>
+                </View>
               )}
             </>
           )}
@@ -423,7 +467,7 @@ export function ExportModal({
           <Pressable
             style={[styles.btn, styles.btnPrimary, preparing && styles.disabled]}
             disabled={preparing}
-            onPress={() => onPreview(options)}
+            onPress={() => onPreview(options, picked)}
           >
             {preparing ? (
               <ActivityIndicator color={C.paper} />
@@ -432,6 +476,90 @@ export function ExportModal({
             )}
           </Pressable>
         </View>
+
+        {/* Choix des photos du pêle-mêle : surcouche <View> et non <Modal>,
+            iOS ne présente pas deux Modal imbriqués (cf. SpellCheckModal). */}
+        {draft && (
+          <View
+            style={[
+              styles.picker,
+              { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 16) },
+            ]}
+          >
+            <View style={styles.header}>
+              <Pressable
+                onPress={() => setDraft(null)}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={L.common.cancel}
+              >
+                <Text style={styles.close}>✕</Text>
+              </Pressable>
+              <Text style={styles.title} numberOfLines={1}>
+                {L.export.scatterPhotosLabel}
+              </Text>
+              <Text style={styles.badge}>{L.export.scatterCount(draft.length)}</Text>
+            </View>
+            <Text style={[styles.note, styles.pickHint]}>{L.export.scatterPickHint}</Text>
+            <FlatList
+              data={images}
+              keyExtractor={(p) => p.id}
+              numColumns={3}
+              contentContainerStyle={styles.pickGrid}
+              columnWrapperStyle={styles.pickGridRow}
+              renderItem={({ item }) => {
+                const rank = draft.indexOf(item.id);
+                return (
+                  <Pressable
+                    style={[styles.thumb, rank >= 0 && styles.thumbSelected]}
+                    onPress={() => toggleDraft(item.id)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: rank >= 0 }}
+                  >
+                    <Image source={{ uri: item.uri }} style={styles.thumbImg} />
+                    {rank >= 0 && (
+                      <View style={[styles.rank, rank === 0 && styles.rankHero]}>
+                        <Text style={styles.rankText}>{rank + 1}</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              }}
+            />
+            <Text style={[styles.note, styles.pickStatus]}>
+              {draft.length > 0 && draft.length < SCATTER_MIN
+                ? L.export.scatterMin(SCATTER_MIN - draft.length)
+                : draft.length >= SCATTER_MAX
+                  ? L.export.scatterMax
+                  : ' '}
+            </Text>
+            <View style={styles.pickActions}>
+              <Pressable
+                style={[styles.btn, styles.btnGhost]}
+                onPress={() => {
+                  setPicked([]);
+                  setDraft(null);
+                }}
+              >
+                <Text style={styles.btnGhostText}>{L.export.scatterAutoBtn}</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.btn,
+                  styles.btnPrimary,
+                  draft.length > 0 && draft.length < SCATTER_MIN && styles.disabled,
+                ]}
+                disabled={draft.length > 0 && draft.length < SCATTER_MIN}
+                onPress={() => {
+                  setPicked(draft);
+                  setDraft(null);
+                }}
+              >
+                <Text style={styles.btnPrimaryText}>{L.export.scatterValidate}</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
       </View>
     </Modal>
   );
@@ -512,6 +640,63 @@ const styles = StyleSheet.create({
   tileHint: { fontFamily: F.mono, fontSize: 11, color: C.muted, marginTop: 1 },
   sample: { fontSize: 22, color: C.ink, height: 34, lineHeight: 34 },
   note: { fontFamily: F.mono, fontSize: 12, color: C.muted, marginTop: 8 },
+  pickRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: C.card,
+  },
+  pickInfo: { flex: 1 },
+  pickTitle: { fontFamily: F.monoBold, fontSize: 14, color: C.ink },
+  pickBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: C.ink,
+  },
+  pickBtnText: { fontFamily: F.monoBold, fontSize: 14, color: C.paper },
+  picker: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: C.paper,
+  },
+  pickHint: { paddingHorizontal: 20, marginBottom: 8 },
+  pickGrid: { paddingHorizontal: 20, paddingBottom: 12, gap: 8 },
+  pickGridRow: { gap: 8 },
+  thumb: {
+    flex: 1 / 3,
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: 'transparent',
+  },
+  thumbSelected: { borderColor: C.sienna },
+  thumbImg: { width: '100%', height: '100%' },
+  rank: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    minWidth: 26,
+    height: 26,
+    borderRadius: 13,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.ink,
+  },
+  // La 1re choisie, celle du centre, se distingue des autres.
+  rankHero: { backgroundColor: C.sienna },
+  rankText: { fontFamily: F.monoBold, fontSize: 13, color: C.paper },
+  pickStatus: { textAlign: 'center', paddingHorizontal: 20 },
+  pickActions: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
   sketch: {
     width: 48,
     height: 64,

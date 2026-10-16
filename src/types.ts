@@ -99,6 +99,11 @@ export interface Album {
   createdAt: number;
   /** Photo choisie pour la couverture (sinon la première du dossier) */
   coverPhotoId?: string;
+  /**
+   * Photos choisies pour la couverture pêle-mêle (3 à 9, dans l'ordre : la
+   * 1ʳᵉ au centre). Absent ou invalide → sélection automatique.
+   */
+  scatterPhotoIds?: string[];
 }
 
 export interface Photo {

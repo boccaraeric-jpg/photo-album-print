@@ -764,6 +764,7 @@ async function renderCover(
   pro: boolean,
   lang: Lang,
   coverPhotoId?: string,
+  scatterIds?: string[],
 ): Promise<PagePayload | null> {
   const surface = Skia.Surface.Make(W, H);
   if (!surface) return null;
@@ -828,7 +829,7 @@ async function renderCover(
   const style = effectiveCover(options.cover, photos.length);
   if (style !== 'classic') {
     const k = W / COVER_W; // points A4 → pixels de l'image
-    const picks = coverPicks(photos, style, coverPhotoId);
+    const picks = coverPicks(photos, style, coverPhotoId, scatterIds);
     // Vignettes réduites : jusqu'à 9 photos décodées en pleine résolution
     // (~48 Mo chacune) feraient tuer l'app par iOS.
     const thumbs = await Promise.all(picks.map((p) => loadThumb(p.uri)));
@@ -1040,6 +1041,7 @@ export async function buildAlbumImages(
   options: ExportOptions,
   coverPhotoId?: string,
   lang: Lang = 'fr',
+  scatterIds?: string[],
 ): Promise<string[]> {
   const uris: string[] = [];
 
@@ -1063,7 +1065,9 @@ export async function buildAlbumImages(
   const full = !pro && options.photoSize === 'full';
 
   const photoEntries = photos.filter((p) => p.kind !== 'text');
-  await push(await renderCover(photoEntries, eff, title, pro, lang, coverPhotoId));
+  await push(
+    await renderCover(photoEntries, eff, title, pro, lang, coverPhotoId, scatterIds),
+  );
 
   // Couverture classique : la photo de couverture ne réapparaît dans les pages
   // que si elle porte un commentaire. Les montages gardent toutes leurs photos
