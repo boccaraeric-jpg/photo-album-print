@@ -9,14 +9,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-```bash
-npm start              # Démarre Metro (⚠️ plus utilisable depuis Expo Go, cf. ci-dessous)
-npm run ios            # Ouvre dans le simulateur iOS
-npm run android        # Ouvre sur Android
-npx tsc --noEmit       # Vérification de types (pas de script lint/test dans ce projet)
-npx expo-doctor        # Cohérence des versions natives avec le SDK (18 contrôles)
-```
-
 Il n'y a **ni tests, ni linter, ni CI** — `tsc --noEmit` est la seule vérification statique.
 
 > ⛔ **Expo Go ne peut plus ouvrir ce projet** (constaté le 24/09/2026). L'Expo Go de l'App Store
@@ -351,11 +343,6 @@ de compilation sinon). Valeurs = chaînes **ou fonctions** (pluriel/interpolatio
   rendus album embarquent **Montserrat** (sans glyphes CJK) → il faudrait une police CJK dédiée.
 
 ## Dépendances & assets à connaître
-- Ajouts : `react-native-webview` (aperçu), `expo-location` (lieu), `jszip` (ZIP d'export et
-  `.comclic`), `talisman` (phonétique FR), `@expo/vector-icons` (icônes), `expo-font` (polices du
-  thème), `expo-image-manipulator` (recadrage), `@shopify/react-native-skia` (accueil + rendu JPEG
-  des pages), `@react-native-community/slider` (réglages d'image), `expo-updates` (EAS Update).
-  Toutes épinglées sur `node_modules/expo/bundledNativeModules.json` (SDK 54).
 - **Modules natifs absents d'Expo Go** — ne se valident que sur un build EAS : `expo-share-intent`
   (import par partage système), `expo-speech-recognition` (dictée). Le code doit rester **tolérant**
   à leur absence (provider no-op, bouton non monté), sinon Expo Go crashe au lancement.
@@ -394,18 +381,9 @@ cause, inutile de le chercher. Remise en route : arrêter Metro, supprimer `node
 `$TEMP/metro-cache` + `$TEMP/metro-file-map-*`, puis `npx expo start --clear`.
 
 ## Liste des dossiers (accueil)
-`HomeScreen` filtre et trie la liste avant de la passer à la `FlatList` (`visibleAlbums`) :
-**recherche** sur le nom via `normalizeSearch()` (minuscules **et sans accents** — `NFD` puis
-suppression des diacritiques, pour que « ete » trouve « Été ») et **tri** par `AlbumSort`
-(`recent` = `createdAt` décroissant, `name` = `localeCompare` avec `localeTag(lang)`, `size` =
-**poids réel des fichiers** décroissant). Le poids vient de `fileSize()` (`photoFiles.ts`,
-`getInfoAsync`) : chaque photo n'est mesurée **qu'une fois** — l'effet n'interroge que les `id`
-absents de `sizeByPhoto`, donc ajouter une photo ne relance pas de balayage complet. Le total par
-dossier ignore les `originalUri` conservés pour la ré-édition : c'est le poids de l'album, pas
-l'occupation disque. Affichage via `formatBytes()` (`src/fileSize.ts`, unités Ko/Mo/Go ou KB/MB/GB). Le tri est persisté (`album.sort.v1`, `loadAlbumSort` /
-`saveAlbumSort`) ; le texte cherché ne l'est pas. Le nombre de photos par dossier vient d'une `Map`
-mémoïsée sur `photos` — la liste est plate, un `filter` par carte serait quadratique. L'état vide
-distingue « aucun dossier » de « aucun résultat ».
+Le tri par **poids** ignore les `originalUri` conservés pour la ré-édition : c'est le poids de
+l'album, pas l'occupation disque. Le nombre de photos par dossier vient d'une `Map` mémoïsée sur
+`photos` — la liste est plate, un `filter` par carte serait quadratique.
 
 ## Prise de photo
 `＋ Nouvelle photo` ouvre **`src/components/CameraModal.tsx`** (`expo-camera`, `CameraView`), pas la
@@ -445,11 +423,8 @@ la correction publiée est bien celle qu'il a sous les yeux. Prendre la **fin** 
 ordonnés par le temps : leurs premiers caractères sont identiques d'un update à l'autre).
 `Updates.isEmbeddedLaunch` → mention « version intégrée » (bundle gravé dans le build, ou retour
 arrière après un update défaillant) ; en Expo Go `expo-updates` est inerte, d'où le `try/catch` ·
-`src/id.ts` `newId()` (identifiants `timestamp-suffixe`, utilisé pour photos, dossiers et noms de
-fichiers persistés) · `src/mediaLibrary.ts` `saveToPhotoLibrary()` (copie dans l'app Photos, permission
-**écriture seule**, renvoie `false` si refusée — l'ajout à l'album ne doit jamais échouer pour autant)
-· `src/dateFormat.ts` `photoDate()` (prise de vue réelle sinon date d'ajout) et le rendu des cinq
-`DateFormat`.
+`saveToPhotoLibrary()` (`src/mediaLibrary.ts`) renvoie `false` si la permission est refusée —
+l'ajout à l'album ne doit jamais échouer pour autant.
 
 ## Le dossier `docs/` (site public, exigé par les stores)
 Trois fichiers, tous **obligatoires** une fois publiés — les supprimer casse quelque chose ailleurs :
@@ -463,9 +438,7 @@ Trois fichiers, tous **obligatoires** une fois publiés — les supprimer casse 
   perdre la validation du compte.
 
 ## Identité de l'app
-`app.json` : `slug` **`photo-album-print`** (historique) mais l'app s'appelle **ComClic** ;
-`scheme` `comclic` ; `owner` = organisation **`boccaras-team`** ; `ios.bundleIdentifier` =
-`android.package` = `com.boccarasteam.comclic`. Ne pas « corriger » le slug : il identifie le projet
+`slug` **`photo-album-print`** (historique) mais l'app s'appelle **ComClic**. Ne pas « corriger » le slug : il identifie le projet
 côté EAS (builds, updates, canal `preview`).
 
 ## Commits
