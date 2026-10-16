@@ -172,6 +172,14 @@ const fr = {
     frames: { card: 'Cadre', border: 'Bordure', polaroid: 'Polaroïd', none: 'Sans cadre' },
     aligns: { left: 'Gauche', center: 'Centre', right: 'Droite' },
     commentPos: { top: 'Haut', middle: 'Centre', bottom: 'Bas' },
+    typefaceLabel: 'Typographie',
+    typefaces: { sans: 'Moderne', serif: 'Classique', script: 'Manuscrite' },
+    typefaceSample: 'Nos souvenirs',
+    coverLabel: 'Couverture',
+    covers: { classic: 'Classique', scatter: 'Pêle-mêle', filmstrip: 'Grille' },
+    coverHints: { classic: '1 photo', scatter: '3 à 7 photos', filmstrip: '4 à 9 photos' },
+    coverFallback: (n: number) =>
+      `Ce dossier n’a que ${n} photo${n > 1 ? 's' : ''} : la couverture classique sera utilisée.`,
     dateFormats: {
       short: 'Simple',
       shortTime: 'Simple + heure',
@@ -467,6 +475,14 @@ const en: Dict = {
     frames: { card: 'Card', border: 'Border', polaroid: 'Polaroid', none: 'No frame' },
     aligns: { left: 'Left', center: 'Center', right: 'Right' },
     commentPos: { top: 'Top', middle: 'Middle', bottom: 'Bottom' },
+    typefaceLabel: 'Typography',
+    typefaces: { sans: 'Modern', serif: 'Classic', script: 'Handwritten' },
+    typefaceSample: 'Our memories',
+    coverLabel: 'Cover',
+    covers: { classic: 'Classic', scatter: 'Scattered', filmstrip: 'Grid' },
+    coverHints: { classic: '1 photo', scatter: '3 to 7 photos', filmstrip: '4 to 9 photos' },
+    coverFallback: (n: number) =>
+      `This folder has only ${n} photo${n > 1 ? 's' : ''}: the classic cover will be used.`,
     dateFormats: {
       short: 'Simple',
       shortTime: 'Simple + time',

@@ -37,6 +37,24 @@ export type RenderStyle = 'family' | 'pro';
  */
 export type DateFormat = 'short' | 'shortTime' | 'long' | 'full' | 'none';
 
+/**
+ * Typographie du rendu familial :
+ * - `sans`   : Montserrat partout (rendu historique) ;
+ * - `serif`  : Lora, titres et légendes ;
+ * - `script` : Caveat (manuscrite) pour titres et légendes, Lora pour les
+ *              textes longs (pages de texte, date) — une page entière en
+ *              manuscrite devient vite illisible.
+ */
+export type Typeface = 'sans' | 'serif' | 'script';
+
+/**
+ * 1ère de couverture du rendu familial :
+ * - `classic`   : titre + année + la photo de couverture (rendu historique) ;
+ * - `scatter`   : pêle-mêle de polaroïds éparpillés (3 à 7 photos) ;
+ * - `filmstrip` : grille cinématique jointive (4 à 9 photos).
+ */
+export type CoverStyle = 'classic' | 'scatter' | 'filmstrip';
+
 /** Options de personnalisation du mini album exporté. */
 export interface ExportOptions {
   /** Rendu global (familial personnalisable ou professionnel sobre). */
@@ -62,6 +80,10 @@ export interface ExportOptions {
    * en flux (une expertise ne doit jamais la tronquer), il n'a pas de bande.
    */
   commentVAlign: 'top' | 'middle' | 'bottom';
+  /** Typographie — familial uniquement (le pro reste en Montserrat). */
+  typeface: Typeface;
+  /** Style de la 1ère de couverture — familial uniquement. */
+  cover: CoverStyle;
 }
 
 /** Critère de tri de la liste des dossiers (écran d'accueil). */

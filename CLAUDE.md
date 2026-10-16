@@ -214,6 +214,17 @@ d'entrée** (ils pilotent aussi les libellés) :
   la pagination ne bouge pas. `min-height` et non `height` : un commentaire long continue de
   s'étendre au lieu d'être rogné. Côté JPEG, `pageImages.ts` mesure le bloc (`measureRich`) puis
   répartit le vide dans `captionH`.
+- **Typographie & couverture** (`typeface` `sans`/`serif`/`script`, `cover`
+  `classic`/`scatter`/`filmstrip`) — **familial uniquement**, le pro les force à `sans`/`classic`.
+  Source unique : **`src/albumStyle.ts`** (`TYPE_SPECS` = famille par rôle titre/légende/texte/date ;
+  gabarits de couverture en **points A4** que le PDF pose en absolu et que Skia multiplie par
+  `W / COVER_W`). Retoucher un placement là, jamais dans un seul moteur. Le pêle-mêle tire son
+  désordre d'une **graine** (`seedOf` des ids) : jamais `Math.random`, sinon PDF et JPEG divergent.
+  Montage sans assez de photos (< 3 pêle-mêle, < 4 grille) → `effectiveCover` retombe sur `classic`.
+  Les montages **gardent** la photo ★ dans les pages (la règle d'exclusion ne vaut qu'en `classic`).
+  En `script`, les textes longs (pages de texte, date) restent en Lora : Caveat illisible au long cours.
+  Contrôle visuel possible **sur PC** : `buildAlbumHtml` tourne sous node (sucrase + bouchons des
+  modules Expo) et Chrome headless fait la capture — le rendu Skia, lui, ne se voit que sur l'iPhone.
 - **Types d'entrées** : une `Photo` est soit une image, soit une **page de texte** (`kind: 'text'`,
   `uri` vide, `comment` = le texte) créée par « ＋ Page de texte ». `src/paginate.ts`
   `paginateEntries()` renvoie des `AlbumPage` (`photos` groupées | `text` autonome) ; les pages de
@@ -351,7 +362,11 @@ de compilation sinon). Valeurs = chaînes **ou fonctions** (pluriel/interpolatio
 - `src/frenchPhonetic.json` est un **asset généré de ~5,9 Mo** (bundle ~15 Mo, premier chargement
   plus long) : ne pas le supprimer ; régénérable par un script node (talisman + `an-array-of-french-words`).
 - `src/montserratFonts.ts` = **~0,9 Mo** de base64 (graisses 500 + 800), généré une fois depuis
-  `@expo-google-fonts/montserrat`.
+  `@expo-google-fonts/montserrat`. `src/albumFonts.ts` = **~0,5 Mo** (Lora 400/700, Caveat
+  400/700), **sous-ensemble latin** via `pyftsubset` (fonttools, venv temporaire) depuis
+  `npm pack @expo-google-fonts/lora|caveat` — `npm pack` ne touche pas `node_modules`. Seuls
+  `Lora-Bold` / `Caveat-Bold.ttf` sont dans `assets/fonts/` (échantillons de `ExportModal`).
+  Le PDF n'embarque que les familles employées (`famsUsed`).
 - **Icônes & logo** : sources SVG et procédure de régénération dans **`design/README.md`**
   (dessin actuel « v7 » = monogramme « CC » seul, historique des versions refusées, `sharp` en
   `--no-save`, table des PNG produits dans `assets/`). Retoucher le dessin = éditer le SVG puis

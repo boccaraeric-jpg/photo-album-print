@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -11,12 +11,22 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, F } from '../theme';
 import { useLang } from '../i18n';
-import type { DateFormat, ExportOptions, FrameStyle, PhotoSize } from '../types';
+import { effectiveCover } from '../albumStyle';
+import type {
+  CoverStyle,
+  DateFormat,
+  ExportOptions,
+  FrameStyle,
+  PhotoSize,
+  Typeface,
+} from '../types';
 
 interface Props {
   visible: boolean;
   /** Options pré-sélectionnées (dernier export). */
   initial: ExportOptions;
+  /** Photos du dossier (hors pages de texte) : un montage de couverture en exige un minimum. */
+  photoCount: number;
   /** Vrai pendant la préparation de l'aperçu (lecture des images). */
   preparing: boolean;
   /** Ouvre l'aperçu avant envoi avec les options choisies. */
@@ -36,6 +46,15 @@ const ALIGN_KEYS: ('left' | 'center' | 'right')[] = ['left', 'center', 'right'];
 // bande de commentaire où placer quoi que ce soit.
 const COMMENT_POS_KEYS: ('top' | 'middle' | 'bottom')[] = ['top', 'middle', 'bottom'];
 const DATE_FORMAT_KEYS: DateFormat[] = ['short', 'shortTime', 'long', 'full', 'none'];
+const TYPEFACE_KEYS: Typeface[] = ['sans', 'serif', 'script'];
+const COVER_KEYS: CoverStyle[] = ['classic', 'scatter', 'filmstrip'];
+// Chaque choix de typographie s'écrit dans sa propre police : un nom de police
+// ne dit rien à un utilisateur, un échantillon si.
+const TYPEFACE_FONTS: Record<Typeface, string> = {
+  sans: F.display,
+  serif: F.serifBold,
+  script: F.scriptBold,
+};
 
 const BACKGROUNDS = [
   '#f6f1e9', // crème
@@ -80,6 +99,74 @@ function Chip({
   );
 }
 
+/** Carte de choix illustrée (échantillon de police ou schéma de couverture). */
+function Tile({
+  label,
+  hint,
+  selected,
+  onPress,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  selected: boolean;
+  onPress: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Pressable
+      style={[styles.tile, selected && styles.tileSelected]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
+    >
+      {children}
+      <Text style={[styles.tileLabel, selected && styles.tileLabelSelected]}>{label}</Text>
+      {!!hint && <Text style={styles.tileHint}>{hint}</Text>}
+    </Pressable>
+  );
+}
+
+/** Schéma miniature d'une page de couverture (pas de photo réelle : lisible d'un coup d'œil). */
+function CoverSketch({ kind }: { kind: CoverStyle }) {
+  if (kind === 'classic') {
+    return (
+      <View style={styles.sketch}>
+        <View style={[styles.sketchLine, { width: 30, marginTop: 6 }]} />
+        <View style={[styles.sketchPhoto, { width: 38, height: 40, marginTop: 6 }]} />
+      </View>
+    );
+  }
+  if (kind === 'scatter') {
+    const polas: [number, number, string][] = [
+      [5, 16, '-9deg'],
+      [26, 14, '8deg'],
+      [7, 42, '7deg'],
+      [27, 44, '-6deg'],
+      [16, 28, '-2deg'],
+    ];
+    return (
+      <View style={styles.sketch}>
+        <View style={[styles.sketchLine, { width: 26, marginTop: 5 }]} />
+        {polas.map(([left, top, rotate], i) => (
+          <View key={i} style={[styles.sketchPola, { left, top, transform: [{ rotate }] }]} />
+        ))}
+      </View>
+    );
+  }
+  return (
+    <View style={styles.sketch}>
+      <View style={styles.sketchGrid}>
+        {Array.from({ length: 9 }, (_, i) => (
+          <View key={i} style={styles.sketchCell} />
+        ))}
+      </View>
+      <View style={[styles.sketchLine, { width: 26, marginTop: 6 }]} />
+    </View>
+  );
+}
+
 /**
  * Options de personnalisation du mini album, affichées avant l'export.
  *
@@ -91,6 +178,7 @@ function Chip({
 export function ExportModal({
   visible,
   initial,
+  photoCount,
   preparing,
   onPreview,
   onClose,
@@ -140,6 +228,51 @@ export function ExportModal({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator
         >
+          {/* Typographie et couverture : familial seulement (le pro garde sa
+              page de garde factuelle en Montserrat). En tête de l'écran : ce
+              sont les deux choix qui changent le plus l'allure de l'album. */}
+          {!isPro && (
+            <>
+              <Text style={styles.label}>{L.export.typefaceLabel}</Text>
+              <View style={styles.tiles}>
+                {TYPEFACE_KEYS.map((value) => (
+                  <Tile
+                    key={value}
+                    label={L.export.typefaces[value]}
+                    selected={options.typeface === value}
+                    onPress={() => setOptions((o) => ({ ...o, typeface: value }))}
+                  >
+                    <Text
+                      style={[styles.sample, { fontFamily: TYPEFACE_FONTS[value] }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                    >
+                      {L.export.typefaceSample}
+                    </Text>
+                  </Tile>
+                ))}
+              </View>
+
+              <Text style={styles.label}>{L.export.coverLabel}</Text>
+              <View style={styles.tiles}>
+                {COVER_KEYS.map((value) => (
+                  <Tile
+                    key={value}
+                    label={L.export.covers[value]}
+                    hint={L.export.coverHints[value]}
+                    selected={options.cover === value}
+                    onPress={() => setOptions((o) => ({ ...o, cover: value }))}
+                  >
+                    <CoverSketch kind={value} />
+                  </Tile>
+                ))}
+              </View>
+              {effectiveCover(options.cover, photoCount) !== options.cover && (
+                <Text style={styles.note}>{L.export.coverFallback(photoCount)}</Text>
+              )}
+            </>
+          )}
+
           {/* Taille, fond et liseré n'existent qu'en familial : le gabarit pro
               impose une photo pleine largeur sur fond blanc. */}
           {!isPro && (
@@ -360,6 +493,58 @@ const styles = StyleSheet.create({
   chipTextSelected: { color: C.paper },
   chipHint: { fontFamily: F.mono, fontSize: 11, color: C.muted, marginTop: 1 },
   chipHintSelected: { color: 'rgba(241,233,214,0.8)' },
+  tiles: { flexDirection: 'row', gap: 8 },
+  tile: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    backgroundColor: C.tan,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  // Sélection par la bordure, pas par un fond plein : l'échantillon et le
+  // schéma doivent rester lisibles dans leurs vraies couleurs.
+  tileSelected: { borderColor: C.sienna, backgroundColor: C.card },
+  tileLabel: { fontFamily: F.monoBold, fontSize: 13, color: C.ink, marginTop: 8 },
+  tileLabelSelected: { color: C.sienna },
+  tileHint: { fontFamily: F.mono, fontSize: 11, color: C.muted, marginTop: 1 },
+  sample: { fontSize: 22, color: C.ink, height: 34, lineHeight: 34 },
+  note: { fontFamily: F.mono, fontSize: 12, color: C.muted, marginTop: 8 },
+  sketch: {
+    width: 48,
+    height: 64,
+    backgroundColor: '#fffdf8',
+    borderWidth: 1,
+    borderColor: C.line,
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  sketchLine: { height: 3, borderRadius: 1.5, backgroundColor: C.ink },
+  sketchPhoto: { backgroundColor: C.muted },
+  sketchPola: {
+    position: 'absolute',
+    width: 15,
+    height: 17,
+    backgroundColor: C.muted,
+    borderWidth: 2,
+    borderBottomWidth: 4,
+    borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 1.5,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  sketchGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: 38,
+    gap: 1,
+    marginTop: 5,
+  },
+  sketchCell: { width: 12, height: 13, backgroundColor: C.muted },
   swatch: {
     width: 38,
     height: 38,

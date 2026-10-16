@@ -1,4 +1,5 @@
 import {
+  BlurStyle,
   ClipOp,
   ImageFormat,
   PaintStyle,
@@ -14,7 +15,23 @@ import { dict, localeTag, type Lang } from './i18n';
 import { paginateEntries, PER_PAGE } from './paginate';
 import { albumFileBase } from './pdf';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
+import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
 import { parseRich, type RichRun } from './richText';
+import { readPrintBase64 } from './photoFiles';
+import {
+  COVER_W,
+  coverPicks,
+  effectiveCover,
+  gridLayout,
+  GRID,
+  POLAROID,
+  polaroidBox,
+  scatterSlots,
+  SCATTER_TITLE,
+  seedOf,
+  TYPE_SPECS,
+  type FontFam,
+} from './albumStyle';
 
 /** Tronque un texte à `n` mots (légende de pleine page). */
 function limitWords(text: string, n: number): string {
@@ -39,32 +56,41 @@ interface TextOpts {
   maxLines?: number;
   bold?: boolean;
   letterSpacing?: number;
+  /** Famille de police (Montserrat par défaut). */
+  fam?: FontFam;
 }
 
-// Typefaces système mis en cache (l'API ParagraphBuilder rendait du vide sans
-// fournisseur de polices ; l'API bas niveau drawText + Font est fiable).
-let tfRegular: SkTypeface | undefined;
-let tfBold: SkTypeface | undefined;
-let tfResolved = false;
+// Polices embarquées, mêmes fichiers que le PDF (cf. `FACES` de `pdf.ts`).
+const FACE_DATA: Record<FontFam, [string, string]> = {
+  sans: [MONTSERRAT_500, MONTSERRAT_800],
+  serif: [LORA_400, LORA_700],
+  script: [CAVEAT_400, CAVEAT_700],
+};
 
-function typefaceFor(bold: boolean): SkTypeface | undefined {
-  if (!tfResolved) {
-    tfResolved = true;
-    try {
-      // Montserrat embarquée (500 corps / 800 titres), pour coller au PDF.
-      tfRegular =
-        Skia.Typeface.MakeFreeTypeFaceFromData(
-          Skia.Data.fromBase64(MONTSERRAT_500),
-        ) ?? undefined;
-      tfBold =
-        Skia.Typeface.MakeFreeTypeFaceFromData(
-          Skia.Data.fromBase64(MONTSERRAT_800),
-        ) ?? undefined;
-    } catch {
-      // Chargement impossible : Skia.Font(undefined) prendra la police par défaut.
-    }
+// Typefaces mis en cache, créés à la première demande de chaque famille
+// (l'API ParagraphBuilder rendait du vide sans fournisseur de polices ;
+// l'API bas niveau drawText + Font est fiable).
+const typefaces = new Map<FontFam, { regular?: SkTypeface; bold?: SkTypeface }>();
+
+function makeFace(b64: string): SkTypeface | undefined {
+  try {
+    return Skia.Typeface.MakeFreeTypeFaceFromData(Skia.Data.fromBase64(b64)) ?? undefined;
+  } catch {
+    // Chargement impossible : Skia.Font(undefined) prendra la police par défaut.
+    return undefined;
   }
-  return bold ? tfBold ?? tfRegular : tfRegular;
+}
+
+function typefaceFor(bold: boolean, fam: FontFam = 'sans'): SkTypeface | undefined {
+  let faces = typefaces.get(fam);
+  if (!faces) {
+    const [regular, heavy] = FACE_DATA[fam];
+    faces = { regular: makeFace(regular), bold: makeFace(heavy) };
+    typefaces.set(fam, faces);
+  }
+  const face = bold ? faces.bold ?? faces.regular : faces.regular;
+  // Famille illisible : repli sur Montserrat plutôt que sur la police système.
+  return face ?? (fam === 'sans' ? undefined : typefaceFor(bold, 'sans'));
 }
 
 /** Découpe un texte en lignes tenant dans `width`, avec ellipsis si tronqué. */
@@ -114,7 +140,7 @@ function drawText(
 ): number {
   if (!text) return 0;
   try {
-    const font = Skia.Font(typefaceFor(!!o.bold), o.size);
+    const font = fontFor(!!o.bold, o.size, o.fam);
     const paint = Skia.Paint();
     paint.setAntiAlias(true);
     paint.setColor(Skia.Color(o.color));
@@ -155,14 +181,14 @@ interface Seg {
 /** Un mot = un ou plusieurs fragments collés (le style peut changer en son sein). */
 type Word = Seg[];
 
-// Les polices Skia sont coûteuses à créer : une par (graisse, taille) suffit.
+// Les polices Skia sont coûteuses à créer : une par (famille, graisse, taille) suffit.
 const fontCache = new Map<string, ReturnType<typeof Skia.Font>>();
 
-function fontFor(bold: boolean, size: number) {
-  const key = `${bold ? 'b' : 'r'}:${size}`;
+function fontFor(bold: boolean, size: number, fam: FontFam = 'sans') {
+  const key = `${fam}:${bold ? 'b' : 'r'}:${size}`;
   const hit = fontCache.get(key);
   if (hit) return hit;
-  const font = Skia.Font(typefaceFor(bold), size);
+  const font = Skia.Font(typefaceFor(bold, fam), size);
   fontCache.set(key, font);
   return font;
 }
@@ -171,7 +197,7 @@ const segWidth = (seg: Seg) => seg.w;
 const wordWidth = (word: Word) => word.reduce((sum, seg) => sum + segWidth(seg), 0);
 
 /** Découpe les fragments de style en mots mesurés (les blancs séparent). */
-function toWords(runs: RichRun[], size: number): Word[] {
+function toWords(runs: RichRun[], size: number, fam: FontFam): Word[] {
   const words: Word[] = [];
   let current: Word = [];
   const flush = () => {
@@ -186,7 +212,7 @@ function toWords(runs: RichRun[], size: number): Word[] {
         flush();
         continue;
       }
-      const font = fontFor(run.bold, size);
+      const font = fontFor(run.bold, size, fam);
       current.push({
         text: piece,
         bold: run.bold,
@@ -205,8 +231,9 @@ function layoutRich(
   size: number,
   width: number,
   maxLines: number,
+  fam: FontFam,
 ): Word[][] {
-  const spaceW = fontFor(false, size).getTextWidth(' ');
+  const spaceW = fontFor(false, size, fam).getTextWidth(' ');
   const lines: Word[][] = [];
   let line: Word[] = [];
   let lineW = 0;
@@ -238,7 +265,7 @@ function layoutRich(
     const lastWord = lastLine[lastLine.length - 1];
     const seg = lastWord?.[lastWord.length - 1];
     if (seg) {
-      const font = fontFor(seg.bold, size);
+      const font = fontFor(seg.bold, size, fam);
       const others =
         lastLine.reduce((sum, word) => sum + wordWidth(word), 0) -
         seg.w +
@@ -262,12 +289,13 @@ const lineHeightFor = (size: number) => size * 1.32;
 function measureRich(
   text: string,
   width: number,
-  o: Pick<TextOpts, 'size' | 'maxLines'>,
+  o: Pick<TextOpts, 'size' | 'maxLines' | 'fam'>,
 ): number {
   if (!text) return 0;
   try {
-    const words = toWords(parseRich(text), o.size);
-    const lines = layoutRich(words, o.size, width, o.maxLines ?? 999);
+    const fam = o.fam ?? 'sans';
+    const words = toWords(parseRich(text), o.size, fam);
+    const lines = layoutRich(words, o.size, width, o.maxLines ?? 999, fam);
     return lines.length * lineHeightFor(o.size);
   } catch {
     return 0;
@@ -294,10 +322,11 @@ function drawRichText(
     rule.setStyle(PaintStyle.Stroke);
     rule.setStrokeWidth(Math.max(1, o.size / 16));
 
-    const words = toWords(parseRich(text), o.size);
-    const lines = layoutRich(words, o.size, width, o.maxLines ?? 999);
+    const fam = o.fam ?? 'sans';
+    const words = toWords(parseRich(text), o.size, fam);
+    const lines = layoutRich(words, o.size, width, o.maxLines ?? 999, fam);
     const lineHeight = lineHeightFor(o.size);
-    const spaceW = fontFor(false, o.size).getTextWidth(' ');
+    const spaceW = fontFor(false, o.size, fam).getTextWidth(' ');
 
     lines.forEach((line, idx) => {
       const textW =
@@ -310,7 +339,7 @@ function drawRichText(
       const baseline = y + idx * lineHeight + o.size;
       for (const word of line) {
         for (const seg of word) {
-          canvas.drawText(seg.text, cx, baseline, paint, fontFor(seg.bold, o.size));
+          canvas.drawText(seg.text, cx, baseline, paint, fontFor(seg.bold, o.size, fam));
           if (seg.underline) {
             const uy = baseline + o.size * 0.16;
             canvas.drawLine(cx, uy, cx + seg.w, uy, rule);
@@ -405,6 +434,59 @@ async function loadImage(uri: string) {
   } catch {
     return null;
   }
+}
+
+/** Photo réduite (côté long 900 px) pour les montages de couverture. */
+async function loadThumb(uri: string) {
+  try {
+    const b64 = await readPrintBase64(uri, 900, 0.8);
+    return Skia.Image.MakeImageFromEncoded(Skia.Data.fromBase64(b64));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Polaroïd incliné du pêle-mêle — pendant Skia de `.pola` (`pdf.ts`) : même
+ * centre, même rotation autour du centre, mêmes marges de cadre.
+ */
+function drawPolaroid(
+  canvas: SkCanvas,
+  img: ReturnType<typeof Skia.Image.MakeImageFromEncoded>,
+  slot: { cx: number; cy: number; size: number; rot: number },
+  k: number,
+  dark: boolean,
+): void {
+  const box = polaroidBox(slot.size);
+  const w = box.w * k;
+  const h = box.h * k;
+  canvas.save();
+  canvas.translate(slot.cx * k, slot.cy * k);
+  canvas.rotate(slot.rot, 0, 0);
+
+  // Ombre portée (≈ box-shadow 0 6px 16px du PDF).
+  const shadow = Skia.Paint();
+  shadow.setAntiAlias(true);
+  shadow.setColor(Skia.Color(dark ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.26)'));
+  shadow.setMaskFilter(Skia.MaskFilter.MakeBlur(BlurStyle.Normal, 7 * k, true));
+  canvas.drawRect(Skia.XYWHRect(-w / 2, -h / 2 + 6 * k, w, h), shadow);
+
+  const frame = Skia.Paint();
+  frame.setAntiAlias(true);
+  frame.setColor(Skia.Color('#ffffff'));
+  canvas.drawRRect(rrect(-w / 2, -h / 2, w, h, 2 * k), frame);
+
+  const px = -w / 2 + POLAROID.pad * k;
+  const py = -h / 2 + POLAROID.pad * k;
+  const side = slot.size * k;
+  if (img) {
+    drawCoverImage(canvas, img, px, py, side, side, 0);
+  } else {
+    const empty = Skia.Paint();
+    empty.setColor(Skia.Color('rgba(31,29,26,0.08)'));
+    canvas.drawRect(Skia.XYWHRect(px, py, side, side), empty);
+  }
+  canvas.restore();
 }
 
 /** Grille (colonnes, lignes) pour un nombre de photos par page. */
@@ -578,7 +660,11 @@ async function renderPhotoPage(
     const place = options.showPlace ? photo.place?.trim() : undefined;
     const date = formatPhotoDate(photoDate(photo), options.dateFormat, lang);
     const meta = [place, date].filter(Boolean).join(' · ');
-    const captionH = comment || meta ? (perPage === 4 ? 92 : 122) : 0;
+    // La légende agrandie (manuscrite) prend sa place sur la photo, pas sur
+    // l'espace entre les cartes : sinon la 2ᵉ ligne débordait sur le pied de page.
+    const spec = TYPE_SPECS[options.typeface];
+    const captionH =
+      comment || meta ? Math.round((perPage === 4 ? 92 : 122) * spec.captionScale) : 0;
 
     const imgX = cellX + pad;
     const imgY = cellY + pad;
@@ -622,13 +708,13 @@ async function renderPhotoPage(
     // Position verticale du commentaire dans la bande qui lui est réservée
     // (pendant Skia de la bande `.caption` du PDF). On mesure le bloc avant de
     // le dessiner pour répartir le vide au-dessus, autour ou en dessous.
-    const commentSize = perPage === 4 ? 28 : 34;
+    const commentSize = (perPage === 4 ? 28 : 34) * spec.captionScale;
     const metaSize = perPage === 4 ? 10 : 11;
     const bandTop = imgY + imgH + 14;
     const bandH = Math.max(0, captionH - 14);
     const blockH =
       (comment
-        ? measureRich(comment, imgW, { size: commentSize, maxLines: 2 })
+        ? measureRich(comment, imgW, { size: commentSize, maxLines: 2, fam: spec.caption })
         : 0) +
       (comment && meta ? 6 : 0) +
       (meta ? lineHeightFor(metaSize) : 0);
@@ -644,6 +730,7 @@ async function renderPhotoPage(
         size: commentSize,
         maxLines: 2,
         align,
+        fam: spec.caption,
       });
       ty += 6;
     }
@@ -654,6 +741,7 @@ async function renderPhotoPage(
         maxLines: 1,
         align: dateAlign,
         letterSpacing: 1,
+        fam: spec.meta,
       });
     }
   }
@@ -728,6 +816,71 @@ async function renderCover(
   bg.setColor(Skia.Color(options.background));
   canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
 
+  const spec = TYPE_SPECS[options.typeface];
+  // Année (ou plage d'années) en gras sous le titre, comme dans l'aperçu.
+  const years = photos.map((p) => new Date(photoDate(p)).getFullYear());
+  const yearLabel = years.length
+    ? Math.min(...years) === Math.max(...years)
+      ? `${Math.min(...years)}`
+      : `${Math.min(...years)} – ${Math.max(...years)}`
+    : '';
+
+  const style = effectiveCover(options.cover, photos.length);
+  if (style !== 'classic') {
+    const k = W / COVER_W; // points A4 → pixels de l'image
+    const picks = coverPicks(photos, style, coverPhotoId);
+    // Vignettes réduites : jusqu'à 9 photos décodées en pleine résolution
+    // (~48 Mo chacune) feraient tuer l'app par iOS.
+    const thumbs = await Promise.all(picks.map((p) => loadThumb(p.uri)));
+    const head = (top: number, size: number) => {
+      const ty =
+        top * k +
+        drawText(canvas, title, SCATTER_TITLE.side * k, top * k, (COVER_W - 2 * SCATTER_TITLE.side) * k, {
+          color: ink,
+          size: size * spec.titleScale * k,
+          align: TextAlign.Center,
+          bold: true,
+          maxLines: 2,
+          fam: spec.title,
+        });
+      if (yearLabel) {
+        drawText(canvas, yearLabel, PAD, ty + 8 * k, W - 2 * PAD, {
+          color: accent,
+          size: 24 * spec.titleScale * k,
+          align: TextAlign.Center,
+          bold: true,
+          maxLines: 1,
+          fam: spec.title,
+        });
+      }
+    };
+
+    if (style === 'scatter') {
+      head(SCATTER_TITLE.top, SCATTER_TITLE.size);
+      const slots = scatterSlots(picks.length, seedOf(picks.map((p) => p.id)));
+      // Ordre d'empilement : la photo étoilée en dernier, donc au-dessus.
+      const order = slots.map((_, i) => i).sort((a, b) => slots[a].z - slots[b].z);
+      for (const i of order) {
+        drawPolaroid(canvas, thumbs[i], slots[i], k, dark);
+      }
+    } else {
+      const layout = gridLayout(picks.length);
+      picks.forEach((_, i) => {
+        const c = layout.cells[i];
+        const x = c.x * k;
+        const y = c.y * k;
+        const w = c.w * k;
+        const h = c.h * k;
+        const empty = Skia.Paint();
+        empty.setColor(Skia.Color('rgba(31,29,26,0.08)'));
+        canvas.drawRect(Skia.XYWHRect(x, y, w, h), empty);
+        drawCoverImage(canvas, thumbs[i], x, y, w, h, 0);
+      });
+      head(layout.titleY, GRID.titleSize);
+    }
+    return encodeSurface(surface, title, 0);
+  }
+
   const cover = photos.find((p) => p.id === coverPhotoId) ?? photos[0];
   if (cover) {
     const img = await loadImage(cover.uri);
@@ -746,27 +899,22 @@ async function renderCover(
   ty += 18;
   ty += drawText(canvas, title, PAD, ty, W - 2 * PAD, {
     color: ink,
-    size: 76,
+    size: 76 * spec.titleScale,
     align: TextAlign.Center,
     bold: true,
     maxLines: 2,
+    fam: spec.title,
   });
-  // Année (ou plage d'années) en gras sous le titre, comme dans l'aperçu.
-  const years = photos.map((p) => new Date(photoDate(p)).getFullYear());
-  const yearLabel = years.length
-    ? Math.min(...years) === Math.max(...years)
-      ? `${Math.min(...years)}`
-      : `${Math.min(...years)} – ${Math.max(...years)}`
-    : '';
   if (yearLabel) {
     ty += 16;
     drawText(canvas, yearLabel, PAD, ty, W - 2 * PAD, {
       color: accent,
-      size: 52,
+      size: 52 * spec.titleScale,
       align: TextAlign.Center,
       bold: true,
       letterSpacing: 4,
       maxLines: 1,
+      fam: spec.title,
     });
   }
   // Familial : pas de nombre total de photos affiché sur la couverture.
@@ -796,7 +944,9 @@ function renderTextPage(
   // hauteur (mêmes règles que drawText), puis on choisit le y de départ.
   const bodyText = item.comment.trim();
   const bodySize = 46;
-  const bodyFont = Skia.Font(typefaceFor(false), bodySize);
+  // Pro : Montserrat imposée (cf. `buildAlbumImages`, typeface forcée à `sans`).
+  const bodyFam = TYPE_SPECS[options.typeface].text;
+  const bodyFont = fontFor(false, bodySize, bodyFam);
   const bodyLines = wrapLines(bodyFont, bodyText, W - 2 * PAD, 12);
   const blockH = bodyLines.length * bodySize * 1.32;
   // Pro : texte en HAUT à gauche (présentation « document ») ; familial : centré
@@ -814,6 +964,7 @@ function renderTextPage(
     size: bodySize,
     align: bodyAlign,
     maxLines: 12,
+    fam: bodyFam,
   });
   drawText(canvas, String(pageNo), PAD, H - PAD - 24, W - 2 * PAD, {
     color: muted,
@@ -847,11 +998,17 @@ async function renderFullPage(
 
   const comment = limitWords(item.comment, 15);
   if (comment) {
-    drawRichText(canvas, comment, PAD, H - capH + 54, W - 2 * PAD, {
+    const spec = TYPE_SPECS[options.typeface];
+    // Première ligne centrée dans le bandeau quel que soit le corps (en
+    // Montserrat : H - 96, la position d'origine).
+    const size = 28 * spec.captionScale;
+    const top = H - capH / 2 - lineHeightFor(size) / 2 - 2;
+    drawRichText(canvas, comment, PAD, top, W - 2 * PAD, {
       color: ink,
-      size: 28,
+      size,
       align: TextAlign.Center,
       maxLines: 2,
+      fam: spec.caption,
     });
   }
   return encodeSurface(surface, title, pageNo);
@@ -897,19 +1054,25 @@ export async function buildAlbumImages(
   const pro = options.style === 'pro';
   // En mode pro : gabarit imposé (fond blanc, 2 photos/page). L'encadrement, le
   // format et la position de la date restent réglables par l'utilisateur.
-  const eff: ExportOptions = pro ? { ...options, background: '#ffffff' } : options;
+  // Typographie et couverture restent celles du gabarit pro (Montserrat, page
+  // de garde factuelle), comme dans `buildProDocument`.
+  const eff: ExportOptions = pro
+    ? { ...options, background: '#ffffff', typeface: 'sans', cover: 'classic' }
+    : options;
   const perPage = pro ? 2 : PER_PAGE[options.photoSize];
   const full = !pro && options.photoSize === 'full';
 
   const photoEntries = photos.filter((p) => p.kind !== 'text');
   await push(await renderCover(photoEntries, eff, title, pro, lang, coverPhotoId));
 
-  // La photo de couverture ne réapparaît dans les pages que si elle porte un
-  // commentaire ; sinon elle n'est visible que sur la couverture.
+  // Couverture classique : la photo de couverture ne réapparaît dans les pages
+  // que si elle porte un commentaire. Les montages gardent toutes leurs photos
+  // dans les pages (même règle que `buildAlbumHtml`).
   const coverPhoto =
     photoEntries.find((p) => p.id === coverPhotoId) ?? photoEntries[0];
+  const classicCover = effectiveCover(eff.cover, photoEntries.length) === 'classic';
   const pageSource =
-    !pro && coverPhoto && coverPhoto.comment.trim().length === 0
+    !pro && classicCover && coverPhoto && coverPhoto.comment.trim().length === 0
       ? photos.filter((p) => p.id !== coverPhoto.id)
       : photos;
 

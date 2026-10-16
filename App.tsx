@@ -128,6 +128,10 @@ export default function App() {
     Montserrat: require('./assets/fonts/Montserrat-Medium.ttf'),
     MontserratBold: require('./assets/fonts/Montserrat-Bold.ttf'),
     MontserratExtraBold: require('./assets/fonts/Montserrat-ExtraBold.ttf'),
+    // Échantillons du choix de typographie (`ExportModal`) : le rendu de
+    // l'album embarque, lui, ses propres copies en base64 (`albumFonts.ts`).
+    LoraBold: require('./assets/fonts/Lora-Bold.ttf'),
+    CaveatBold: require('./assets/fonts/Caveat-Bold.ttf'),
   });
   if (!fontsLoaded) {
     return <View style={{ flex: 1, backgroundColor: C.paper }} />;
@@ -1762,6 +1766,7 @@ function AlbumScreen({
       <ExportModal
         visible={exportVisible}
         initial={exportOptions}
+        photoCount={orderedPhotos.filter((p) => p.kind !== 'text').length}
         preparing={preparing}
         onPreview={openPreview}
         onClose={() => setExportVisible(false)}

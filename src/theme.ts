@@ -20,4 +20,7 @@ export const F = {
   display: 'MontserratExtraBold', // titres (800, comme les titres du rendu album)
   mono: 'Montserrat', // corps, labels, champs (500, comme le corps du rendu album)
   monoBold: 'MontserratBold', // boutons, valeurs mises en avant (700)
+  // Échantillons du choix de typographie de l'album (écran de mise en page).
+  serifBold: 'LoraBold',
+  scriptBold: 'CaveatBold',
 };

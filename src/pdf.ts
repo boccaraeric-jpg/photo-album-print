@@ -7,15 +7,54 @@ import { fileDateStamp, formatPhotoDate, photoDate } from './dateFormat';
 import { dict, localeTag, SUPPORTED, type Lang } from './i18n';
 import { paginateEntries, PER_PAGE } from './paginate';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
+import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
 import { richToHtml } from './richText';
+import {
+  COVER_H,
+  coverPicks,
+  effectiveCover,
+  famsUsed,
+  gridLayout,
+  GRID,
+  POLAROID,
+  polaroidBox,
+  scatterSlots,
+  SCATTER_TITLE,
+  seedOf,
+  TYPE_SPECS,
+  type FontFam,
+} from './albumStyle';
 
-/** Déclarations @font-face Montserrat (500 corps + 800 titres) embarquées en
- *  base64, pour un rendu identique et hors-ligne dans le PDF/aperçu. */
-const MONTSERRAT_FACE = `
-  @font-face { font-family: 'Montserrat'; font-weight: 500; font-style: normal;
-    src: url(data:font/ttf;base64,${MONTSERRAT_500}) format('truetype'); }
-  @font-face { font-family: 'Montserrat'; font-weight: 800; font-style: normal;
-    src: url(data:font/ttf;base64,${MONTSERRAT_800}) format('truetype'); }`;
+/** Polices embarquées en base64 par famille (graisse normale + grasse), pour un
+ *  rendu identique et hors-ligne dans le PDF/aperçu. */
+const FACES: Record<FontFam, { name: string; regular: [number, string]; bold: [number, string] }> = {
+  sans: { name: 'Montserrat', regular: [500, MONTSERRAT_500], bold: [800, MONTSERRAT_800] },
+  serif: { name: 'Lora', regular: [400, LORA_400], bold: [700, LORA_700] },
+  script: { name: 'Caveat', regular: [400, CAVEAT_400], bold: [700, CAVEAT_700] },
+};
+
+/** Pile CSS d'une famille (Georgia en secours si la police ne charge pas). */
+const FAM_CSS: Record<FontFam, string> = {
+  sans: "'Montserrat', Georgia, serif",
+  serif: "'Lora', Georgia, serif",
+  script: "'Caveat', 'Lora', Georgia, cursive",
+};
+
+function fontFaces(fams: FontFam[]): string {
+  return fams
+    .flatMap((fam) => {
+      const f = FACES[fam];
+      return [f.regular, f.bold].map(
+        ([weight, b64]) => `
+  @font-face { font-family: '${f.name}'; font-weight: ${weight}; font-style: normal;
+    src: url(data:font/ttf;base64,${b64}) format('truetype'); }`,
+      );
+    })
+    .join('');
+}
+
+/** Montserrat seule : gabarit pro, dont la typographie ne change pas. */
+const MONTSERRAT_FACE = fontFaces(['sans']);
 
 /**
  * Politique de sécurité du document (aperçu WebView **et** PDF `expo-print`).
@@ -48,6 +87,8 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   dateAlign: 'left',
   textAlign: 'center',
   commentVAlign: 'top',
+  typeface: 'sans',
+  cover: 'classic',
 };
 
 /** Garde la valeur si elle fait partie des choix connus, sinon le défaut. */
@@ -90,6 +131,8 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     dateAlign: oneOf(o.dateAlign, align, d.dateAlign),
     textAlign: oneOf(o.textAlign, align, d.textAlign),
     commentVAlign: oneOf(o.commentVAlign, ['top', 'middle', 'bottom'] as const, d.commentVAlign),
+    typeface: oneOf(o.typeface, ['sans', 'serif', 'script'] as const, d.typeface),
+    cover: oneOf(o.cover, ['classic', 'scatter', 'filmstrip'] as const, d.cover),
   };
 }
 
@@ -278,7 +321,12 @@ function buildStyles(options: ExportOptions): string {
   // Ce que la bande coûte en plus d'une légende d'une ligne, pris sur la photo.
   const shrink = band ? band - CAPTION_BASES[options.photoSize] : 0;
   const phHeight = `${parseInt(PH_HEIGHTS[options.photoSize], 10) - shrink}px`;
-  const captionSize = options.photoSize === 'small' ? '16px' : '18px';
+  // Typographie : une famille par rôle (titre, légende, texte long, date).
+  const spec = TYPE_SPECS[options.typeface];
+  const fam = (f: FontFam) => FAM_CSS[f];
+  const regular = (f: FontFam) => FACES[f].regular[0];
+  const bold = (f: FontFam) => FACES[f].bold[0];
+  const captionSize = `${(options.photoSize === 'small' ? 16 : 18) * spec.captionScale}px`;
   const cardGap = options.photoSize === 'small' ? '12px' : '16px';
 
   // Encadré : les cadres à fond blanc gardent un texte sombre ; les cadres
@@ -324,7 +372,7 @@ function buildStyles(options: ExportOptions): string {
   }
 
   return `
-  ${MONTSERRAT_FACE}
+  ${fontFaces(famsUsed(options.typeface))}
   * {
     box-sizing: border-box;
     /* Indispensable : sans cela, le moteur d'impression iOS supprime les
@@ -334,7 +382,7 @@ function buildStyles(options: ExportOptions): string {
   }
   body {
     margin: 0; background: ${options.background}; color: ${ink};
-    font-family: 'Montserrat', Georgia, serif; font-weight: 500;
+    font-family: ${fam(spec.meta)}; font-weight: ${regular(spec.meta)};
   }
   figure { margin: 0; }
   /* Pas de hauteur imposée : le contenu (dimensionné en px, total < page)
@@ -359,13 +407,33 @@ function buildStyles(options: ExportOptions): string {
     font-size: 12px; letter-spacing: 5px; color: ${accent}; font-weight: 700;
   }
   .cover-title {
-    margin: 16px 0 0; font-family: 'Montserrat', Georgia, serif;
-    font-weight: 800; font-size: 58px; line-height: 1.04; letter-spacing: 0.5px; color: ${ink};
+    margin: 16px 0 0; font-family: ${fam(spec.title)};
+    font-weight: ${bold(spec.title)}; font-size: ${58 * spec.titleScale}px; line-height: 1.04;
+    letter-spacing: 0.5px; color: ${ink};
   }
   .cover-year {
-    margin: 12px 0 0; font-family: 'Montserrat', Georgia, serif;
-    font-size: 38px; letter-spacing: 3px; color: ${accent}; font-weight: 800;
+    margin: 12px 0 0; font-family: ${fam(spec.title)};
+    font-size: ${38 * spec.titleScale}px; letter-spacing: 3px; color: ${accent};
+    font-weight: ${bold(spec.title)};
   }
+
+  /* --- Couvertures montées (pêle-mêle, grille) : gabarit calculé dans
+     albumStyle.ts, posé en absolu pour coller au rendu Skia --- */
+  .cover-abs { position: relative; height: ${COVER_H}px; padding: 0; overflow: hidden; }
+  .cv-head {
+    position: absolute; top: ${SCATTER_TITLE.top}px;
+    left: ${SCATTER_TITLE.side}px; right: ${SCATTER_TITLE.side}px; text-align: center;
+  }
+  .cover-abs .cover-title { margin: 0; font-size: ${SCATTER_TITLE.size * spec.titleScale}px; }
+  .cover-abs .cover-year { margin: 8px 0 0; font-size: ${24 * spec.titleScale}px; }
+  .grid-head .cover-title { font-size: ${GRID.titleSize * spec.titleScale}px; }
+  .pola {
+    position: absolute; margin: 0; background: #fff; border-radius: 2px;
+    padding: ${POLAROID.pad}px ${POLAROID.pad}px ${POLAROID.bottom}px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, ${dark ? '0.55' : '0.26'});
+  }
+  .pola img, .cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cell { position: absolute; overflow: hidden; background: rgba(31,29,26,0.08); }
   .cover-hero {
     height: 470px; margin: 40px 0 0; overflow: hidden;
     border: 6px solid #fff; box-shadow: 0 8px 22px rgba(0, 0, 0, ${dark ? '0.55' : '0.22'});
@@ -398,7 +466,8 @@ function buildStyles(options: ExportOptions): string {
   .card.large .ph img { object-fit: contain; }
   .missing { color: ${muted}; font-style: italic; font-size: 13px; }
   .caption {
-    margin: 8px 4px 2px; font-size: ${captionSize}; line-height: 1.45;
+    margin: 8px 4px 2px; font-size: ${captionSize}; line-height: ${spec.lineHeight};
+    font-family: ${fam(spec.caption)}; font-weight: ${regular(spec.caption)};
     color: ${captionInk};
   }
   /* Bande de commentaire : hauteur MINIMALE (et non fixe), pour qu'un long
@@ -411,12 +480,13 @@ function buildStyles(options: ExportOptions): string {
   }`
       : ''
   }
-  .caption strong { font-weight: 800; }
+  .caption strong, .full-cap strong { font-weight: ${bold(spec.caption)}; }
   .caption u, .meta u, .full-cap u { text-decoration: underline; }
   .caption .date {
     display: block; margin-top: 3px; font-size: 6.5px;
     text-align: ${options.dateAlign ?? 'left'};
-    letter-spacing: 1px; text-transform: lowercase; font-weight: 500;
+    font-family: ${fam(spec.meta)};
+    letter-spacing: 1px; text-transform: lowercase; font-weight: ${regular(spec.meta)};
     color: ${dark ? '#cbc5b8' : '#6b6456'};
   }
 
@@ -427,7 +497,8 @@ function buildStyles(options: ExportOptions): string {
   .full-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .full-cap {
     height: 64px; padding: 0 44px; display: flex; align-items: center; justify-content: center;
-    font-size: 14px; line-height: 1.4; text-align: center; color: ${ink};
+    font-size: ${14 * spec.captionScale}px; line-height: 1.4; text-align: center; color: ${ink};
+    font-family: ${fam(spec.caption)}; font-weight: ${regular(spec.caption)};
   }
 
   /* --- Page de texte seule (texte centré verticalement sur la page) --- */
@@ -439,7 +510,7 @@ function buildStyles(options: ExportOptions): string {
   .textpage:last-of-type { page-break-after: auto; }
   .textpage .footer { position: absolute; left: 0; right: 0; bottom: 30px; margin: 0; }
   .textpage-body {
-    font-family: 'Montserrat', Georgia, serif; font-size: 21px; line-height: 1.6;
+    font-family: ${fam(spec.text)}; font-size: 21px; line-height: 1.6;
     color: ${ink}; text-align: ${options.textAlign}; white-space: pre-wrap;
   }
 
@@ -447,7 +518,7 @@ function buildStyles(options: ExportOptions): string {
   .end { text-align: center; padding-top: 330px; }
   .end .orn { font-size: 22px; color: ${accent}; margin: 0; }
   .end h2 {
-    font-family: 'Montserrat', Georgia, serif; font-weight: 800;
+    font-family: ${fam(spec.title)}; font-weight: ${bold(spec.title)};
     font-size: 26px; margin: 12px 0 6px; color: ${ink};
   }
   .end p { color: ${muted}; font-size: 13px; margin: 0; }
@@ -522,14 +593,75 @@ export async function buildAlbumHtml(
     items.find((it) => it.src);
   const coverSrc = coverItem?.src ?? '';
   const perPage = PER_PAGE[options.photoSize];
+  const coverStyle = effectiveCover(options.cover, photoEntries.length);
 
-  // La photo de couverture ne réapparaît dans les pages que si elle porte un
-  // commentaire ; sinon elle n'est visible que sur la couverture.
+  // Couverture classique : la photo de couverture ne réapparaît dans les pages
+  // que si elle porte un commentaire. Les montages (pêle-mêle, grille) sont un
+  // avant-goût de l'album : leurs photos restent toutes dans les pages.
   const coverPhoto = coverItem?.photo;
   const pageSource =
-    coverPhoto && coverPhoto.comment.trim().length === 0
+    coverStyle === 'classic' && coverPhoto && coverPhoto.comment.trim().length === 0
       ? photos.filter((p) => p.id !== coverPhoto.id)
       : photos;
+
+  const spec = TYPE_SPECS[options.typeface];
+  const coverTitle = escapeHtml(spec.uppercaseTitle ? title.toUpperCase() : title);
+  const coverYear = escapeHtml(photoEntries.length ? yearLabel(photoEntries) : '');
+  const srcOf = (p: Photo) => items.find((it) => it.photo.id === p.id)?.src ?? '';
+  const imgTag = (src: string) => (src ? `<img src="${src}" />` : '');
+  // Nombres seuls dans les attributs `style` (calculés, jamais saisis).
+  const px = (n: number) => `${Math.round(n * 10) / 10}px`;
+
+  let coverHtml: string;
+  if (coverStyle === 'scatter') {
+    const picks = coverPicks(photoEntries, 'scatter', coverPhotoId);
+    const slots = scatterSlots(picks.length, seedOf(picks.map((p) => p.id)));
+    const polas = picks
+      .map((p, i) => {
+        const s = slots[i];
+        const box = polaroidBox(s.size);
+        return `<figure class="pola" style="left:${px(s.cx - box.w / 2)};top:${px(s.cy - box.h / 2)};width:${px(box.w)};height:${px(box.h)};transform:rotate(${s.rot.toFixed(2)}deg);z-index:${s.z}">${imgTag(srcOf(p))}</figure>`;
+      })
+      .join('');
+    coverHtml = `
+        <section class="sheet cover-abs">
+          <div class="cv-head">
+            <h1 class="cover-title">${coverTitle}</h1>
+            <p class="cover-year">${coverYear}</p>
+          </div>
+          ${polas}
+        </section>`;
+  } else if (coverStyle === 'filmstrip') {
+    const picks = coverPicks(photoEntries, 'filmstrip', coverPhotoId);
+    const layout = gridLayout(picks.length);
+    const cells = picks
+      .map((p, i) => {
+        const c = layout.cells[i];
+        return `<div class="cell" style="left:${px(c.x)};top:${px(c.y)};width:${px(c.w)};height:${px(c.h)}">${imgTag(srcOf(p))}</div>`;
+      })
+      .join('');
+    coverHtml = `
+        <section class="sheet cover-abs">
+          ${cells}
+          <div class="cv-head grid-head" style="top:${px(layout.titleY)}">
+            <h1 class="cover-title">${coverTitle}</h1>
+            <p class="cover-year">${coverYear}</p>
+          </div>
+        </section>`;
+  } else {
+    coverHtml = `
+        <section class="sheet cover">
+          <span class="crop tl"></span><span class="crop tr"></span>
+          <span class="crop bl"></span><span class="crop br"></span>
+          <h1 class="cover-title">${coverTitle}</h1>
+          <p class="cover-year">${coverYear}</p>
+          <div class="cover-hero">${imgTag(coverSrc)}</div>
+          <div class="cover-foot">
+            <span>${escapeHtml(subtitle)}</span>
+            <span class="reg"></span>
+          </div>
+        </section>`;
+  }
 
   const pages = paginateEntries(pageSource, perPage)
     .map((page, index) => {
@@ -562,17 +694,7 @@ export async function buildAlbumHtml(
         <style>${buildStyles(options)}</style>
       </head>
       <body>
-        <section class="sheet cover">
-          <span class="crop tl"></span><span class="crop tr"></span>
-          <span class="crop bl"></span><span class="crop br"></span>
-          <h1 class="cover-title">${escapeHtml(title.toUpperCase())}</h1>
-          <p class="cover-year">${escapeHtml(photoEntries.length ? yearLabel(photoEntries) : '')}</p>
-          <div class="cover-hero">${coverSrc ? `<img src="${coverSrc}" />` : ''}</div>
-          <div class="cover-foot">
-            <span>${escapeHtml(subtitle)}</span>
-            <span class="reg"></span>
-          </div>
-        </section>
+        ${coverHtml}
         ${pages}
         <section class="sheet end">
           <p class="orn">✦</p>
