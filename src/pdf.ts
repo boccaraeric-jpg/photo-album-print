@@ -9,6 +9,7 @@ import { paginateEntries, PER_PAGE } from './paginate';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
 import { richToHtml } from './richText';
+import { buildMapModel, type MapModel, type MapRect } from './albumMap';
 import {
   COVER_H,
   coverPicks,
@@ -89,6 +90,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   commentVAlign: 'top',
   typeface: 'sans',
   cover: 'classic',
+  showMap: false,
 };
 
 /** Garde la valeur si elle fait partie des choix connus, sinon le défaut. */
@@ -133,6 +135,7 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     commentVAlign: oneOf(o.commentVAlign, ['top', 'middle', 'bottom'] as const, d.commentVAlign),
     typeface: oneOf(o.typeface, ['sans', 'serif', 'script'] as const, d.typeface),
     cover: oneOf(o.cover, ['classic', 'scatter', 'filmstrip'] as const, d.cover),
+    showMap: typeof o.showMap === 'boolean' ? o.showMap : d.showMap,
   };
 }
 
@@ -522,6 +525,10 @@ function buildStyles(options: ExportOptions): string {
     font-size: 26px; margin: 12px 0 6px; color: ${ink};
   }
   .end p { color: ${muted}; font-size: 13px; margin: 0; }
+
+  /* --- Carte des lieux : un SVG pleine page (cf. albumMap.ts) --- */
+  .mappage { padding: 0; height: 842px; overflow: hidden; }
+  .mappage svg { display: block; }
   ${
     options.liseret
       ? `/* Liseré BLANC (option additive) autour de CHAQUE photo : l'image prend
@@ -664,6 +671,12 @@ export async function buildAlbumHtml(
         </section>`;
   }
 
+  // Carte des lieux juste après la couverture (rien si aucune photo n'a de GPS).
+  const mapModel = options.showMap
+    ? buildMapModel(photos, options.typeface, options.background, lang)
+    : null;
+  const mapHtml = mapModel ? mapPageHtml(mapModel) : '';
+
   const pages = paginateEntries(pageSource, perPage)
     .map((page, index) => {
       const no = index + 1;
@@ -696,6 +709,7 @@ export async function buildAlbumHtml(
       </head>
       <body>
         ${coverHtml}
+        ${mapHtml}
         ${pages}
         <section class="sheet end">
           <p class="orn">✦</p>
@@ -703,6 +717,54 @@ export async function buildAlbumHtml(
         </section>
       </body>
     </html>`;
+}
+
+/**
+ * Page carte en SVG : simple transcription du modèle de `albumMap.ts` (tout le
+ * placement y est calculé, à l'identique pour le rendu Skia).
+ */
+function mapPageHtml(model: MapModel): string {
+  const clips = new Map<string, string>();
+  const clipId = (r: MapRect) => {
+    const key = `${r.x},${r.y},${r.w},${r.h}`;
+    let id = clips.get(key);
+    if (!id) {
+      id = `mc${clips.size}`;
+      clips.set(key, id);
+    }
+    return id;
+  };
+  const body = model.items
+    .map((it) => {
+      if (it.kind === 'shape') {
+        const attrs = [
+          `d="${it.d}"`,
+          `fill="${it.fill ?? 'none'}"`,
+          it.stroke ? `stroke="${it.stroke}" stroke-width="${it.width ?? 1}"` : '',
+          it.dash ? `stroke-dasharray="${it.dash.join(' ')}"` : '',
+          it.opacity !== undefined ? `opacity="${it.opacity}"` : '',
+          it.offset ? `transform="translate(${it.offset.join(' ')})"` : '',
+        ].join(' ');
+        const path = `<path ${attrs}/>`;
+        // Découpe posée sur un groupe : elle ne subit pas le décalage du tracé.
+        return it.clip ? `<g clip-path="url(#${clipId(it.clip)})">${path}</g>` : path;
+      }
+      const face = FACES[it.fam];
+      const weight = it.bold ? face.bold[0] : face.regular[0];
+      const spacing = it.spacing ? ` letter-spacing="${it.spacing}"` : '';
+      return `<text x="${it.x}" y="${it.y}" text-anchor="${it.anchor}" font-size="${it.size}" font-weight="${weight}" fill="${it.color}"${spacing} style="font-family:${FAM_CSS[it.fam]}">${escapeHtml(it.text.replace(/\s+/g, ' '))}</text>`;
+    })
+    .join('');
+  const defs = [...clips]
+    .map(([key, id]) => {
+      const [x, y, w, h] = key.split(',');
+      return `<clipPath id="${id}"><rect x="${x}" y="${y}" width="${w}" height="${h}"/></clipPath>`;
+    })
+    .join('');
+  return `
+        <section class="sheet mappage">
+          <svg width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" viewBox="0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${body}</svg>
+        </section>`;
 }
 
 /** Une ligne factuelle « Clé : valeur » du rapport professionnel. */

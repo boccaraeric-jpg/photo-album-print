@@ -18,6 +18,7 @@ import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
 import { parseRich, type RichRun } from './richText';
 import { readPrintBase64 } from './photoFiles';
+import { buildMapModel, type MapModel } from './albumMap';
 import {
   COVER_W,
   coverPicks,
@@ -1015,15 +1016,90 @@ async function renderFullPage(
   return encodeSurface(surface, title, pageNo);
 }
 
+/**
+ * Page carte (Skia) : dessine le modèle de `albumMap.ts` tel quel, en points
+ * A4 mis à l'échelle — même liste de tracés et de textes que le SVG du PDF.
+ */
+function renderMapPage(
+  model: MapModel,
+  options: ExportOptions,
+  title: string,
+): PagePayload | null {
+  const surface = Skia.Surface.Make(W, H);
+  if (!surface) return null;
+  const canvas = surface.getCanvas();
+  const bg = Skia.Paint();
+  bg.setColor(Skia.Color(options.background));
+  canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
+
+  canvas.save();
+  const k = W / COVER_W;
+  canvas.scale(k, k);
+  for (const it of model.items) {
+    try {
+      if (it.kind === 'shape') {
+        const path = Skia.Path.MakeFromSVGString(it.d);
+        if (!path) continue;
+        canvas.save();
+        if (it.clip) {
+          canvas.clipRect(Skia.XYWHRect(it.clip.x, it.clip.y, it.clip.w, it.clip.h), ClipOp.Intersect, true);
+        }
+        if (it.offset) canvas.translate(it.offset[0], it.offset[1]);
+        if (it.fill) {
+          const paint = Skia.Paint();
+          paint.setAntiAlias(true);
+          paint.setColor(Skia.Color(it.fill));
+          if (it.opacity !== undefined) paint.setAlphaf(it.opacity);
+          canvas.drawPath(path, paint);
+        }
+        if (it.stroke) {
+          const paint = Skia.Paint();
+          paint.setAntiAlias(true);
+          paint.setStyle(PaintStyle.Stroke);
+          paint.setStrokeWidth(it.width ?? 1);
+          paint.setColor(Skia.Color(it.stroke));
+          if (it.opacity !== undefined) paint.setAlphaf(it.opacity);
+          if (it.dash) {
+            const effect = Skia.PathEffect.MakeDash(it.dash, 0);
+            if (effect) paint.setPathEffect(effect);
+          }
+          canvas.drawPath(path, paint);
+        }
+        canvas.restore();
+        continue;
+      }
+      // Texte : interlettrage à la main (Skia n'en a pas), ancrage mesuré.
+      const font = fontFor(it.bold, it.size, it.fam);
+      const paint = Skia.Paint();
+      paint.setAntiAlias(true);
+      paint.setColor(Skia.Color(it.color));
+      const spacing = it.spacing ?? 0;
+      const chars = spacing ? [...it.text] : [it.text];
+      const widths = chars.map((c) => font.getTextWidth(c));
+      const total = widths.reduce((a, b) => a + b, 0) + spacing * chars.length;
+      let x = it.anchor === 'middle' ? it.x - total / 2 : it.anchor === 'end' ? it.x - total : it.x;
+      chars.forEach((c, i) => {
+        canvas.drawText(c, x, it.y, paint, font);
+        x += widths[i] + spacing;
+      });
+    } catch {
+      // Un élément illisible ne doit pas priver l'album du reste de la page.
+    }
+  }
+  canvas.restore();
+  return encodeSurface(surface, title, 0, '00b-carte');
+}
+
 function encodeSurface(
   surface: ReturnType<typeof Skia.Surface.Make>,
   title: string,
   pageNo: number,
+  name?: string,
 ): PagePayload | null {
   if (!surface) return null;
   const snapshot = surface.makeImageSnapshot();
   const base64 = snapshot.encodeToBase64(ImageFormat.JPEG, 92);
-  const suffix = pageNo === 0 ? '00-couverture' : String(pageNo).padStart(2, '0');
+  const suffix = name ?? (pageNo === 0 ? '00-couverture' : String(pageNo).padStart(2, '0'));
   const dest = `${FileSystem.cacheDirectory}${albumFileBase(title)} - p${suffix}.jpg`;
   return { base64, dest };
 }
@@ -1068,6 +1144,12 @@ export async function buildAlbumImages(
   await push(
     await renderCover(photoEntries, eff, title, pro, lang, coverPhotoId, scatterIds),
   );
+
+  // Carte des lieux juste après la couverture (familial ; rien sans GPS).
+  if (!pro && eff.showMap) {
+    const model = buildMapModel(photos, eff.typeface, eff.background, lang);
+    if (model) await push(renderMapPage(model, eff, title));
+  }
 
   // Couverture classique : la photo de couverture ne réapparaît dans les pages
   // que si elle porte un commentaire. Les montages gardent toutes leurs photos

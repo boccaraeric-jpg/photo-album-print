@@ -188,6 +188,11 @@ const fr = {
     scatterValidate: 'Valider',
     scatterMin: (n: number) => `Encore ${n} photo${n > 1 ? 's' : ''} à choisir`,
     scatterMax: '9 photos au plus',
+    mapLabel: 'Carte des lieux',
+    mapHint: (n: number) =>
+      `Une page « Nos lieux de visite » après la couverture : ${n} lieu${n > 1 ? 'x' : ''} repéré${n > 1 ? 's' : ''}.`,
+    mapNone:
+      'Aucune photo de ce dossier n’a de position GPS : la carte ne peut pas être dessinée.',
     coverFallback: (n: number) =>
       `Ce dossier n’a que ${n} photo${n > 1 ? 's' : ''} : la couverture classique sera utilisée.`,
     dateFormats: {
@@ -347,6 +352,9 @@ Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un
     comment: 'Commentaire',
     textPageMarker: '— Page de texte —',
     contextFile: 'contexte.txt',
+    mapTitle: 'Nos lieux de visite',
+    mapCredit: 'Fond de carte : Natural Earth',
+    and: 'et',
   },
 };
 
@@ -501,6 +509,10 @@ const en: Dict = {
     scatterValidate: 'Done',
     scatterMin: (n: number) => `${n} more photo${n > 1 ? 's' : ''} to choose`,
     scatterMax: '9 photos at most',
+    mapLabel: 'Map of places',
+    mapHint: (n: number) =>
+      `A “Places we visited” page after the cover: ${n} place${n > 1 ? 's' : ''} found.`,
+    mapNone: 'No photo in this folder has a GPS position: the map cannot be drawn.',
     coverFallback: (n: number) =>
       `This folder has only ${n} photo${n > 1 ? 's' : ''}: the classic cover will be used.`,
     dateFormats: {
@@ -659,6 +671,9 @@ Folders will be ADDED to the ones already there: nothing is replaced. A name alr
     comment: 'Comment',
     textPageMarker: '— Text page —',
     contextFile: 'context.txt',
+    mapTitle: 'Places we visited',
+    mapCredit: 'Base map: Natural Earth',
+    and: 'and',
   },
 };
 

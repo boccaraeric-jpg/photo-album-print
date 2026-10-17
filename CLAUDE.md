@@ -231,6 +231,17 @@ d'entrée** (ils pilotent aussi les libellés) :
   En `script`, les textes longs (pages de texte, date) restent en Lora : Caveat illisible au long cours.
   Contrôle visuel possible **sur PC** : `buildAlbumHtml` tourne sous node (sucrase + bouchons des
   modules Expo) et Chrome headless fait la capture — le rendu Skia, lui, ne se voit que sur l'iPhone.
+- **Carte des lieux** (`showMap`, familial, défaut non) : page « Nos lieux de visite » après la
+  couverture. **`src/albumMap.ts`** calcule toute la page (lieux, cadrage, côtes, repères,
+  étiquettes, médaillon, légende) en une **liste de tracés SVG + textes en points A4** : `pdf.ts`
+  (`mapPageHtml`) l'écrit en SVG, `pageImages.ts` (`renderMapPage`) la dessine en Skia — aucun
+  placement dans les moteurs, retoucher `albumMap.ts` seul. Tracés limités à `M L H V C Q Z`
+  (pas d'arc `A`), ombre décalée sans flou, largeur de texte **estimée** (`CHAR_EM`) : tout ce
+  qui garantit la parité des deux rendus. Lieux = photos avec **`coords`** seulement (un lieu tapé à
+  la main n'a pas de position), regroupés par nom de lieu, numérotés par date, 20 au plus.
+  Fond de carte **hors ligne** : `src/worldLand.ts` (~0,84 Mo, Natural Earth 1:10m, domaine public)
+  généré par `design/build-worldmap.py` (mode d'emploi en tête du script), décodé une fois par
+  `worldMap.ts`. Pas de noms de pays sur la carte : la donnée n'a que des contours.
 - **Types d'entrées** : une `Photo` est soit une image, soit une **page de texte** (`kind: 'text'`,
   `uri` vide, `comment` = le texte) créée par « ＋ Page de texte ». `src/paginate.ts`
   `paginateEntries()` renvoie des `AlbumPage` (`photos` groupées | `text` autonome) ; les pages de

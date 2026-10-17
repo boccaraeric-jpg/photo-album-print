@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, F } from '../theme';
 import { useLang } from '../i18n';
 import { effectiveCover, SCATTER_MAX, SCATTER_MIN, validScatterPicks } from '../albumStyle';
+import { collectPlaces } from '../albumMap';
 import type {
   CoverStyle,
   DateFormat,
@@ -189,7 +190,7 @@ export function ExportModal({
   onPreview,
   onClose,
 }: Props) {
-  const { L } = useLang();
+  const { L, lang } = useLang();
   const insets = useSafeAreaInsets();
   const [options, setOptions] = useState<ExportOptions>(initial);
   const images = photos.filter((p) => p.kind !== 'text');
@@ -206,6 +207,8 @@ export function ExportModal({
       return cur.length >= SCATTER_MAX ? cur : [...cur, id];
     });
   const isPro = options.style === 'pro';
+  // Lieux plaçables sur la carte (photos géolocalisées) : 0 → réglage inactif.
+  const placeCount = useMemo(() => collectPlaces(photos, lang).length, [photos, lang]);
   // En pro les sections sont peu nombreuses : on les aère davantage.
   const labelStyle = isPro ? [styles.label, styles.labelSpaced] : styles.label;
 
@@ -313,6 +316,25 @@ export function ExportModal({
                     <Text style={styles.pickBtnText}>{L.export.scatterChoose}</Text>
                   </Pressable>
                 </View>
+              )}
+
+              <Text style={styles.label}>{L.export.mapLabel}</Text>
+              {placeCount > 0 ? (
+                <>
+                  <View style={styles.chips}>
+                    {([true, false] as const).map((value) => (
+                      <Chip
+                        key={String(value)}
+                        selected={options.showMap === value}
+                        label={value ? L.export.yes : L.export.no}
+                        onPress={() => setOptions((o) => ({ ...o, showMap: value }))}
+                      />
+                    ))}
+                  </View>
+                  <Text style={styles.note}>{L.export.mapHint(placeCount)}</Text>
+                </>
+              ) : (
+                <Text style={styles.note}>{L.export.mapNone}</Text>
               )}
             </>
           )}

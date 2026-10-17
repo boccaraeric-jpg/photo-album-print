@@ -84,6 +84,8 @@ export interface ExportOptions {
   typeface: Typeface;
   /** Style de la 1ère de couverture — familial uniquement. */
   cover: CoverStyle;
+  /** Page « Nos lieux de visite » après la couverture — familial uniquement. */
+  showMap: boolean;
 }
 
 /** Critère de tri de la liste des dossiers (écran d'accueil). */
