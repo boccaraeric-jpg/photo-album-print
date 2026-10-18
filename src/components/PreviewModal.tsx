@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -9,8 +11,20 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 
-import { F } from '../theme';
+import { ALBUM_BACKGROUNDS, C, F } from '../theme';
 import { useLang } from '../i18n';
+import { stripMarks } from '../richText';
+import { pageBackground } from '../paginate';
+import type { Photo, PhotoSize } from '../types';
+
+/** Réglages d'une entrée depuis l'aperçu ; `null` = revenir à celui de l'album. */
+export interface EntryPatch {
+  size?: PhotoSize | null;
+  pageBg?: string | null;
+}
+
+const SIZE_KEYS: PhotoSize[] = ['small', 'medium', 'large', 'full'];
+const EDIT_SCHEME = 'comclic-edit://e/';
 
 interface Props {
   visible: boolean;
@@ -28,6 +42,18 @@ interface Props {
   onEditLayout: () => void;
   /** Ouvrir le choix du format et envoyer. */
   onSend: () => void;
+  /**
+   * Aperçu interactif (familial) : entrées du dossier, taille de l'album, et
+   * réglage d'une entrée touchée. Absent → aperçu en lecture seule (pro).
+   */
+  entries?: Photo[];
+  albumSize?: PhotoSize;
+  /** `pageIds` : entrées de la même page (le fond est commun à la page). */
+  onEditEntry?: (id: string, patch: EntryPatch, pageIds: string[]) => void;
+  /** Entrée à remettre à l'écran après un nouveau rendu (celle qu'on règle). */
+  focusId?: string | null;
+  /** Vrai pendant la reconstruction de l'aperçu après un réglage. */
+  refreshing?: boolean;
 }
 
 /**
@@ -45,9 +71,34 @@ export function PreviewModal({
   onBackToAlbum,
   onEditLayout,
   onSend,
+  entries,
+  albumSize = 'medium',
+  onEditEntry,
+  focusId,
+  refreshing = false,
 }: Props) {
   const { L } = useLang();
   const insets = useSafeAreaInsets();
+  const editable = !!onEditEntry && !!entries;
+  // Entrée touchée dans l'aperçu et les entrées de sa page (panneau ouvert).
+  const [target, setTarget] = useState<{ id: string; pageIds: string[] } | null>(null);
+  const selected = target ? entries?.find((e) => e.id === target.id) : undefined;
+  // Fond affiché par la page : celui de la première de ses entrées qui en a un.
+  const pageBg = target
+    ? pageBackground((entries ?? []).filter((e) => target.pageIds.includes(e.id)))
+    : undefined;
+  const edit = (patch: EntryPatch) => selected && onEditEntry?.(selected.id, patch, target?.pageIds ?? [selected.id]);
+  useEffect(() => {
+    if (!visible) setTarget(null);
+  }, [visible]);
+
+  // Remet l'entrée réglée à l'écran : le nouvel aperçu se recharge en haut.
+  // Script de l'app (WKUserScript), non soumis à la politique de sécurité du
+  // document — qui, elle, interdit toujours tout script venu de l'album.
+  const safeFocus = focusId && /^[A-Za-z0-9-]+$/.test(focusId) ? focusId : null;
+  const focusScript = safeFocus
+    ? `(function(){var e=document.getElementById('e-${safeFocus}');if(e){e.scrollIntoView({block:'start'});}})();true;`
+    : 'true;';
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onBackToAlbum}>
@@ -57,7 +108,9 @@ export function PreviewModal({
             <Text style={styles.backLink}>{L.preview.editAlbum}</Text>
           </Pressable>
           <Text style={styles.title}>{L.preview.title}</Text>
-          <Text style={styles.subtitle}>{L.preview.subtitle}</Text>
+          <Text style={styles.subtitle}>
+            {editable ? L.preview.subtitleEditable : L.preview.subtitle}
+          </Text>
         </View>
 
         <View style={styles.webWrap}>
@@ -65,12 +118,27 @@ export function PreviewModal({
             <WebView
               originWhitelist={['*']}
               source={{ html }}
-              // Défense en profondeur : l'aperçu est un document statique. Aucun
-              // script n'y est utile, et aucune navigation vers le web ne doit
-              // en partir (une valeur injectée dans le HTML ne pourrait alors ni
-              // exécuter de code ni envoyer la page ailleurs).
-              javaScriptEnabled={false}
-              onShouldStartLoadWithRequest={(req) => !/^https?:/i.test(req.url)}
+              // Défense en profondeur : l'album est un document statique, sa
+              // politique de sécurité (CSP) interdit tout script et toute
+              // ressource externe. Seul le script de l'app (`focusScript`,
+              // recentrage après un réglage) s'exécute, en aperçu interactif.
+              javaScriptEnabled={editable}
+              injectedJavaScript={editable ? focusScript : undefined}
+              // Toucher une photo = suivre son lien `comclic-edit://e/<id>` :
+              // intercepté ici, il ouvre le panneau de réglage. Aucune
+              // navigation vers le web ne part de l'aperçu.
+              onShouldStartLoadWithRequest={(req) => {
+                if (req.url.startsWith(EDIT_SCHEME)) {
+                  if (editable) {
+                    const [id, ids = ''] = req.url.slice(EDIT_SCHEME.length).split('/');
+                    const pageIds = ids.split(',').filter(Boolean).map(decodeURIComponent);
+                    const one = decodeURIComponent(id);
+                    setTarget({ id: one, pageIds: pageIds.length ? pageIds : [one] });
+                  }
+                  return false;
+                }
+                return !/^https?:/i.test(req.url) && !req.url.startsWith('comclic-');
+              }}
               style={styles.web}
               scrollEnabled
               showsVerticalScrollIndicator
@@ -81,6 +149,77 @@ export function PreviewModal({
             </View>
           )}
         </View>
+
+        {refreshing && (
+          <View style={styles.refreshing} pointerEvents="none">
+            <ActivityIndicator color={C.sienna} />
+          </View>
+        )}
+
+        {/* Panneau de réglage de l'entrée touchée : surcouche <View>, pas de
+            <Modal> imbriqué (iOS ne les présente pas). Chaque choix redessine
+            l'aperçu aussitôt ; « OK » referme. */}
+        {selected && editable && (
+          <View style={[styles.panel, { paddingBottom: insets.bottom + 12 }]}>
+            <View style={styles.panelHead}>
+              <Text style={styles.panelTitle} numberOfLines={1}>
+                {selected.kind === 'text'
+                  ? L.preview.textPage
+                  : stripMarks(selected.comment).trim() || selected.place || ' '}
+              </Text>
+              <Pressable
+                style={styles.doneBtn}
+                onPress={() => setTarget(null)}
+                accessibilityRole="button"
+              >
+                <Text style={styles.doneText}>{L.preview.done}</Text>
+              </Pressable>
+            </View>
+            <ScrollView>
+              {selected.kind !== 'text' && (
+                <>
+                  <Text style={styles.panelLabel}>{L.preview.entrySize}</Text>
+                  <View style={styles.chips}>
+                    <Chip
+                      label={L.preview.sizeAlbum(L.export.sizes[albumSize])}
+                      selected={!selected.size}
+                      onPress={() => edit({ size: null })}
+                    />
+                    {SIZE_KEYS.map((size) => (
+                      <Chip
+                        key={size}
+                        label={L.export.sizes[size]}
+                        selected={selected.size === size}
+                        onPress={() => edit({ size })}
+                      />
+                    ))}
+                  </View>
+                </>
+              )}
+              <Text style={styles.panelLabel}>{L.preview.entryBg}</Text>
+              <View style={styles.chips}>
+                <Chip
+                  label={L.preview.bgAlbum}
+                  selected={!pageBg}
+                  onPress={() => edit({ pageBg: null })}
+                />
+                {ALBUM_BACKGROUNDS.map((color) => (
+                  <Pressable
+                    key={color}
+                    style={[
+                      styles.swatch,
+                      { backgroundColor: color },
+                      pageBg === color && styles.swatchSelected,
+                    ]}
+                    onPress={() => edit({ pageBg: color })}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: pageBg === color }}
+                  />
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        )}
 
         <View style={[styles.toolbar, { paddingBottom: insets.bottom + 12 }]}>
           <Pressable
@@ -110,8 +249,83 @@ export function PreviewModal({
   );
 }
 
+/** Puce de choix du panneau (même allure que celles de la mise en page). */
+function Chip({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={[styles.chip, selected && styles.chipSelected]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+    >
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#fff' },
+  refreshing: {
+    position: 'absolute',
+    top: '45%',
+    alignSelf: 'center',
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  panel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    maxHeight: '55%',
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    backgroundColor: C.card,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 12,
+  },
+  panelHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
+  panelTitle: { flex: 1, fontFamily: F.monoBold, fontSize: 15, color: C.ink },
+  doneBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: C.ink,
+  },
+  doneText: { fontFamily: F.monoBold, fontSize: 14, color: C.paper },
+  panelLabel: { fontFamily: F.monoBold, fontSize: 13, color: C.muted, marginTop: 12, marginBottom: 8 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: C.tan,
+  },
+  chipSelected: { backgroundColor: C.sienna },
+  chipText: { fontFamily: F.monoBold, fontSize: 14, color: C.ink },
+  chipTextSelected: { color: '#fff' },
+  swatch: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.15)',
+  },
+  swatchSelected: { borderWidth: 3, borderColor: C.sienna },
   header: { paddingHorizontal: 20, paddingBottom: 12 },
   backLink: {
     fontFamily: F.monoBold,

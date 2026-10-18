@@ -1,6 +1,19 @@
 // Thème « Chambre Claire » — élégance argentique : papier crème, encre tiède,
 // unique accent terre de Sienne. Voir « Chambre Claire — philosophie.md ».
 
+/** Fonds proposés pour l'album (mise en page) et pour une page (aperçu). */
+export const ALBUM_BACKGROUNDS = [
+  '#f6f1e9', // crème
+  '#ffffff', // blanc
+  '#dfe3e8', // gris clair
+  '#f6ddd0', // rose poudré
+  '#fbf3c4', // jaune clair
+  '#dcf3e0', // vert clair
+  '#f9dada', // rouge clair
+  '#dbeafe', // bleu clair
+  '#22211f', // sombre
+];
+
 export const C = {
   paper: '#F1E9D6', // fond crème (papier chiffon)
   card: '#FBF7EC', // cartes / feuilles / barres

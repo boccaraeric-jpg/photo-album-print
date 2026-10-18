@@ -12,7 +12,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import type { ExportOptions, Photo } from './types';
 import { formatPhotoDate, photoDate } from './dateFormat';
 import { dict, localeTag, type Lang } from './i18n';
-import { paginateEntries, PER_PAGE, wideSlots } from './paginate';
+import { pageBackground, paginateEntries, PER_PAGE, wideSlots } from './paginate';
 import { albumFileBase } from './pdf';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
@@ -1257,8 +1257,6 @@ export async function buildAlbumImages(
   const eff: ExportOptions = pro
     ? { ...options, background: '#ffffff', typeface: 'sans', cover: 'classic' }
     : options;
-  const perPage = pro ? 2 : PER_PAGE[options.photoSize];
-  const full = !pro && options.photoSize === 'full';
 
   const photoEntries = photos.filter((p) => p.kind !== 'text');
   await push(
@@ -1296,25 +1294,40 @@ export async function buildAlbumImages(
       : photos;
 
   // Les pages de texte s'intercalent dans les deux rendus (familial et pro).
-  const pages = paginateEntries(
-    pageSource,
-    perPage,
-    mapIds,
-    pro ? 1 : COMMENT_SCALE[eff.commentSize],
-  );
+  // Pro : 2 photos par page, sans taille ni fond par photo. Familial : taille
+  // et fond propres à une photo (aperçu interactif) honorés page par page.
+  const pages = paginateEntries(pageSource, pro ? 'medium' : eff.photoSize, {
+    wide: mapIds,
+    commentScale: pro ? 1 : COMMENT_SCALE[eff.commentSize],
+    perPhotoSize: !pro,
+  });
   let numbered = 0;
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
+    const entries = page.type === 'text' ? [page.item] : page.items;
+    const bg = pro ? undefined : pageBackground(entries);
+    // Fond propre : toutes les couleurs de la page en découlent (cf. `isDark`).
+    const pageOpts = bg ? { ...eff, background: bg } : eff;
     if (page.type === 'text') {
-      await push(renderTextPage(page.item, eff, title, i + 1));
+      await push(renderTextPage(page.item, pageOpts, title, i + 1));
       continue;
     }
-    if (full) {
-      await push(await renderFullPage(page.items[0], eff, title, i + 1, maps));
+    if (page.size === 'full') {
+      await push(await renderFullPage(page.items[0], pageOpts, title, i + 1, maps));
       continue;
     }
     await push(
-      await renderPhotoPage(page.items, eff, title, i + 1, perPage, pro, numbered, lang, maps),
+      await renderPhotoPage(
+        page.items,
+        pageOpts,
+        title,
+        i + 1,
+        PER_PAGE[page.size],
+        pro,
+        numbered,
+        lang,
+        maps,
+      ),
     );
     numbered += page.items.length;
   }

@@ -288,6 +288,17 @@ d'entrée** (ils pilotent aussi les libellés) :
   embarquer du 4000 px pour un affichage A4 donnait des PDF de ~190 Mo (9 photos). Budget adaptatif au
   nombre de photos (≤15 → 1600 px/q0.72 ; >30 → 1024 px/q0.68). `htmlToPdfFile()` `console.warn` si le
   fichier dépasse 10 Mo. L'export « Photos (à réutiliser) » garde, lui, la **pleine résolution**.
+- **Aperçu interactif** (familial) : `buildAlbumHtml(..., interactive = true)` enveloppe chaque
+  entrée d'un lien **`comclic-edit://e/<id>/<ids de la page>`** que `PreviewModal` intercepte dans
+  `onShouldStartLoadWithRequest` → panneau **taille de la photo** (`Photo.size`) et **fond de la
+  page** (`Photo.pageBg`, commun à la page : un nouveau fond efface celui des voisines). App
+  (`editPreviewEntry`) enregistre puis reconstruit l'aperçu ; `injectedJavaScript` le recentre sur
+  l'entrée. JS activé **seulement** pour ce script de l'app : la CSP du document interdit toujours
+  tout script de l'album. Jamais de liens dans le PDF envoyé. Côté rendu : couleurs en **variables
+  CSS** (`themeVars`, redéfinies sur une `.sheet.painted` de 842 px), hauteurs par taille sous
+  `.sz-<taille>` (`sizeCss`), pagination par taille (`paginateEntries(..., albumSize,
+  { perPhotoSize })` : une page ne mélange pas deux tailles) ; Skia passe `{ ...options,
+  background }` page par page. `size`/`pageBg` ne sont **pas** portés par sauvegarde ni `.comclic`.
 - `PreviewModal` rend **le même HTML** dans une **WebView**. L'envoi JPEG : `src/pageImages.ts`
   compose chaque page en **Skia** (déterministe, hors-ligne — la capture de WebView est peu fiable
   sur iOS) ; plusieurs pages → **ZIP** (`src/albumZip.ts`, `jszip`).

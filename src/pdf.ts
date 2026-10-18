@@ -1,11 +1,11 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import type { ExportOptions, Photo } from './types';
+import type { ExportOptions, Photo, PhotoSize } from './types';
 import { readPrintBase64 } from './photoFiles';
 import { fileDateStamp, formatPhotoDate, photoDate } from './dateFormat';
 import { dict, localeTag, SUPPORTED, type Lang } from './i18n';
-import { paginateEntries, PER_PAGE } from './paginate';
+import { pageBackground, paginateEntries, PER_PAGE } from './paginate';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
 import { richToHtml } from './richText';
@@ -214,13 +214,37 @@ interface Item {
   map?: string;
 }
 
-function figureHtml(
-  item: Item,
-  variant: '' | 'solo' | 'large',
-  dateFormat: ExportOptions['dateFormat'],
-  showPlace: boolean,
-  lang: Lang,
-): string {
+/** Options de rendu d'une page photo (familial). */
+interface PageCtx {
+  dateFormat: ExportOptions['dateFormat'];
+  showPlace: boolean;
+  frame: ExportOptions['frame'];
+  lang: Lang;
+  /** Aperçu interactif : photos cliquables (liens `comclic-edit://`). */
+  interactive: boolean;
+  /** Entrées de la page en cours (le fond est commun à toute la page). */
+  pageIds?: string[];
+}
+
+/**
+ * Lien d'édition de l'aperçu : l'entrée touchée puis toutes celles de sa page
+ * (un nouveau fond de page remplace celui des voisines). Ids : chiffres,
+ * lettres et tirets (cf. `newId`).
+ */
+function editHref(id: string, pageIds: string[] = [id]): string {
+  return `comclic-edit://e/${encodeURIComponent(id)}/${pageIds.map(encodeURIComponent).join(',')}`;
+}
+
+/** Attributs d'une page à fond propre : classe + couleurs de ce fond. */
+function paintAttrs(bg: string | undefined, frame: ExportOptions['frame']): {
+  cls: string;
+  style: string;
+} {
+  return bg ? { cls: ' painted', style: ` style="${themeVars(bg, frame)}"` } : { cls: '', style: '' };
+}
+
+function figureHtml(item: Item, variant: '' | 'solo' | 'large', ctx: PageCtx): string {
+  const { dateFormat, showPlace, lang } = ctx;
   const { photo, src, map } = item;
   const comment = photo.comment.trim();
   const place = showPlace ? photo.place?.trim() : undefined;
@@ -240,62 +264,69 @@ function figureHtml(
   const ph = map
     ? `<div class="ph split"><div class="ph-photo">${img}</div><div class="ph-map">${map}</div></div>`
     : `<div class="ph">${img}</div>`;
+  const body = ctx.interactive
+    ? `<a class="edit" href="${editHref(photo.id, ctx.pageIds)}">${ph}${caption}</a>`
+    : `${ph}${caption}`;
   return `
-    <figure class="card ${variant}${map ? ' wide' : ''}">
-      ${ph}
-      ${caption}
+    <figure class="card ${variant}${map ? ' wide' : ''}" id="e-${escapeHtml(photo.id)}">
+      ${body}
     </figure>`;
 }
 
 function pageHtml(
   group: Item[],
-  perPage: number,
-  title: string,
+  size: PhotoSize,
   pageNo: number,
-  dateFormat: ExportOptions['dateFormat'],
-  showPlace: boolean,
-  lang: Lang,
+  ctx: PageCtx,
 ): string {
+  const perPage = PER_PAGE[size];
   // Page d'une seule photo : « large » si c'est la taille choisie,
   // « solo » si c'est une exception (commentaire long ou photo restante).
   const variant = group.length > 1 ? '' : perPage === 1 ? 'large' : 'solo';
+  const pageCtx = { ...ctx, pageIds: group.map((it) => it.photo.id) };
   const figures = group
-    .map((item) => figureHtml(item, variant, dateFormat, showPlace, lang))
+    .map((item) => figureHtml(item, variant, pageCtx))
     .join('');
   // En taille « petite », les photos s'organisent en grille 2 colonnes.
   const body =
     perPage === 4 && group.length > 1
       ? `<div class="grid4">${figures}</div>`
       : figures;
+  const paint = paintAttrs(pageBackground(group.map((it) => it.photo)), ctx.frame);
   return `
-    <section class="sheet">
+    <section class="sheet sz-${size}${paint.cls}"${paint.style}>
       ${body}
       <p class="footer"><span>${pageNo}</span></p>
     </section>`;
 }
 
 /** Photo pleine page (bord à bord) + légende courte (≤ 15 mots) en pied. */
-function fullPageHtml(item: Item, lang: Lang): string {
+function fullPageHtml(item: Item, ctx: PageCtx): string {
   const { photo, src, map } = item;
+  const { lang } = ctx;
   const comment = limitWords(photo.comment, 15);
   const img = src
     ? `<img src="${src}" />`
     : `<span class="missing">${dict(lang).doc.imageUnavailable}</span>`;
   // Pleine page : la carte se pose en médaillon dans le coin de la photo.
   const inset = map ? `<div class="full-map">${map}</div>` : '';
+  const inner = `<div class="full-img">${img}${inset}</div>
+      <div class="full-cap">${comment ? richToHtml(comment, escapeHtml) : ''}</div>`;
+  const paint = paintAttrs(pageBackground([photo]), ctx.frame);
   return `
-    <section class="sheet full-sheet">
-      <div class="full-img">${img}${inset}</div>
-      <div class="full-cap">${comment ? richToHtml(comment, escapeHtml) : ''}</div>
+    <section class="sheet full-sheet${paint.cls}" id="e-${escapeHtml(photo.id)}"${paint.style}>
+      ${ctx.interactive ? `<a class="edit" href="${editHref(photo.id)}">${inner}</a>` : inner}
     </section>`;
 }
 
 /** Page de texte seule (intro, dédicace, séparateur…). */
-function textPageHtml(item: Photo, title: string, pageNo: number): string {
+function textPageHtml(item: Photo, pageNo: number, ctx: PageCtx): string {
   const text = escapeHtml(item.comment.trim()).replace(/\n/g, '<br/>');
+  const body = `<div class="textpage-body">${text}</div>`;
+  const paint = paintAttrs(pageBackground([item]), ctx.frame);
   return `
-    <section class="sheet textpage">
-      <div class="textpage-body">${text}</div>
+    <section class="sheet textpage${paint.cls}" id="e-${escapeHtml(item.id)}"${paint.style}>
+      ${ctx.interactive ? `<a class="edit" href="${editHref(item.id)}">${body}</a>` : body}
       <p class="footer"><span>${pageNo}</span></p>
     </section>`;
 }
@@ -342,56 +373,100 @@ const PH_HEIGHTS: Record<ExportOptions['photoSize'], string> = {
 };
 
 /**
+ * Couleurs d'une page selon son fond, en propriétés CSS (`--ink`…). Posées sur
+ * `body` pour le fond de l'album, et **sur la page elle-même** quand elle a son
+ * propre fond (`Photo.pageBg`) : un fond sombre éclaircit alors le texte de
+ * cette page seulement. Valeurs calculées (hex/rgba), jamais saisies.
+ */
+function themeVars(bg: string, frame: ExportOptions['frame']): string {
+  const dark = isDark(bg);
+  const ink = dark ? '#f3efe7' : '#1f1d1a';
+  // Cadres à fond blanc : texte sombre quel que soit le fond de page.
+  const whiteFrame = frame === 'card' || frame === 'polaroid';
+  const vars: Record<string, string> = {
+    '--bg': bg,
+    '--ink': ink,
+    '--muted': dark ? '#8f8a80' : '#a89f8d',
+    '--accent': dark ? '#e3a455' : '#b45309',
+    '--cap-ink': whiteFrame ? CAPTION_INK : dark ? ink : CAPTION_INK,
+    '--meta-ink': !whiteFrame && dark ? META_INK_DARK : META_INK,
+    '--full-ink': dark ? ink : CAPTION_INK,
+    '--ph-bg': dark ? 'rgba(255,255,255,0.06)' : 'rgba(31,29,26,0.05)',
+    '--border': dark ? 'rgba(243,239,231,0.55)' : 'rgba(31,29,26,0.4)',
+    '--shadow': dark ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.24)',
+  };
+  return Object.entries(vars)
+    .map(([k, v]) => `${k}: ${v};`)
+    .join(' ');
+}
+
+const SIZES: PhotoSize[] = ['small', 'medium', 'large'];
+
+/**
+ * Hauteurs d'une taille de photo, sous `.sz-<taille>` : depuis la taille par
+ * photo (aperçu), des pages de tailles différentes cohabitent dans un album.
+ */
+function sizeCss(size: PhotoSize, options: ExportOptions): string {
+  const spec = TYPE_SPECS[options.typeface];
+  const vAlign = options.commentVAlign ?? 'top';
+  // Position verticale du commentaire : « haut » = flux d'origine, sans bande.
+  const band = vAlign === 'top' ? 0 : CAPTION_BANDS[size];
+  const baseSize = size === 'small' ? COMMENT_BASE.small : COMMENT_BASE.other;
+  // Bande de position + place d'un commentaire plus grand, prises sur la photo :
+  // la carte garde sa hauteur, la pagination ne bouge pas.
+  const shrink =
+    (band ? band - CAPTION_BASES[size] : 0) +
+    commentShrink(baseSize, options.typeface, options.commentSize);
+  const captionSize =
+    Math.round(baseSize * spec.captionScale * COMMENT_SCALE[options.commentSize] * 10) / 10;
+  const z = `.sz-${size}`;
+  return `
+  ${z} .card { margin-bottom: ${size === 'small' ? 12 : 16}px; }
+  ${z} .ph { height: ${parseInt(PH_HEIGHTS[size], 10) - shrink}px; }
+  ${z} .card.solo .ph { height: ${380 - shrink}px; }
+  ${z} .card.large .ph { height: ${480 - shrink}px; }
+  ${z} .caption { font-size: ${captionSize}px; }
+  ${
+    band
+      ? `${z} .caption {
+    min-height: ${band}px; display: flex; flex-direction: column;
+    justify-content: ${vAlign === 'middle' ? 'center' : 'flex-end'};
+  }`
+      : ''
+  }`;
+}
+
+/**
  * Construit la feuille de style du mini album à partir des options :
  * hauteurs fixes uniquement (jamais de flex vertical), pour que le contenu
- * ne déborde jamais sur la page suivante.
+ * ne déborde jamais sur la page suivante. Couleurs en variables (`themeVars`),
+ * hauteurs par taille (`sizeCss`).
  */
 function buildStyles(options: ExportOptions): string {
+  // Couverture et page de fin : sur le fond de l'album (variables du `body`).
   const dark = isDark(options.background);
-  // Couleurs de texte posées directement sur le fond de page.
-  const ink = dark ? '#f3efe7' : '#1f1d1a';
-  const muted = dark ? '#8f8a80' : '#a89f8d';
-  const accent = dark ? '#e3a455' : '#b45309';
-
-  // Position verticale du commentaire : « haut » = flux d'origine, sans bande.
-  const vAlign = options.commentVAlign ?? 'top';
-  const band = vAlign === 'top' ? 0 : CAPTION_BANDS[options.photoSize];
-  // Ce que la bande coûte en plus d'une légende d'une ligne, pris sur la photo.
-  const baseSize = options.photoSize === 'small' ? COMMENT_BASE.small : COMMENT_BASE.other;
-  // Bande de position + place d'un commentaire plus grand, prises sur la photo.
-  const shrink =
-    (band ? band - CAPTION_BASES[options.photoSize] : 0) +
-    commentShrink(baseSize, options.typeface, options.commentSize);
-  const phHeight = `${parseInt(PH_HEIGHTS[options.photoSize], 10) - shrink}px`;
   // Typographie : une famille par rôle (titre, légende, texte long, date).
   const spec = TYPE_SPECS[options.typeface];
   const fam = (f: FontFam) => FAM_CSS[f];
   const regular = (f: FontFam) => FACES[f].regular[0];
   const bold = (f: FontFam) => FACES[f].bold[0];
   const commentScale = COMMENT_SCALE[options.commentSize];
-  const captionSize = `${Math.round(baseSize * spec.captionScale * commentScale * 10) / 10}px`;
   const captionWeight = spec.captionBold ? bold(spec.caption) : regular(spec.caption);
-  const cardGap = options.photoSize === 'small' ? '12px' : '16px';
 
-  // Encadré : les cadres à fond blanc gardent un texte sombre ; les cadres
-  // transparents (bordure, sans cadre) héritent des couleurs de la page.
+  // Encadré : les cadres à fond blanc gardent un texte sombre (`--cap-ink`) ;
+  // les cadres transparents (bordure, sans cadre) prennent celui de la page.
   let frameCss = '';
-  let captionInk = CAPTION_INK;
-  let captionMuted = '#a89f8d';
   switch (options.frame) {
     case 'card':
       frameCss = `
         .card { background: #fff; border-radius: 16px; padding: 10px;
-          box-shadow: 0 8px 22px rgba(0, 0, 0, ${dark ? '0.55' : '0.22'}); }
+          box-shadow: 0 8px 22px var(--shadow); }
         .ph { border-radius: 10px; }`;
       break;
     case 'border':
       frameCss = `
-        .card { border: 2px solid ${dark ? 'rgba(243,239,231,0.55)' : 'rgba(31,29,26,0.4)'};
-          border-radius: 16px; padding: 10px; }
+        .card { border: 2px solid var(--border); border-radius: 16px; padding: 10px; }
         .ph { border-radius: 8px; }`;
-      captionInk = ink;
-      captionMuted = muted;
       break;
     case 'polaroid':
       // Cadre blanc épais, façon scrapbook. Les photos empilées (2 ou 4/page)
@@ -399,7 +474,7 @@ function buildStyles(options: ExportOptions): string {
       // taille ou page « solo ») restent DROITES et centrées.
       frameCss = `
         .card { background: #fff; border-radius: 3px; padding: 14px 14px 18px;
-          box-shadow: 0 10px 24px rgba(0, 0, 0, ${dark ? '0.6' : '0.28'}); }
+          box-shadow: 0 10px 24px var(--shadow); }
         .card:not(.large):not(.solo):nth-of-type(odd) { transform: rotate(-1.4deg); }
         .card:not(.large):not(.solo):nth-of-type(even) { transform: rotate(1.1deg); }
         .card.large, .card.solo { transform: none; margin-left: auto; margin-right: auto; }
@@ -410,8 +485,6 @@ function buildStyles(options: ExportOptions): string {
       frameCss = `
         .card { padding: 0; }
         .ph { border-radius: 14px; }`;
-      captionInk = ink;
-      captionMuted = muted;
       break;
   }
 
@@ -425,7 +498,8 @@ function buildStyles(options: ExportOptions): string {
     print-color-adjust: exact;
   }
   body {
-    margin: 0; background: ${options.background}; color: ${ink};
+    ${themeVars(options.background, options.frame)}
+    margin: 0; background: var(--bg); color: var(--ink);
     font-family: ${fam(spec.meta)}; font-weight: ${regular(spec.meta)};
   }
   figure { margin: 0; }
@@ -433,31 +507,37 @@ function buildStyles(options: ExportOptions): string {
      s'arrête avant le bas, et le saut de page force la suite. */
   .sheet { padding: 24px 28px 0; page-break-after: always; }
   .sheet:last-of-type { page-break-after: auto; }
+  /* Page à fond propre : hauteur de page exacte, pour que la couleur la
+     couvre jusqu'en bas (le fond du body reste celui de l'album). */
+  .sheet.painted { height: ${PAGE_HEIGHT}px; overflow: hidden; background: var(--bg); color: var(--ink); }
   .footer {
     display: flex; justify-content: center; align-items: center;
     margin: 6px 4px 0; font-size: 10px; letter-spacing: 2.5px;
-    text-transform: uppercase; color: ${muted};
+    text-transform: uppercase; color: var(--muted);
   }
+  /* Aperçu : chaque photo est un lien interne (comclic-edit://) que l'app
+     intercepte — aucun script dans la page. Absent du PDF. */
+  a.edit { display: block; color: inherit; text-decoration: none; }
 
   /* --- 1ère de couverture (titre + année + montage, façon carnet) --- */
   .cover { position: relative; padding: 62px 46px 0; text-align: center; }
-  .crop { position: absolute; width: 22px; height: 22px; border: 0 solid ${ink}; }
+  .crop { position: absolute; width: 22px; height: 22px; border: 0 solid var(--ink); }
   .crop.tl { top: 26px; left: 26px; border-top-width: 1.5px; border-left-width: 1.5px; }
   .crop.tr { top: 26px; right: 26px; border-top-width: 1.5px; border-right-width: 1.5px; }
   .crop.bl { bottom: 26px; left: 26px; border-bottom-width: 1.5px; border-left-width: 1.5px; }
   .crop.br { bottom: 26px; right: 26px; border-bottom-width: 1.5px; border-right-width: 1.5px; }
   .cover-kicker {
     margin: 14px 0 0; font-family: "Courier New", monospace;
-    font-size: 12px; letter-spacing: 5px; color: ${accent}; font-weight: 700;
+    font-size: 12px; letter-spacing: 5px; color: var(--accent); font-weight: 700;
   }
   .cover-title {
     margin: 16px 0 0; font-family: ${fam(spec.title)};
     font-weight: ${bold(spec.title)}; font-size: ${58 * spec.titleScale}px; line-height: 1.04;
-    letter-spacing: 0.5px; color: ${ink};
+    letter-spacing: 0.5px; color: var(--ink);
   }
   .cover-year {
     margin: 12px 0 0; font-family: ${fam(spec.title)};
-    font-size: ${38 * spec.titleScale}px; letter-spacing: 3px; color: ${accent};
+    font-size: ${38 * spec.titleScale}px; letter-spacing: 3px; color: var(--accent);
     font-weight: ${bold(spec.title)};
   }
 
@@ -486,44 +566,32 @@ function buildStyles(options: ExportOptions): string {
   .cover-foot {
     display: flex; justify-content: space-between; align-items: center;
     margin: 42px 6px 0; font-family: 'Montserrat', Georgia, serif;
-    font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: ${muted};
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
   }
   .cover-foot .reg {
-    width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid ${accent};
+    width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--accent);
   }
 
-  /* --- Pages photo : hauteurs fixes --- */
-  .card { margin-bottom: ${cardGap}; }
+  /* --- Pages photo : hauteurs fixes (par taille, cf. sizeCss) --- */
   .grid4 { display: flex; flex-wrap: wrap; gap: 12px; }
   .grid4 .card { width: calc(50% - 6px); margin-bottom: 4px; }
   ${frameCss}
   .ph {
-    height: ${phHeight}; overflow: hidden;
+    overflow: hidden;
     display: flex; align-items: center; justify-content: center;
-    background: ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(31,29,26,0.05)'};
+    background: var(--ph-bg);
   }
   .ph img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .card.solo { max-width: 460px; }
-  .card.solo .ph { height: ${380 - shrink}px; }
   .card.solo .ph img { object-fit: contain; }
-  .card.large .ph { height: ${480 - shrink}px; }
   .card.large .ph img { object-fit: contain; }
-  .missing { color: ${muted}; font-style: italic; font-size: 13px; }
+  .missing { color: var(--muted); font-style: italic; font-size: 13px; }
   .caption {
-    margin: 8px 4px 2px; font-size: ${captionSize}; line-height: ${spec.lineHeight};
+    margin: 8px 4px 2px; line-height: ${spec.lineHeight};
     font-family: ${fam(spec.caption)}; font-weight: ${captionWeight};
-    color: ${captionInk};
+    color: var(--cap-ink);
   }
-  /* Bande de commentaire : hauteur MINIMALE (et non fixe), pour qu'un long
-     commentaire continue de s'étendre au lieu d'être rogné. */
-  ${
-    band
-      ? `.caption {
-    min-height: ${band}px; display: flex; flex-direction: column;
-    justify-content: ${vAlign === 'middle' ? 'center' : 'flex-end'};
-  }`
-      : ''
-  }
+  ${SIZES.map((size) => sizeCss(size, options)).join('')}
   .caption strong, .full-cap strong { font-weight: ${bold(spec.caption)}; }
   .caption u, .meta u, .full-cap u { text-decoration: underline; }
   .caption .date {
@@ -531,7 +599,7 @@ function buildStyles(options: ExportOptions): string {
     text-align: ${options.dateAlign ?? 'left'};
     font-family: ${fam(spec.meta)};
     letter-spacing: 0.6px; text-transform: lowercase; font-weight: ${regular(spec.meta)};
-    color: ${captionInk === ink && dark ? META_INK_DARK : META_INK};
+    color: var(--meta-ink);
   }
 
   /* --- Photo pleine page (bord à bord) --- */
@@ -542,7 +610,7 @@ function buildStyles(options: ExportOptions): string {
   .full-cap {
     height: 64px; padding: 0 44px; display: flex; align-items: center; justify-content: center;
     font-size: ${Math.round(14 * spec.captionScale * commentScale * 10) / 10}px; line-height: 1.4;
-    text-align: center; color: ${dark ? ink : CAPTION_INK};
+    text-align: center; color: var(--full-ink);
     font-family: ${fam(spec.caption)}; font-weight: ${captionWeight};
   }
 
@@ -554,19 +622,20 @@ function buildStyles(options: ExportOptions): string {
   }
   .textpage:last-of-type { page-break-after: auto; }
   .textpage .footer { position: absolute; left: 0; right: 0; bottom: 30px; margin: 0; }
+  .textpage a.edit { width: 100%; }
   .textpage-body {
     font-family: ${fam(spec.text)}; font-size: 21px; line-height: 1.6;
-    color: ${ink}; text-align: ${options.textAlign}; white-space: pre-wrap;
+    color: var(--ink); text-align: ${options.textAlign}; white-space: pre-wrap;
   }
 
   /* --- Page de fin --- */
   .end { text-align: center; padding-top: 330px; }
-  .end .orn { font-size: 22px; color: ${accent}; margin: 0; }
+  .end .orn { font-size: 22px; color: var(--accent); margin: 0; }
   .end h2 {
     font-family: ${fam(spec.title)}; font-weight: ${bold(spec.title)};
-    font-size: 26px; margin: 12px 0 6px; color: ${ink};
+    font-size: 26px; margin: 12px 0 6px; color: var(--ink);
   }
-  .end p { color: ${muted}; font-size: 13px; margin: 0; }
+  .end p { color: var(--muted); font-size: 13px; margin: 0; }
 
   /* --- Carte à côté d'une photo (MAP_SHARE / MAP_GAP / FULL_MAP d'albumMap.ts) --- */
   .grid4 .card.wide { width: 100%; }
@@ -575,7 +644,7 @@ function buildStyles(options: ExportOptions): string {
     flex: ${1 - MAP_SHARE} 1 0; min-width: 0; height: 100%; overflow: hidden;
     display: flex; align-items: center; justify-content: center;
     border-radius: inherit;
-    background: ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(31,29,26,0.05)'};
+    background: var(--ph-bg);
   }
   .ph-map { flex: ${MAP_SHARE} 1 0; min-width: 0; position: relative; overflow: hidden; height: 100%; }
   /* Sélecteurs plus précis que .card.large .ph img et le liseré (.ph img) :
@@ -605,7 +674,7 @@ function buildStyles(options: ExportOptions): string {
          .ph img { width: auto; height: auto; max-width: 100%; max-height: 100%;
            box-sizing: border-box; border-radius: 2px;
            border: 6px solid #ffffff;
-           box-shadow: 0 2px 8px rgba(0, 0, 0, ${dark ? '0.55' : '0.28'}); }`
+           box-shadow: 0 2px 8px var(--shadow); }`
       : ''
   }
 `;
@@ -623,6 +692,8 @@ export async function buildAlbumHtml(
   coverPhotoId?: string,
   lang: Lang = 'fr',
   scatterIds?: string[],
+  /** Aperçu : photos cliquables pour régler taille et fond (jamais dans le PDF). */
+  interactive = false,
 ): Promise<string> {
   // Point d'entrée unique du HTML (familial ET pro) : les réglages et la langue
   // y sont filtrés une fois pour toutes avant d'être interpolés dans le
@@ -686,7 +757,6 @@ export async function buildAlbumHtml(
     items.find((it) => it.photo.id === coverPhotoId && it.src) ??
     items.find((it) => it.src);
   const coverSrc = coverItem?.src ?? '';
-  const perPage = PER_PAGE[options.photoSize];
   const coverStyle = effectiveCover(options.cover, photoEntries.length);
 
   // Couverture classique : la photo de couverture ne réapparaît dans les pages
@@ -770,23 +840,26 @@ export async function buildAlbumHtml(
     : null;
   const mapHtml = mapModel ? mapPageHtml(mapModel) : '';
 
-  const pages = paginateEntries(pageSource, perPage, mapIds, COMMENT_SCALE[options.commentSize])
+  const ctx: PageCtx = {
+    dateFormat: options.dateFormat,
+    showPlace: options.showPlace,
+    frame: options.frame,
+    lang,
+    interactive,
+  };
+  const pages = paginateEntries(pageSource, options.photoSize, {
+    wide: mapIds,
+    commentScale: COMMENT_SCALE[options.commentSize],
+    perPhotoSize: true,
+  })
     .map((page, index) => {
       const no = index + 1;
-      if (page.type === 'text') return textPageHtml(page.item, title, no);
+      if (page.type === 'text') return textPageHtml(page.item, no, ctx);
       const groupItems = page.items.map(
         (p) => items.find((it) => it.photo.id === p.id)!,
       );
-      if (options.photoSize === 'full') return fullPageHtml(groupItems[0], lang);
-      return pageHtml(
-        groupItems,
-        perPage,
-        title,
-        no,
-        options.dateFormat,
-        options.showPlace,
-        lang,
-      );
+      if (page.size === 'full') return fullPageHtml(groupItems[0], ctx);
+      return pageHtml(groupItems, page.size, no, ctx);
     })
     .join('');
 

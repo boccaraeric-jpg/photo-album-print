@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { C, F } from '../theme';
+import { ALBUM_BACKGROUNDS, C, F } from '../theme';
 import { useLang } from '../i18n';
 import { effectiveCover, SCATTER_MAX, SCATTER_MIN, validScatterPicks } from '../albumStyle';
 import { autoMapIds, collectPlaces, mapPhotoIds, photoCoords } from '../albumMap';
@@ -67,17 +67,7 @@ const TYPEFACE_FONTS: Record<Typeface, string> = {
   script: F.scriptBold,
 };
 
-const BACKGROUNDS = [
-  '#f6f1e9', // crème
-  '#ffffff', // blanc
-  '#dfe3e8', // gris clair
-  '#f6ddd0', // rose poudré
-  '#fbf3c4', // jaune clair
-  '#dcf3e0', // vert clair
-  '#f9dada', // rouge clair
-  '#dbeafe', // bleu clair
-  '#22211f', // sombre
-];
+const BACKGROUNDS = ALBUM_BACKGROUNDS;
 
 /** Puce de choix (libellé + précision facultative). */
 function Chip({

@@ -1,11 +1,11 @@
-import type { ExportOptions, Photo } from './types';
+import type { Photo, PhotoSize } from './types';
 import { stripMarks } from './richText';
 
 /**
  * Petite = grille 2×2, moyenne = 2 empilées, grande = pleine page (avec légende),
  * pleine = photo bord à bord sur toute la page.
  */
-export const PER_PAGE: Record<ExportOptions['photoSize'], number> = {
+export const PER_PAGE: Record<PhotoSize, number> = {
   small: 4,
   medium: 2,
   large: 1,
@@ -22,31 +22,51 @@ export function isLongComment(photo: Photo, scale = 1): boolean {
   return stripMarks(photo.comment).trim().length > LONG_COMMENT / scale;
 }
 
-/** Une page de l'album : soit des photos, soit une page de texte seule. */
+/** Une page de l'album : soit des photos (d'une seule taille), soit une page de texte seule. */
 export type AlbumPage =
-  | { type: 'photos'; items: Photo[] }
+  | { type: 'photos'; items: Photo[]; size: PhotoSize }
   | { type: 'text'; item: Photo };
+
+/** Couleur de fond propre à une page (`Photo.pageBg`), si valable. */
+export function pageBackground(items: Photo[]): string | undefined {
+  for (const p of items) {
+    if (p.pageBg && /^#[0-9a-f]{6}$/i.test(p.pageBg)) return p.pageBg;
+  }
+  return undefined;
+}
+
+export interface PaginateOptions {
+  /** Photos avec carte à côté (grille 2×2 : une ligne entière, cf. `wideSlots`). */
+  wide?: Set<string>;
+  /** Échelle du commentaire : abaisse le seuil de page seule (`isLongComment`). */
+  commentScale?: number;
+  /** Honorer la taille propre à chaque photo (`Photo.size`) — familial seulement. */
+  perPhotoSize?: boolean;
+}
 
 /**
  * Répartit les entrées (photos + pages de texte) en pages. Les pages de texte
  * sont toujours autonomes ; une photo au commentaire très long (ou la taille
  * « grande / pleine ») obtient sa page à elle. L'ordre reçu est conservé.
  *
- * `wide` : photos qui ont leur carte à côté. En grille 2×2 (`perPage` 4), elles
- * prennent une ligne entière, soit deux cases, et commencent toujours une ligne
- * (`wideSlots` donne les mêmes cases aux deux moteurs).
+ * Taille : celle de l'album, sauf photo qui a la sienne (`Photo.size`, choisie
+ * dans l'aperçu). Une page ne mélange jamais deux tailles : un changement de
+ * taille commence une nouvelle page.
+ *
+ * `wide` : en grille 2×2, une photo avec carte prend une ligne entière, soit
+ * deux cases, et commence toujours une ligne.
  */
 export function paginateEntries(
   entries: Photo[],
-  perPage: number,
-  wide?: Set<string>,
-  commentScale = 1,
+  albumSize: PhotoSize,
+  { wide, commentScale = 1, perPhotoSize = false }: PaginateOptions = {},
 ): AlbumPage[] {
   const pages: AlbumPage[] = [];
   let group: Photo[] = [];
+  let groupSize: PhotoSize = albumSize;
   const flush = () => {
     if (group.length) {
-      pages.push({ type: 'photos', items: group });
+      pages.push({ type: 'photos', items: group, size: groupSize });
       group = [];
     }
   };
@@ -56,14 +76,19 @@ export function paginateEntries(
       pages.push({ type: 'text', item: e });
       continue;
     }
+    const size = (perPhotoSize && e.size) || albumSize;
+    const perPage = PER_PAGE[size];
+    if (group.length && size !== groupSize) flush();
+    groupSize = size;
     if (perPage <= 1 || isLongComment(e, commentScale)) {
       flush();
-      pages.push({ type: 'photos', items: [e] });
+      pages.push({ type: 'photos', items: [e], size });
       continue;
     }
-    if (perPage === 4 && wide && slotsUsed([...group, e], wide) > 4) flush();
+    const w = perPage === 4 ? wide : undefined;
+    if (w && slotsUsed([...group, e], w) > 4) flush();
     group.push(e);
-    if (slotsUsed(group, perPage === 4 ? wide : undefined) >= perPage) flush();
+    if (slotsUsed(group, w) >= perPage) flush();
   }
   flush();
   return pages;

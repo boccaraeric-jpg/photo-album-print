@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -103,7 +103,7 @@ import { CommentModal } from './src/components/CommentModal';
 import { AdjustModal } from './src/components/AdjustModal';
 import { NameModal } from './src/components/NameModal';
 import { ExportModal } from './src/components/ExportModal';
-import { PreviewModal } from './src/components/PreviewModal';
+import { PreviewModal, type EntryPatch } from './src/components/PreviewModal';
 import { CameraModal } from './src/components/CameraModal';
 import { PhotoViewerModal } from './src/components/PhotoViewerModal';
 import { CropModal } from './src/components/CropModal';
@@ -1138,6 +1138,11 @@ onBack,
   const [sendProgress, setSendProgress] = useState<string | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  // Aperçu interactif : entrée à recentrer après un réglage, reconstruction en cours.
+  const [previewFocus, setPreviewFocus] = useState<string | null>(null);
+  const [previewRefreshing, setPreviewRefreshing] = useState(false);
+  // Seul le dernier rendu demandé s'affiche (réglages touchés en rafale).
+  const previewSeq = useRef(0);
   const [exportOptions, setExportOptions] = useState<ExportOptions>(
     DEFAULT_EXPORT_OPTIONS,
   );
@@ -1479,7 +1484,12 @@ onBack,
           defaultCoverId,
           lang,
           scatterIds,
+          // Aperçu familial interactif : toucher une photo règle sa taille et
+          // le fond de sa page. Jamais dans le PDF envoyé.
+          options.style === 'family',
         );
+        previewSeq.current++;
+        setPreviewFocus(null);
         setPreviewHtml(html);
         setExportVisible(false);
         setPreviewVisible(true);
@@ -1490,6 +1500,46 @@ onBack,
       }
     },
     [photos.length, orderedPhotos, albumTitle, defaultCoverId, onSetScatter],
+  );
+
+  // Réglage d'une entrée depuis l'aperçu (taille de la photo, fond de sa page) :
+  // enregistré sur la photo, puis aperçu reconstruit et recentré sur elle.
+  const editPreviewEntry = useCallback(
+    async (id: string, patch: EntryPatch, pageIds: string[]) => {
+      const apply = (p: Photo): Photo => {
+        let next = p;
+        if (p.id === id && 'size' in patch) next = { ...next, size: patch.size ?? undefined };
+        if ('pageBg' in patch) {
+          // Le fond est commun à la page : la photo touchée le porte, ses
+          // voisines de page perdent le leur (sinon il l'emporterait).
+          if (p.id === id) next = { ...next, pageBg: patch.pageBg ?? undefined };
+          else if (pageIds.includes(p.id) && p.pageBg) next = { ...next, pageBg: undefined };
+        }
+        return next;
+      };
+      setPhotos((prev) => prev.map(apply));
+      const seq = ++previewSeq.current;
+      setPreviewRefreshing(true);
+      try {
+        const html = await buildAlbumHtml(
+          orderedPhotos.map(apply),
+          albumTitle,
+          exportOptions,
+          defaultCoverId,
+          lang,
+          album.scatterPhotoIds,
+          true,
+        );
+        if (seq !== previewSeq.current) return;
+        setPreviewFocus(id);
+        setPreviewHtml(html);
+      } catch {
+        Alert.alert(L.common.error, L.alert.previewFail);
+      } finally {
+        if (seq === previewSeq.current) setPreviewRefreshing(false);
+      }
+    },
+    [setPhotos, orderedPhotos, albumTitle, exportOptions, defaultCoverId, lang, album.scatterPhotoIds, L],
   );
 
   // Étape 2a : PDF prêt à imprimer, nommé, puis feuille de partage. Reconstruit
@@ -1821,6 +1871,11 @@ onBack,
           setExportVisible(true);
         }}
         onSend={chooseFormat}
+        entries={exportOptions.style === 'family' ? orderedPhotos : undefined}
+        albumSize={exportOptions.photoSize}
+        onEditEntry={exportOptions.style === 'family' ? editPreviewEntry : undefined}
+        focusId={previewFocus}
+        refreshing={previewRefreshing}
       />
     </View>
   );

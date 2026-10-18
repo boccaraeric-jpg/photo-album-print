@@ -141,6 +141,17 @@ export interface Photo {
    * absent = d'office (une carte quand le lieu change, cf. `autoMapIds`).
    */
   mapMode?: 'on' | 'off';
+  /**
+   * Taille propre à cette photo, choisie dans l'aperçu (sinon celle de l'album)
+   * — familial seulement. Une page ne mélange pas deux tailles.
+   */
+  size?: PhotoSize;
+  /**
+   * Fond de la page qui porte cette photo (hex 6 chiffres), choisi dans
+   * l'aperçu ; sinon le fond de l'album. Rattaché à la photo et non à un numéro
+   * de page : il suit la photo quand l'album change.
+   */
+  pageBg?: string;
   /** Timestamp d'ajout dans l'app (ms) — sert de repli et d'ordre par défaut */
   createdAt: number;
   /**
