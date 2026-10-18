@@ -292,8 +292,8 @@ d'entrée** (ils pilotent aussi les libellés) :
   entrée d'un lien **`comclic-edit://e/<id>/<ids de la page>`** que `PreviewModal` intercepte dans
   `onShouldStartLoadWithRequest` → panneau **taille de la photo** (`Photo.size`) et **fond de la
   page** (`Photo.pageBg`, commun à la page : un nouveau fond efface celui des voisines). App
-  (`editPreviewEntry`) enregistre puis reconstruit l'aperçu ; `injectedJavaScript` le recentre sur
-  l'entrée. JS activé **seulement** pour ce script de l'app : la CSP du document interdit toujours
+  (`editPreviewEntry`) enregistre puis reconstruit l'aperçu, recentré sur
+  l'entrée (`injectJavaScript` à `onLoadEnd`, aperçu masqué jusque-là — `injectedJavaScript` ne s'exécutait pas sur l'iPhone). JS activé **seulement** pour ce script de l'app : la CSP du document interdit toujours
   tout script de l'album. Jamais de liens dans le PDF envoyé. Côté rendu : couleurs en **variables
   CSS** (`themeVars`, redéfinies sur une `.sheet.painted` de 842 px), hauteurs par taille sous
   `.sz-<taille>` (`sizeCss`), pagination par taille (`paginateEntries(..., albumSize,

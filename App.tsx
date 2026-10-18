@@ -1873,6 +1873,7 @@ onBack,
         onSend={chooseFormat}
         entries={exportOptions.style === 'family' ? orderedPhotos : undefined}
         albumSize={exportOptions.photoSize}
+        albumBg={exportOptions.background}
         onEditEntry={exportOptions.style === 'family' ? editPreviewEntry : undefined}
         focusId={previewFocus}
         refreshing={previewRefreshing}

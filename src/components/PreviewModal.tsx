@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -48,6 +48,8 @@ interface Props {
    */
   entries?: Photo[];
   albumSize?: PhotoSize;
+  /** Fond de l'album : la pastille en cours quand la page n'a pas le sien. */
+  albumBg?: string;
   /** `pageIds` : entrées de la même page (le fond est commun à la page). */
   onEditEntry?: (id: string, patch: EntryPatch, pageIds: string[]) => void;
   /** Entrée à remettre à l'écran après un nouveau rendu (celle qu'on règle). */
@@ -73,6 +75,7 @@ export function PreviewModal({
   onSend,
   entries,
   albumSize = 'medium',
+  albumBg,
   onEditEntry,
   focusId,
   refreshing = false,
@@ -92,13 +95,36 @@ export function PreviewModal({
     if (!visible) setTarget(null);
   }, [visible]);
 
-  // Remet l'entrée réglée à l'écran : le nouvel aperçu se recharge en haut.
-  // Script de l'app (WKUserScript), non soumis à la politique de sécurité du
-  // document — qui, elle, interdit toujours tout script venu de l'album.
+  // Retour au même endroit après un réglage : le nouvel aperçu se charge en
+  // haut de l'album. Une fois chargé, l'app le fait défiler jusqu'à l'entrée
+  // réglée (`injectJavaScript`, exécuté par l'app et non par le document — dont
+  // la politique de sécurité interdit toujours tout script venu de l'album), et
+  // le garde masqué jusque-là : on ne voit pas le saut vers la couverture.
+  // (`injectedJavaScript`, posé au chargement, ne s'exécutait pas sur l'iPhone.)
+  const webRef = useRef<WebView>(null);
   const safeFocus = focusId && /^[A-Za-z0-9-]+$/.test(focusId) ? focusId : null;
-  const focusScript = safeFocus
-    ? `(function(){var e=document.getElementById('e-${safeFocus}');if(e){e.scrollIntoView({block:'start'});}})();true;`
-    : 'true;';
+  const [placedHtml, setPlacedHtml] = useState<string | null>(null);
+  const hidden = !!safeFocus && !!html && placedHtml !== html;
+  const placeFocus = () => {
+    if (!safeFocus || !html) return;
+    webRef.current?.injectJavaScript(
+      `(function(){var e=document.getElementById('e-${safeFocus}');` +
+        `if(e){e.scrollIntoView({block:'start'});window.scrollBy(0,-12);}})();true;`,
+    );
+    // Le défilement est immédiat ; on laisse une image s'afficher avant de montrer.
+    const done = html;
+    setTimeout(() => setPlacedHtml(done), 60);
+  };
+  // Filet de sécurité : jamais d'aperçu masqué plus d'une seconde.
+  useEffect(() => {
+    if (!hidden) return;
+    const t = setTimeout(() => setPlacedHtml(html), 1000);
+    return () => clearTimeout(t);
+  }, [hidden, html]);
+
+  // Valeurs réellement en vigueur pour l'entrée touchée (affichées en couleur).
+  const currentSize: PhotoSize = selected?.size ?? albumSize;
+  const currentBg = pageBg ?? albumBg;
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onBackToAlbum}>
@@ -116,14 +142,15 @@ export function PreviewModal({
         <View style={styles.webWrap}>
           {html ? (
             <WebView
+              ref={webRef}
               originWhitelist={['*']}
               source={{ html }}
               // Défense en profondeur : l'album est un document statique, sa
               // politique de sécurité (CSP) interdit tout script et toute
-              // ressource externe. Seul le script de l'app (`focusScript`,
+              // ressource externe. Seul le script de l'app (`placeFocus`,
               // recentrage après un réglage) s'exécute, en aperçu interactif.
               javaScriptEnabled={editable}
-              injectedJavaScript={editable ? focusScript : undefined}
+              onLoadEnd={editable ? placeFocus : undefined}
               // Toucher une photo = suivre son lien `comclic-edit://e/<id>` :
               // intercepté ici, il ouvre le panneau de réglage. Aucune
               // navigation vers le web ne part de l'aperçu.
@@ -139,7 +166,7 @@ export function PreviewModal({
                 }
                 return !/^https?:/i.test(req.url) && !req.url.startsWith('comclic-');
               }}
-              style={styles.web}
+              style={[styles.web, hidden && styles.webHidden]}
               scrollEnabled
               showsVerticalScrollIndicator
             />
@@ -180,43 +207,54 @@ export function PreviewModal({
                 <>
                   <Text style={styles.panelLabel}>{L.preview.entrySize}</Text>
                   <View style={styles.chips}>
-                    <Chip
-                      label={L.preview.sizeAlbum(L.export.sizes[albumSize])}
-                      selected={!selected.size}
-                      onPress={() => edit({ size: null })}
-                    />
                     {SIZE_KEYS.map((size) => (
                       <Chip
                         key={size}
                         label={L.export.sizes[size]}
-                        selected={selected.size === size}
-                        onPress={() => edit({ size })}
+                        selected={currentSize === size}
+                        onPress={() => size !== currentSize && edit({ size })}
                       />
                     ))}
                   </View>
+                  {selected.size ? (
+                    <Pressable onPress={() => edit({ size: null })} hitSlop={8}>
+                      <Text style={styles.reset}>
+                        {L.preview.resetSize(L.export.sizes[albumSize])}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={styles.hint}>{L.preview.sizeIsAlbum}</Text>
+                  )}
                 </>
               )}
               <Text style={styles.panelLabel}>{L.preview.entryBg}</Text>
               <View style={styles.chips}>
-                <Chip
-                  label={L.preview.bgAlbum}
-                  selected={!pageBg}
-                  onPress={() => edit({ pageBg: null })}
-                />
-                {ALBUM_BACKGROUNDS.map((color) => (
-                  <Pressable
-                    key={color}
-                    style={[
-                      styles.swatch,
-                      { backgroundColor: color },
-                      pageBg === color && styles.swatchSelected,
-                    ]}
-                    onPress={() => edit({ pageBg: color })}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: pageBg === color }}
-                  />
-                ))}
+                {ALBUM_BACKGROUNDS.map((color) => {
+                  const on = currentBg === color;
+                  return (
+                    <Pressable
+                      key={color}
+                      style={[styles.swatch, { backgroundColor: color }, on && styles.swatchSelected]}
+                      onPress={() => !on && edit({ pageBg: color })}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                    >
+                      {on && (
+                        <Text style={[styles.swatchCheck, isDarkHex(color) && styles.swatchCheckLight]}>
+                          ✓
+                        </Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
               </View>
+              {pageBg ? (
+                <Pressable onPress={() => edit({ pageBg: null })} hitSlop={8}>
+                  <Text style={styles.reset}>{L.preview.resetBg}</Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.hint}>{L.preview.bgIsAlbum}</Text>
+              )}
             </ScrollView>
           </View>
         )}
@@ -247,6 +285,12 @@ export function PreviewModal({
       </View>
     </Modal>
   );
+}
+
+/** Vrai si la couleur (hex 6 chiffres) est sombre : coche blanche sur la pastille. */
+function isDarkHex(hex: string): boolean {
+  const n = parseInt(hex.slice(1), 16);
+  return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) < 128;
 }
 
 /** Puce de choix du panneau (même allure que celles de la mise en page). */
@@ -319,11 +363,13 @@ const styles = StyleSheet.create({
   chipText: { fontFamily: F.monoBold, fontSize: 14, color: C.ink },
   chipTextSelected: { color: '#fff' },
   swatch: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   swatchSelected: { borderWidth: 3, borderColor: C.sienna },
   header: { paddingHorizontal: 20, paddingBottom: 12 },
@@ -337,6 +383,11 @@ const styles = StyleSheet.create({
   subtitle: { fontFamily: F.mono, fontSize: 13, color: '#6b7280', marginTop: 2 },
   webWrap: { flex: 1, backgroundColor: '#e5e7eb' },
   web: { flex: 1, backgroundColor: 'transparent' },
+  webHidden: { opacity: 0 },
+  reset: { fontFamily: F.monoBold, fontSize: 13, color: C.sienna, marginTop: 10 },
+  hint: { fontFamily: F.mono, fontSize: 12, color: C.muted, marginTop: 10 },
+  swatchCheck: { fontFamily: F.monoBold, fontSize: 16, color: C.ink },
+  swatchCheckLight: { color: '#fff' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   toolbar: {
     flexDirection: 'row',
