@@ -35,11 +35,17 @@ import {
 } from './albumMap';
 import { mapImagesFor } from './mapSnapshot';
 import {
+  CAPTION_INK,
+  COMMENT_BASE,
+  COMMENT_SCALE,
   COVER_W,
   coverPicks,
   effectiveCover,
   gridLayout,
   GRID,
+  META_INK,
+  META_INK_DARK,
+  META_SIZE,
   POLAROID,
   polaroidBox,
   scatterSlots,
@@ -212,8 +218,11 @@ function fontFor(bold: boolean, size: number, fam: FontFam = 'sans') {
 const segWidth = (seg: Seg) => seg.w;
 const wordWidth = (word: Word) => word.reduce((sum, seg) => sum + segWidth(seg), 0);
 
-/** Découpe les fragments de style en mots mesurés (les blancs séparent). */
-function toWords(runs: RichRun[], size: number, fam: FontFam): Word[] {
+/**
+ * Découpe les fragments de style en mots mesurés (les blancs séparent).
+ * `baseBold` : tout le texte en graisse forte (légende manuscrite).
+ */
+function toWords(runs: RichRun[], size: number, fam: FontFam, baseBold = false): Word[] {
   const words: Word[] = [];
   let current: Word = [];
   const flush = () => {
@@ -228,10 +237,11 @@ function toWords(runs: RichRun[], size: number, fam: FontFam): Word[] {
         flush();
         continue;
       }
-      const font = fontFor(run.bold, size, fam);
+      const bold = run.bold || baseBold;
+      const font = fontFor(bold, size, fam);
       current.push({
         text: piece,
-        bold: run.bold,
+        bold,
         underline: run.underline,
         w: font.getTextWidth(piece),
       });
@@ -305,12 +315,12 @@ const lineHeightFor = (size: number) => size * 1.32;
 function measureRich(
   text: string,
   width: number,
-  o: Pick<TextOpts, 'size' | 'maxLines' | 'fam'>,
+  o: Pick<TextOpts, 'size' | 'maxLines' | 'fam' | 'bold'>,
 ): number {
   if (!text) return 0;
   try {
     const fam = o.fam ?? 'sans';
-    const words = toWords(parseRich(text), o.size, fam);
+    const words = toWords(parseRich(text), o.size, fam, !!o.bold);
     const lines = layoutRich(words, o.size, width, o.maxLines ?? 999, fam);
     return lines.length * lineHeightFor(o.size);
   } catch {
@@ -339,7 +349,7 @@ function drawRichText(
     rule.setStrokeWidth(Math.max(1, o.size / 16));
 
     const fam = o.fam ?? 'sans';
-    const words = toWords(parseRich(text), o.size, fam);
+    const words = toWords(parseRich(text), o.size, fam, !!o.bold);
     const lines = layoutRich(words, o.size, width, o.maxLines ?? 999, fam);
     const lineHeight = lineHeightFor(o.size);
     const spaceW = fontFor(false, o.size, fam).getTextWidth(' ');
@@ -688,12 +698,31 @@ async function renderPhotoPage(
     // La légende agrandie (manuscrite) prend sa place sur la photo, pas sur
     // l'espace entre les cartes : sinon la 2ᵉ ligne débordait sur le pied de page.
     const spec = TYPE_SPECS[options.typeface];
-    const captionH =
-      comment || meta ? Math.round((perPage === 4 ? 92 : 122) * spec.captionScale) : 0;
-
     const imgX = cellX + pad;
     const imgY = cellY + pad;
     const imgW = cw - 2 * pad;
+    // Corps : même valeur que le PDF (points A4 × k). Le commentaire s'affiche
+    // en entier (4 lignes au plus ; au-delà la photo a sa page, cf.
+    // `isLongComment`) — la bande grandit et la photo cède la place.
+    const k = W / COVER_W;
+    const commentSize =
+      (perPage === 4 ? COMMENT_BASE.small : COMMENT_BASE.other) *
+      spec.captionScale *
+      COMMENT_SCALE[options.commentSize] *
+      k;
+    const metaSize = META_SIZE * k;
+    const commentOpts = {
+      size: commentSize,
+      maxLines: 4,
+      fam: spec.caption,
+      bold: spec.captionBold,
+    };
+    const textH =
+      (comment ? measureRich(comment, imgW, commentOpts) : 0) +
+      (comment && meta ? 6 : 0) +
+      (meta ? lineHeightFor(metaSize) : 0);
+    const minBand = Math.round((perPage === 4 ? 92 : 122) * spec.captionScale);
+    const captionH = comment || meta ? Math.max(minBand, Math.ceil(textH) + 22) : 0;
     const imgH = cellH - 2 * pad - captionH;
     // Carte du lieu à droite de la photo (MAP_SHARE de la largeur, comme le PDF).
     const hasMap = maps.has(photo.id);
@@ -726,9 +755,9 @@ async function renderPhotoPage(
     }
 
     // Légende (commentaire tronqué + date · lieu) sous la photo.
-    const captionColor = whiteFrame ? '#2c2a26' : ink;
+    const captionColor = whiteFrame || !dark ? CAPTION_INK : ink;
     // Date/lieu nettement lisibles (le tan clair passait inaperçu sur fond crème).
-    const metaColor = dark ? '#cbc5b8' : '#6b6456';
+    const metaColor = !whiteFrame && dark ? META_INK_DARK : META_INK;
     const align =
       options.frame === 'polaroid' ? TextAlign.Center : TextAlign.Left;
     // Alignement de la date/lieu selon l'option (Gauche/Centre/Droite).
@@ -741,16 +770,9 @@ async function renderPhotoPage(
     // Position verticale du commentaire dans la bande qui lui est réservée
     // (pendant Skia de la bande `.caption` du PDF). On mesure le bloc avant de
     // le dessiner pour répartir le vide au-dessus, autour ou en dessous.
-    const commentSize = (perPage === 4 ? 28 : 34) * spec.captionScale;
-    const metaSize = perPage === 4 ? 10 : 11;
     const bandTop = imgY + imgH + 14;
     const bandH = Math.max(0, captionH - 14);
-    const blockH =
-      (comment
-        ? measureRich(comment, imgW, { size: commentSize, maxLines: 2, fam: spec.caption })
-        : 0) +
-      (comment && meta ? 6 : 0) +
-      (meta ? lineHeightFor(metaSize) : 0);
+    const blockH = textH;
     const slack = Math.max(0, bandH - blockH);
     const vAlign = options.commentVAlign ?? 'top';
     let ty =
@@ -759,11 +781,9 @@ async function renderPhotoPage(
 
     if (comment) {
       ty += drawRichText(canvas, comment, imgX, ty, imgW, {
+        ...commentOpts,
         color: captionColor,
-        size: commentSize,
-        maxLines: 2,
         align,
-        fam: spec.caption,
       });
       ty += 6;
     }
@@ -1055,14 +1075,14 @@ async function renderFullPage(
     const spec = TYPE_SPECS[options.typeface];
     // Première ligne centrée dans le bandeau quel que soit le corps (en
     // Montserrat : H - 96, la position d'origine).
-    const size = 28 * spec.captionScale;
-    const top = H - capH / 2 - lineHeightFor(size) / 2 - 2;
+    const size = 14 * spec.captionScale * COMMENT_SCALE[options.commentSize] * (W / COVER_W);
+    const opts = { size, maxLines: 2, fam: spec.caption, bold: spec.captionBold };
+    // Bloc centré verticalement dans le bandeau, quelle que soit sa hauteur.
+    const top = H - capH / 2 - measureRich(comment, W - 2 * PAD, opts) / 2;
     drawRichText(canvas, comment, PAD, top, W - 2 * PAD, {
-      color: ink,
-      size,
+      ...opts,
+      color: dark ? ink : CAPTION_INK,
       align: TextAlign.Center,
-      maxLines: 2,
-      fam: spec.caption,
     });
   }
   return encodeSurface(surface, title, pageNo);
@@ -1276,7 +1296,12 @@ export async function buildAlbumImages(
       : photos;
 
   // Les pages de texte s'intercalent dans les deux rendus (familial et pro).
-  const pages = paginateEntries(pageSource, perPage, mapIds);
+  const pages = paginateEntries(
+    pageSource,
+    perPage,
+    mapIds,
+    pro ? 1 : COMMENT_SCALE[eff.commentSize],
+  );
   let numbered = 0;
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];

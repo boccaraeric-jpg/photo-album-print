@@ -27,12 +27,19 @@ import {
 } from './albumMap';
 import { mapImagesFor } from './mapSnapshot';
 import {
+  CAPTION_INK,
+  COMMENT_BASE,
+  COMMENT_SCALE,
+  commentShrink,
   COVER_H,
   coverPicks,
   effectiveCover,
   famsUsed,
   gridLayout,
   GRID,
+  META_INK,
+  META_INK_DARK,
+  META_SIZE,
   POLAROID,
   polaroidBox,
   scatterSlots,
@@ -106,6 +113,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   commentVAlign: 'top',
   typeface: 'sans',
   cover: 'classic',
+  commentSize: 'large',
   showMap: false,
   photoMaps: false,
 };
@@ -151,6 +159,7 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     textAlign: oneOf(o.textAlign, align, d.textAlign),
     commentVAlign: oneOf(o.commentVAlign, ['top', 'middle', 'bottom'] as const, d.commentVAlign),
     typeface: oneOf(o.typeface, ['sans', 'serif', 'script'] as const, d.typeface),
+    commentSize: oneOf(o.commentSize, ['normal', 'large', 'xlarge'] as const, d.commentSize),
     cover: oneOf(o.cover, ['classic', 'scatter', 'filmstrip'] as const, d.cover),
     showMap: typeof o.showMap === 'boolean' ? o.showMap : d.showMap,
     photoMaps: typeof o.photoMaps === 'boolean' ? o.photoMaps : d.photoMaps,
@@ -348,20 +357,26 @@ function buildStyles(options: ExportOptions): string {
   const vAlign = options.commentVAlign ?? 'top';
   const band = vAlign === 'top' ? 0 : CAPTION_BANDS[options.photoSize];
   // Ce que la bande coûte en plus d'une légende d'une ligne, pris sur la photo.
-  const shrink = band ? band - CAPTION_BASES[options.photoSize] : 0;
+  const baseSize = options.photoSize === 'small' ? COMMENT_BASE.small : COMMENT_BASE.other;
+  // Bande de position + place d'un commentaire plus grand, prises sur la photo.
+  const shrink =
+    (band ? band - CAPTION_BASES[options.photoSize] : 0) +
+    commentShrink(baseSize, options.typeface, options.commentSize);
   const phHeight = `${parseInt(PH_HEIGHTS[options.photoSize], 10) - shrink}px`;
   // Typographie : une famille par rôle (titre, légende, texte long, date).
   const spec = TYPE_SPECS[options.typeface];
   const fam = (f: FontFam) => FAM_CSS[f];
   const regular = (f: FontFam) => FACES[f].regular[0];
   const bold = (f: FontFam) => FACES[f].bold[0];
-  const captionSize = `${(options.photoSize === 'small' ? 16 : 18) * spec.captionScale}px`;
+  const commentScale = COMMENT_SCALE[options.commentSize];
+  const captionSize = `${Math.round(baseSize * spec.captionScale * commentScale * 10) / 10}px`;
+  const captionWeight = spec.captionBold ? bold(spec.caption) : regular(spec.caption);
   const cardGap = options.photoSize === 'small' ? '12px' : '16px';
 
   // Encadré : les cadres à fond blanc gardent un texte sombre ; les cadres
   // transparents (bordure, sans cadre) héritent des couleurs de la page.
   let frameCss = '';
-  let captionInk = '#2c2a26';
+  let captionInk = CAPTION_INK;
   let captionMuted = '#a89f8d';
   switch (options.frame) {
     case 'card':
@@ -496,7 +511,7 @@ function buildStyles(options: ExportOptions): string {
   .missing { color: ${muted}; font-style: italic; font-size: 13px; }
   .caption {
     margin: 8px 4px 2px; font-size: ${captionSize}; line-height: ${spec.lineHeight};
-    font-family: ${fam(spec.caption)}; font-weight: ${regular(spec.caption)};
+    font-family: ${fam(spec.caption)}; font-weight: ${captionWeight};
     color: ${captionInk};
   }
   /* Bande de commentaire : hauteur MINIMALE (et non fixe), pour qu'un long
@@ -512,11 +527,11 @@ function buildStyles(options: ExportOptions): string {
   .caption strong, .full-cap strong { font-weight: ${bold(spec.caption)}; }
   .caption u, .meta u, .full-cap u { text-decoration: underline; }
   .caption .date {
-    display: block; margin-top: 3px; font-size: 6.5px;
+    display: block; margin-top: 4px; font-size: ${META_SIZE}px; line-height: 1.3;
     text-align: ${options.dateAlign ?? 'left'};
     font-family: ${fam(spec.meta)};
-    letter-spacing: 1px; text-transform: lowercase; font-weight: ${regular(spec.meta)};
-    color: ${dark ? '#cbc5b8' : '#6b6456'};
+    letter-spacing: 0.6px; text-transform: lowercase; font-weight: ${regular(spec.meta)};
+    color: ${captionInk === ink && dark ? META_INK_DARK : META_INK};
   }
 
   /* --- Photo pleine page (bord à bord) --- */
@@ -526,8 +541,9 @@ function buildStyles(options: ExportOptions): string {
   .full-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .full-cap {
     height: 64px; padding: 0 44px; display: flex; align-items: center; justify-content: center;
-    font-size: ${14 * spec.captionScale}px; line-height: 1.4; text-align: center; color: ${ink};
-    font-family: ${fam(spec.caption)}; font-weight: ${regular(spec.caption)};
+    font-size: ${Math.round(14 * spec.captionScale * commentScale * 10) / 10}px; line-height: 1.4;
+    text-align: center; color: ${dark ? ink : CAPTION_INK};
+    font-family: ${fam(spec.caption)}; font-weight: ${captionWeight};
   }
 
   /* --- Page de texte seule (texte centré verticalement sur la page) --- */
@@ -754,7 +770,7 @@ export async function buildAlbumHtml(
     : null;
   const mapHtml = mapModel ? mapPageHtml(mapModel) : '';
 
-  const pages = paginateEntries(pageSource, perPage, mapIds)
+  const pages = paginateEntries(pageSource, perPage, mapIds, COMMENT_SCALE[options.commentSize])
     .map((page, index) => {
       const no = index + 1;
       if (page.type === 'text') return textPageHtml(page.item, title, no);

@@ -192,6 +192,8 @@ const fr = {
     scatterValidate: 'Valider',
     scatterMin: (n: number) => `Encore ${n} photo${n > 1 ? 's' : ''} à choisir`,
     scatterMax: '9 photos au plus',
+    commentSizeLabel: 'Taille des commentaires',
+    commentSizes: { normal: 'Normale', large: 'Grande', xlarge: 'Très grande' },
     photoMapsLabel: 'Cartes à côté des photos',
     photoMapsHint:
       'D’office, une carte à chaque changement de lieu. Ajoutez ou retirez-en avec « Choisir », ou dans l’éditeur de commentaire d’une photo.',
@@ -527,6 +529,8 @@ const en: Dict = {
     scatterValidate: 'Done',
     scatterMin: (n: number) => `${n} more photo${n > 1 ? 's' : ''} to choose`,
     scatterMax: '9 photos at most',
+    commentSizeLabel: 'Caption size',
+    commentSizes: { normal: 'Normal', large: 'Large', xlarge: 'Extra large' },
     photoMapsLabel: 'Maps next to photos',
     photoMapsHint:
       'By default, one map each time the place changes. Add or remove maps with “Choose”, or in a photo’s comment editor.',

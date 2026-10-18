@@ -233,6 +233,11 @@ d'entrée** (ils pilotent aussi les libellés) :
   pas `<Modal>`. Sans choix valable (`validScatterPicks`) : automatique, ★ + suivantes, 7 au plus.
   Reporté par `duplicateAlbum` ; **pas** porté par la sauvegarde ni le `.comclic` (retour à
   l'automatique).
+  **Lisibilité des commentaires** (retour testeurs « trop petits, trop pâles ») : réglage
+  `commentSize` (normal / **grand par défaut** / très grand, `COMMENT_SCALE`), corps et encres
+  partagés dans `albumStyle.ts` (`COMMENT_BASE`, `CAPTION_INK`, `META_*`), Caveat en **bold**
+  (`captionBold`). La photo cède la place (`commentShrink`), le seuil de page seule baisse
+  (`isLongComment(photo, scale)`). Skia n'a plus de coupure à 2 lignes : la bande se mesure.
   Les montages **gardent** la photo ★ dans les pages (la règle d'exclusion ne vaut qu'en `classic`).
   En `script`, les textes longs (pages de texte, date) restent en Lora : Caveat illisible au long cours.
   Contrôle visuel possible **sur PC** : `buildAlbumHtml` tourne sous node (sucrase + bouchons des

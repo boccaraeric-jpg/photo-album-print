@@ -55,6 +55,9 @@ export type Typeface = 'sans' | 'serif' | 'script';
  */
 export type CoverStyle = 'classic' | 'scatter' | 'filmstrip';
 
+/** Corps des commentaires sous les photos (rendu familial). */
+export type CommentSize = 'normal' | 'large' | 'xlarge';
+
 /** Options de personnalisation du mini album exporté. */
 export interface ExportOptions {
   /** Rendu global (familial personnalisable ou professionnel sobre). */
@@ -82,6 +85,8 @@ export interface ExportOptions {
   commentVAlign: 'top' | 'middle' | 'bottom';
   /** Typographie — familial uniquement (le pro reste en Montserrat). */
   typeface: Typeface;
+  /** Corps des commentaires — familial uniquement (cf. `COMMENT_SCALE`). */
+  commentSize: CommentSize;
   /** Style de la 1ère de couverture — familial uniquement. */
   cover: CoverStyle;
   /** Page « Nos lieux de visite » après la couverture — familial uniquement. */

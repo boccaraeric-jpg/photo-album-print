@@ -1,4 +1,4 @@
-import type { CoverStyle, Photo, Typeface } from './types';
+import type { CommentSize, CoverStyle, Photo, Typeface } from './types';
 
 /*
  * Typographie et couvertures du rendu familial — source unique partagée par les
@@ -31,6 +31,8 @@ export interface TypeSpec {
   lineHeight: number;
   /** Titre de couverture en capitales : propre au Montserrat (une manuscrite en capitales est illisible). */
   uppercaseTitle: boolean;
+  /** Légende en graisse forte : Caveat en graisse normale est trop pâle pour être lue. */
+  captionBold: boolean;
 }
 
 export const TYPE_SPECS: Record<Typeface, TypeSpec> = {
@@ -43,6 +45,7 @@ export const TYPE_SPECS: Record<Typeface, TypeSpec> = {
     titleScale: 1,
     lineHeight: 1.45,
     uppercaseTitle: true,
+    captionBold: false,
   },
   serif: {
     title: 'serif',
@@ -53,6 +56,7 @@ export const TYPE_SPECS: Record<Typeface, TypeSpec> = {
     titleScale: 1,
     lineHeight: 1.55,
     uppercaseTitle: false,
+    captionBold: false,
   },
   script: {
     title: 'script',
@@ -63,8 +67,38 @@ export const TYPE_SPECS: Record<Typeface, TypeSpec> = {
     titleScale: 1.25,
     lineHeight: 1.4,
     uppercaseTitle: false,
+    captionBold: true,
   },
 };
+
+/*
+ * Lisibilité des commentaires — partagée par les deux moteurs. Retour testeurs :
+ * légendes « trop petites et trop pâles ». Corps de base en points A4 (petite
+ * taille / autres), multiplié par `captionScale` (police) puis par
+ * `COMMENT_SCALE` (réglage) ; Skia multiplie encore par `W / COVER_W`.
+ */
+export const COMMENT_BASE = { small: 16, other: 18 };
+export const COMMENT_SCALE: Record<CommentSize, number> = {
+  normal: 1,
+  large: 1.2,
+  xlarge: 1.4,
+};
+/** Commentaire sur cadre blanc (ou fond clair) : encre quasi noire. */
+export const CAPTION_INK = '#14120f';
+/** Ligne « lieu · date » : 8,5 pt, foncée (c'était 6,5 pt beige, illisible). */
+export const META_SIZE = 8.5;
+export const META_INK = '#4d473e';
+export const META_INK_DARK = '#e0dbd0';
+
+/**
+ * Hauteur prise à la photo pour loger un commentaire plus grand que le corps
+ * normal (deux lignes de plus de hauteur) : la carte garde sa hauteur, la
+ * pagination ne bouge pas (même principe que les bandes de `pdf.ts`).
+ */
+export function commentShrink(baseSize: number, t: Typeface, size: CommentSize): number {
+  const spec = TYPE_SPECS[t];
+  return Math.round(2 * baseSize * spec.captionScale * (COMMENT_SCALE[size] - 1) * spec.lineHeight);
+}
 
 /** Familles réellement employées (le PDF n'embarque que celles-là). */
 export function famsUsed(t: Typeface): FontFam[] {

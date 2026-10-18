@@ -17,6 +17,7 @@ import { effectiveCover, SCATTER_MAX, SCATTER_MIN, validScatterPicks } from '../
 import { autoMapIds, collectPlaces, mapPhotoIds, photoCoords } from '../albumMap';
 import { appleMapsAvailable } from '../mapSnapshot';
 import type {
+  CommentSize,
   CoverStyle,
   DateFormat,
   ExportOptions,
@@ -54,6 +55,7 @@ const ALIGN_KEYS: ('left' | 'center' | 'right')[] = ['left', 'center', 'right'];
 // sa fiche en flux (la description ne doit jamais être tronquée), il n'a pas de
 // bande de commentaire où placer quoi que ce soit.
 const COMMENT_POS_KEYS: ('top' | 'middle' | 'bottom')[] = ['top', 'middle', 'bottom'];
+const COMMENT_SIZE_KEYS: CommentSize[] = ['normal', 'large', 'xlarge'];
 const DATE_FORMAT_KEYS: DateFormat[] = ['short', 'shortTime', 'long', 'full', 'none'];
 const TYPEFACE_KEYS: Typeface[] = ['sans', 'serif', 'script'];
 const COVER_KEYS: CoverStyle[] = ['classic', 'scatter', 'filmstrip'];
@@ -512,6 +514,18 @@ export function ExportModal({
 
           {!isPro && (
             <>
+              <Text style={styles.label}>{L.export.commentSizeLabel}</Text>
+              <View style={styles.chips}>
+                {COMMENT_SIZE_KEYS.map((value) => (
+                  <Chip
+                    key={value}
+                    selected={options.commentSize === value}
+                    label={L.export.commentSizes[value]}
+                    onPress={() => setOptions((o) => ({ ...o, commentSize: value }))}
+                  />
+                ))}
+              </View>
+
               <Text style={styles.label}>{L.export.commentPosLabel}</Text>
               <View style={styles.chips}>
                 {COMMENT_POS_KEYS.map((value) => (

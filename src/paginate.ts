@@ -15,10 +15,11 @@ export const PER_PAGE: Record<ExportOptions['photoSize'], number> = {
 /** Au-delà de cette longueur, le commentaire vaut à sa photo une page entière. */
 const LONG_COMMENT = 160;
 
-export function isLongComment(photo: Photo): boolean {
+export function isLongComment(photo: Photo, scale = 1): boolean {
   // Sur le texte NU : les marques de mise en forme ne doivent pas faire basculer
-  // une photo sur une page entière.
-  return stripMarks(photo.comment).trim().length > LONG_COMMENT;
+  // une photo sur une page entière. Commentaire plus grand (`scale`) → seuil
+  // plus bas : il prend autant de lignes qu'un plus long en petit corps.
+  return stripMarks(photo.comment).trim().length > LONG_COMMENT / scale;
 }
 
 /** Une page de l'album : soit des photos, soit une page de texte seule. */
@@ -39,6 +40,7 @@ export function paginateEntries(
   entries: Photo[],
   perPage: number,
   wide?: Set<string>,
+  commentScale = 1,
 ): AlbumPage[] {
   const pages: AlbumPage[] = [];
   let group: Photo[] = [];
@@ -54,7 +56,7 @@ export function paginateEntries(
       pages.push({ type: 'text', item: e });
       continue;
     }
-    if (perPage <= 1 || isLongComment(e)) {
+    if (perPage <= 1 || isLongComment(e, commentScale)) {
       flush();
       pages.push({ type: 'photos', items: [e] });
       continue;
