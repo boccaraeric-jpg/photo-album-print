@@ -193,8 +193,13 @@ const fr = {
     scatterMin: (n: number) => `Encore ${n} photo${n > 1 ? 's' : ''} à choisir`,
     scatterMax: '9 photos au plus',
     photoMapsLabel: 'Cartes à côté des photos',
-    photoMapsHint: (n: number) =>
-      `${n} carte${n > 1 ? 's' : ''} : une à chaque changement de lieu. Ajoutez ou retirez-en photo par photo, dans l’éditeur de commentaire.`,
+    photoMapsHint:
+      'D’office, une carte à chaque changement de lieu. Ajoutez ou retirez-en avec « Choisir », ou dans l’éditeur de commentaire d’une photo.',
+    photoMapsPick: 'Photos avec carte',
+    photoMapsChosen: (n: number) => `${n} carte${n > 1 ? 's' : ''} dans l’album`,
+    photoMapsPickHint:
+      'Touchez une photo pour ajouter ou retirer sa carte. « Automatique » remet une carte à chaque changement de lieu.',
+    photoMapsNoName: 'Lieu sans nom',
     photoMapsOffline:
       'Cartes simplifiées sur cet appareil (cartes Apple Plans sur iPhone uniquement).',
     mapLabel: 'Carte des lieux',
@@ -523,8 +528,13 @@ const en: Dict = {
     scatterMin: (n: number) => `${n} more photo${n > 1 ? 's' : ''} to choose`,
     scatterMax: '9 photos at most',
     photoMapsLabel: 'Maps next to photos',
-    photoMapsHint: (n: number) =>
-      `${n} map${n > 1 ? 's' : ''}: one each time the place changes. Add or remove them photo by photo, in the comment editor.`,
+    photoMapsHint:
+      'By default, one map each time the place changes. Add or remove maps with “Choose”, or in a photo’s comment editor.',
+    photoMapsPick: 'Photos with a map',
+    photoMapsChosen: (n: number) => `${n} map${n > 1 ? 's' : ''} in the album`,
+    photoMapsPickHint:
+      'Tap a photo to add or remove its map. “Automatic” puts back one map each time the place changes.',
+    photoMapsNoName: 'Unnamed place',
     photoMapsOffline: 'Simplified maps on this device (Apple Maps on iPhone only).',
     mapLabel: 'Map of places',
     mapHint: (n: number) =>

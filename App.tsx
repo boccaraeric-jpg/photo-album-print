@@ -1798,6 +1798,11 @@ onBack,
         scatterIds={album.scatterPhotoIds}
         preparing={preparing}
         onPreview={openPreview}
+        onSetMapModes={(modes) =>
+          setPhotos((prev) =>
+            prev.map((p) => (p.id in modes ? { ...p, mapMode: modes[p.id] } : p)),
+          )
+        }
         onClose={() => setExportVisible(false)}
       />
 

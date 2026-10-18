@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, F } from '../theme';
 import { useLang } from '../i18n';
 import { effectiveCover, SCATTER_MAX, SCATTER_MIN, validScatterPicks } from '../albumStyle';
-import { collectPlaces, mapPhotoIds } from '../albumMap';
+import { autoMapIds, collectPlaces, mapPhotoIds, photoCoords } from '../albumMap';
 import { appleMapsAvailable } from '../mapSnapshot';
 import type {
   CoverStyle,
@@ -38,6 +38,8 @@ interface Props {
   preparing: boolean;
   /** Ouvre l'aperçu avant envoi avec les options et la sélection du pêle-mêle (`[]` = automatique). */
   onPreview: (options: ExportOptions, scatterIds: string[]) => void;
+  /** Enregistre la carte de chaque photo (`undefined` = d'office, cf. `Photo.mapMode`). */
+  onSetMapModes?: (modes: Record<string, Photo['mapMode']>) => void;
   onClose: () => void;
 }
 
@@ -188,6 +190,7 @@ export function ExportModal({
   photos,
   scatterIds,
   preparing,
+  onSetMapModes,
   onPreview,
   onClose,
 }: Props) {
@@ -211,6 +214,30 @@ export function ExportModal({
   // Lieux plaçables sur la carte (photos géolocalisées) : 0 → réglage inactif.
   const placeCount = useMemo(() => collectPlaces(photos, lang).length, [photos, lang]);
   const photoMapCount = useMemo(() => mapPhotoIds(photos).size, [photos]);
+  // Choix des cartes photo par photo : brouillon (photos avec carte) pendant le
+  // panneau, enregistré seulement à « Valider ».
+  const geoPhotos = useMemo(() => images.filter((p) => !!photoCoords(p)), [images]);
+  const [mapDraft, setMapDraft] = useState<Set<string> | null>(null);
+  const toggleMap = (id: string) =>
+    setMapDraft((d) => {
+      const next = new Set(d ?? []);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const validateMaps = () => {
+    if (!mapDraft) return;
+    // Un choix identique à la règle d'office redevient « d'office » : il suivra
+    // alors les changements d'ordre ou de lieu du dossier.
+    const auto = autoMapIds(photos);
+    const modes: Record<string, Photo['mapMode']> = {};
+    for (const p of geoPhotos) {
+      const want = mapDraft.has(p.id);
+      modes[p.id] = want === auto.has(p.id) ? undefined : want ? 'on' : 'off';
+    }
+    onSetMapModes?.(modes);
+    setMapDraft(null);
+  };
   // En pro les sections sont peu nombreuses : on les aère davantage.
   const labelStyle = isPro ? [styles.label, styles.labelSpaced] : styles.label;
 
@@ -227,6 +254,7 @@ export function ExportModal({
     // Une photo supprimée depuis le dernier choix sort de la sélection.
     setPicked(validScatterPicks(photos, scatterIds).map((p) => p.id));
     setDraft(null);
+    setMapDraft(null);
     // `photos` change à chaque édition du dossier : la sélection n'est relue
     // qu'à l'ouverture, pas pendant le réglage.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -333,7 +361,22 @@ export function ExportModal({
                       />
                     ))}
                   </View>
-                  <Text style={styles.note}>{L.export.photoMapsHint(photoMapCount)}</Text>
+                  <Text style={styles.note}>{L.export.photoMapsHint}</Text>
+                  {options.photoMaps && !!onSetMapModes && (
+                    <View style={styles.pickRow}>
+                      <View style={styles.pickInfo}>
+                        <Text style={styles.pickTitle}>{L.export.photoMapsPick}</Text>
+                        <Text style={styles.note}>{L.export.photoMapsChosen(photoMapCount)}</Text>
+                      </View>
+                      <Pressable
+                        style={styles.pickBtn}
+                        onPress={() => setMapDraft(mapPhotoIds(photos))}
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.pickBtnText}>{L.export.scatterChoose}</Text>
+                      </Pressable>
+                    </View>
+                  )}
                   {!appleMapsAvailable && (
                     <Text style={styles.note}>{L.export.photoMapsOffline}</Text>
                   )}
@@ -520,6 +563,76 @@ export function ExportModal({
             )}
           </Pressable>
         </View>
+
+        {/* Choix des cartes, photo par photo : même surcouche que le pêle-mêle. */}
+        {mapDraft && (
+          <View
+            style={[
+              styles.picker,
+              { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 16) },
+            ]}
+          >
+            <View style={styles.header}>
+              <Pressable
+                onPress={() => setMapDraft(null)}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={L.common.cancel}
+              >
+                <Text style={styles.close}>✕</Text>
+              </Pressable>
+              <Text style={styles.title} numberOfLines={1}>
+                {L.export.photoMapsPick}
+              </Text>
+              <Text style={styles.badge}>{`${mapDraft.size} / ${geoPhotos.length}`}</Text>
+            </View>
+            <Text style={[styles.note, styles.pickHint]}>{L.export.photoMapsPickHint}</Text>
+            <FlatList
+              data={geoPhotos}
+              keyExtractor={(p) => p.id}
+              numColumns={3}
+              contentContainerStyle={styles.pickGrid}
+              columnWrapperStyle={styles.pickGridRow}
+              renderItem={({ item }) => {
+                const on = mapDraft.has(item.id);
+                return (
+                  <Pressable
+                    style={styles.mapItem}
+                    onPress={() => toggleMap(item.id)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: on }}
+                  >
+                    <View style={[styles.mapThumb, on && styles.thumbSelected]}>
+                      <Image
+                        source={{ uri: item.uri }}
+                        style={[styles.thumbImg, !on && styles.mapOff]}
+                      />
+                      {on && (
+                        <View style={[styles.rank, styles.rankHero]}>
+                          <Text style={styles.rankText}>✓</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.mapPlace} numberOfLines={1}>
+                      {item.place?.split(',')[0]?.trim() || L.export.photoMapsNoName}
+                    </Text>
+                  </Pressable>
+                );
+              }}
+            />
+            <View style={styles.pickActions}>
+              <Pressable
+                style={[styles.btn, styles.btnGhost]}
+                onPress={() => setMapDraft(autoMapIds(photos))}
+              >
+                <Text style={styles.btnGhostText}>{L.export.scatterAutoBtn}</Text>
+              </Pressable>
+              <Pressable style={[styles.btn, styles.btnPrimary]} onPress={validateMaps}>
+                <Text style={styles.btnPrimaryText}>{L.export.scatterValidate}</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
 
         {/* Choix des photos du pêle-mêle : surcouche <View> et non <Modal>,
             iOS ne présente pas deux Modal imbriqués (cf. SpellCheckModal). */}
@@ -735,6 +848,17 @@ const styles = StyleSheet.create({
   rankHero: { backgroundColor: C.sienna },
   rankText: { fontFamily: F.monoBold, fontSize: 13, color: C.paper },
   pickStatus: { textAlign: 'center', paddingHorizontal: 20 },
+  mapItem: { flex: 1 / 3 },
+  mapThumb: {
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: 'transparent',
+  },
+  // Photo sans carte : estompée, pour lire d'un coup d'œil ce qui en aura une.
+  mapOff: { opacity: 0.45 },
+  mapPlace: { fontFamily: F.mono, fontSize: 11, color: C.muted, marginTop: 4 },
   pickActions: {
     flexDirection: 'row',
     gap: 12,

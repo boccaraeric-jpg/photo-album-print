@@ -247,7 +247,7 @@ d'entrée** (ils pilotent aussi les libellés) :
   une **ligne entière** (`wideSlots` de `paginate.ts`, mêmes cases dans les deux moteurs) ; en
   pleine page, médaillon (`FULL_MAP`). Quelles photos : `mapPhotoIds` = d'office quand le lieu
   change (`autoMapIds`), corrigé par **`Photo.mapMode`** (`on`/`off`, éditeur de commentaire). Avec
-  cette option, la page « Nos lieux » ne garde que les lieux qui ont une carte
+  cette option, la page « Nos lieux » ne garde que les lieux qui ont une carte. Choix en lot : bouton « Choisir » d’`ExportModal` (surcouche `<View>`, `onSetMapModes`)
   (`photosOfMappedPlaces`). Image : **Apple Plans** via le module **local natif**
   `modules/comclic-map` (`MKMapSnapshotter`, iOS seul, autolinké depuis `./modules`) →
   `src/mapSnapshot.ts`, un JPEG par lieu gardé dans `documentDirectory/map-snapshots/`. Sans le
