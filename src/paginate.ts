@@ -30,8 +30,16 @@ export type AlbumPage =
  * Répartit les entrées (photos + pages de texte) en pages. Les pages de texte
  * sont toujours autonomes ; une photo au commentaire très long (ou la taille
  * « grande / pleine ») obtient sa page à elle. L'ordre reçu est conservé.
+ *
+ * `wide` : photos qui ont leur carte à côté. En grille 2×2 (`perPage` 4), elles
+ * prennent une ligne entière, soit deux cases, et commencent toujours une ligne
+ * (`wideSlots` donne les mêmes cases aux deux moteurs).
  */
-export function paginateEntries(entries: Photo[], perPage: number): AlbumPage[] {
+export function paginateEntries(
+  entries: Photo[],
+  perPage: number,
+  wide?: Set<string>,
+): AlbumPage[] {
   const pages: AlbumPage[] = [];
   let group: Photo[] = [];
   const flush = () => {
@@ -51,9 +59,34 @@ export function paginateEntries(entries: Photo[], perPage: number): AlbumPage[] 
       pages.push({ type: 'photos', items: [e] });
       continue;
     }
+    if (perPage === 4 && wide && slotsUsed([...group, e], wide) > 4) flush();
     group.push(e);
-    if (group.length >= perPage) flush();
+    if (slotsUsed(group, perPage === 4 ? wide : undefined) >= perPage) flush();
   }
   flush();
   return pages;
+}
+
+/**
+ * Cases de la grille 2×2 occupées par un groupe : `[début, nombre]` par photo.
+ * Une photo « large » (avec carte) saute à la ligne suivante si besoin et
+ * prend les deux cases de la ligne.
+ */
+export function wideSlots(group: Photo[], wide?: Set<string>): [number, number][] {
+  let slot = 0;
+  return group.map((p) => {
+    if (wide?.has(p.id)) {
+      if (slot % 2) slot++;
+      const r: [number, number] = [slot, 2];
+      slot += 2;
+      return r;
+    }
+    return [slot++, 1];
+  });
+}
+
+function slotsUsed(group: Photo[], wide?: Set<string>): number {
+  const s = wideSlots(group, wide);
+  const last = s[s.length - 1];
+  return last ? last[0] + last[1] : 0;
 }

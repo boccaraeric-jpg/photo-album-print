@@ -77,6 +77,10 @@ const fr = {
     commentPlaceholder: 'Commentez ce moment…',
     placeLabel: 'Lieu',
     placePlaceholder: 'Lieu de la prise de vue…',
+    mapLabel: 'Carte du lieu à côté de la photo',
+    mapAutoOn: 'Proposée d’office : le lieu change par rapport à la photo précédente.',
+    mapAutoOff: 'Pas d’office : même lieu que la photo précédente.',
+    mapNeedsOption: 'Visible si « Cartes à côté des photos » est activé dans la mise en page Loisir.',
     checkButton: '✓ Vérifier orthographe & grammaire',
     boldLabel: 'Gras',
     underlineLabel: 'Souligné',
@@ -188,6 +192,11 @@ const fr = {
     scatterValidate: 'Valider',
     scatterMin: (n: number) => `Encore ${n} photo${n > 1 ? 's' : ''} à choisir`,
     scatterMax: '9 photos au plus',
+    photoMapsLabel: 'Cartes à côté des photos',
+    photoMapsHint: (n: number) =>
+      `${n} carte${n > 1 ? 's' : ''} : une à chaque changement de lieu. Ajoutez ou retirez-en photo par photo, dans l’éditeur de commentaire.`,
+    photoMapsOffline:
+      'Cartes simplifiées sur cet appareil (cartes Apple Plans sur iPhone uniquement).',
     mapLabel: 'Carte des lieux',
     mapHint: (n: number) =>
       `Une page « Nos lieux de visite » après la couverture : ${n} lieu${n > 1 ? 'x' : ''} repéré${n > 1 ? 's' : ''}.`,
@@ -398,6 +407,10 @@ const en: Dict = {
     commentPlaceholder: 'Say something about this moment…',
     placeLabel: 'Location',
     placePlaceholder: 'Where it was taken…',
+    mapLabel: 'Map of the place next to the photo',
+    mapAutoOn: 'Suggested: the place differs from the previous photo.',
+    mapAutoOff: 'Not suggested: same place as the previous photo.',
+    mapNeedsOption: 'Shown when “Maps next to photos” is on in the Leisure layout.',
     checkButton: '✓ Check spelling & grammar',
     boldLabel: 'Bold',
     underlineLabel: 'Underline',
@@ -509,6 +522,10 @@ const en: Dict = {
     scatterValidate: 'Done',
     scatterMin: (n: number) => `${n} more photo${n > 1 ? 's' : ''} to choose`,
     scatterMax: '9 photos at most',
+    photoMapsLabel: 'Maps next to photos',
+    photoMapsHint: (n: number) =>
+      `${n} map${n > 1 ? 's' : ''}: one each time the place changes. Add or remove them photo by photo, in the comment editor.`,
+    photoMapsOffline: 'Simplified maps on this device (Apple Maps on iPhone only).',
     mapLabel: 'Map of places',
     mapHint: (n: number) =>
       `A “Places we visited” page after the cover: ${n} place${n > 1 ? 's' : ''} found.`,

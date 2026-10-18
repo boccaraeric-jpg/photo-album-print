@@ -242,6 +242,19 @@ d'entrée** (ils pilotent aussi les libellés) :
   Fond de carte **hors ligne** : `src/worldLand.ts` (~0,84 Mo, Natural Earth 1:10m, domaine public)
   généré par `design/build-worldmap.py` (mode d'emploi en tête du script), décodé une fois par
   `worldMap.ts`. Pas de noms de pays sur la carte : la donnée n'a que des contours.
+- **Cartes à côté des photos** (`photoMaps`, familial, défaut non) : la bande image d'une photo se
+  partage photo (60 %) / carte (`MAP_SHARE`, `MAP_GAP`) ; en grille 2×2 la photo avec carte prend
+  une **ligne entière** (`wideSlots` de `paginate.ts`, mêmes cases dans les deux moteurs) ; en
+  pleine page, médaillon (`FULL_MAP`). Quelles photos : `mapPhotoIds` = d'office quand le lieu
+  change (`autoMapIds`), corrigé par **`Photo.mapMode`** (`on`/`off`, éditeur de commentaire). Avec
+  cette option, la page « Nos lieux » ne garde que les lieux qui ont une carte
+  (`photosOfMappedPlaces`). Image : **Apple Plans** via le module **local natif**
+  `modules/comclic-map` (`MKMapSnapshotter`, iOS seul, autolinké depuis `./modules`) →
+  `src/mapSnapshot.ts`, un JPEG par lieu gardé dans `documentDirectory/map-snapshots/`. Sans le
+  module (Android — **jamais de clé Google payante** —, Expo Go, build antérieur) ou sans réseau
+  (12 s) : carte stylisée hors ligne `buildMiniMapModel`. ⚠️ Toucher au Swift = **nouveau build**.
+  Skia décode les cartes **page par page** (~4 Mo chacune). `coords` et `mapMode` ne sont **pas**
+  portés par la sauvegarde ni le `.comclic`.
 - **Types d'entrées** : une `Photo` est soit une image, soit une **page de texte** (`kind: 'text'`,
   `uri` vide, `comment` = le texte) créée par « ＋ Page de texte ». `src/paginate.ts`
   `paginateEntries()` renvoie des `AlbumPage` (`photos` groupées | `text` autonome) ; les pages de

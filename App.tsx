@@ -33,6 +33,7 @@ import type {
   ExportOptions,
   Photo,
 } from './src/types';
+import { autoMapIds } from './src/albumMap';
 import {
   comparePhotos,
   loadAlbumSort,
@@ -1146,6 +1147,9 @@ onBack,
     () => [...photos].sort(comparePhotos),
     [photos],
   );
+  // Photos qui auraient une carte d'office (le lieu change) : l'éditeur de
+  // commentaire l'annonce et laisse l'ajouter ou la retirer.
+  const autoMaps = useMemo(() => autoMapIds(orderedPhotos), [orderedPhotos]);
   const defaultCoverId =
     album.coverPhotoId ?? orderedPhotos.find((p) => p.kind !== 'text')?.id;
 
@@ -1396,10 +1400,10 @@ onBack,
   );
 
   const saveComment = useCallback(
-    (id: string, comment: string, place: string) => {
+    (id: string, comment: string, place: string, mapMode: Photo['mapMode']) => {
       setPhotos((prev) =>
         prev.map((p) =>
-          p.id === id ? { ...p, comment, place: place || undefined } : p,
+          p.id === id ? { ...p, comment, place: place || undefined, mapMode } : p,
         ),
       );
       setEditing(null);
@@ -1762,6 +1766,7 @@ onBack,
 
       <CommentModal
         photo={editing}
+        mapAuto={!!editing && autoMaps.has(editing.id)}
         onSave={saveComment}
         onClose={() => setEditing(null)}
       />

@@ -14,7 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, F } from '../theme';
 import { useLang } from '../i18n';
 import { effectiveCover, SCATTER_MAX, SCATTER_MIN, validScatterPicks } from '../albumStyle';
-import { collectPlaces } from '../albumMap';
+import { collectPlaces, mapPhotoIds } from '../albumMap';
+import { appleMapsAvailable } from '../mapSnapshot';
 import type {
   CoverStyle,
   DateFormat,
@@ -209,6 +210,7 @@ export function ExportModal({
   const isPro = options.style === 'pro';
   // Lieux plaçables sur la carte (photos géolocalisées) : 0 → réglage inactif.
   const placeCount = useMemo(() => collectPlaces(photos, lang).length, [photos, lang]);
+  const photoMapCount = useMemo(() => mapPhotoIds(photos).size, [photos]);
   // En pro les sections sont peu nombreuses : on les aère davantage.
   const labelStyle = isPro ? [styles.label, styles.labelSpaced] : styles.label;
 
@@ -316,6 +318,26 @@ export function ExportModal({
                     <Text style={styles.pickBtnText}>{L.export.scatterChoose}</Text>
                   </Pressable>
                 </View>
+              )}
+
+              {placeCount > 0 && (
+                <>
+                  <Text style={styles.label}>{L.export.photoMapsLabel}</Text>
+                  <View style={styles.chips}>
+                    {([true, false] as const).map((value) => (
+                      <Chip
+                        key={String(value)}
+                        selected={options.photoMaps === value}
+                        label={value ? L.export.yes : L.export.no}
+                        onPress={() => setOptions((o) => ({ ...o, photoMaps: value }))}
+                      />
+                    ))}
+                  </View>
+                  <Text style={styles.note}>{L.export.photoMapsHint(photoMapCount)}</Text>
+                  {!appleMapsAvailable && (
+                    <Text style={styles.note}>{L.export.photoMapsOffline}</Text>
+                  )}
+                </>
               )}
 
               <Text style={styles.label}>{L.export.mapLabel}</Text>

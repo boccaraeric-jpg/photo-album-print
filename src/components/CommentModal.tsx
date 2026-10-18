@@ -53,14 +53,18 @@ try {
 interface Props {
   /** Photo en cours d'édition, ou null si le modal est fermé. */
   photo: Photo | null;
-  onSave: (id: string, comment: string, place: string) => void;
+  /** Vrai si la photo aurait une carte d'office (le lieu change, cf. `autoMapIds`). */
+  mapAuto?: boolean;
+  onSave: (id: string, comment: string, place: string, mapMode: Photo['mapMode']) => void;
   onClose: () => void;
 }
 
-export function CommentModal({ photo, onSave, onClose }: Props) {
+export function CommentModal({ photo, mapAuto = false, onSave, onClose }: Props) {
   const { L, lang } = useLang();
   const [text, setText] = useState('');
   const [place, setPlace] = useState('');
+  // Carte à côté de la photo : choix explicite, ou `undefined` = d'office.
+  const [mapMode, setMapMode] = useState<Photo['mapMode']>(undefined);
   const [checking, setChecking] = useState(false);
   // Sélection courante du champ + sélection à réimposer après une mise en forme
   // (sans quoi le curseur retomberait à la fin du texte après chaque bouton).
@@ -87,6 +91,7 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
   useEffect(() => {
     setText(photo?.comment ?? '');
     setPlace(photo?.place ?? '');
+    setMapMode(photo?.mapMode);
     setSel({ start: 0, end: 0 });
     setForceSel(undefined);
     setRemembered(null);
@@ -303,6 +308,38 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
                   spellCheck
                   autoCapitalize="words"
                 />
+                {/* Carte du lieu : seulement pour une photo géolocalisée (un
+                    lieu tapé à la main n'a pas de position). */}
+                {!!photo?.coords && (
+                  <>
+                    <Text style={styles.label}>{L.comment.mapLabel}</Text>
+                    <View style={styles.formatRow}>
+                      {(['on', 'off'] as const).map((value) => {
+                        const selected = (mapMode ?? (mapAuto ? 'on' : 'off')) === value;
+                        return (
+                          <Pressable
+                            key={value}
+                            style={[styles.mapChip, selected && styles.mapChipOn]}
+                            onPress={() => setMapMode(value)}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                          >
+                            <Text style={[styles.mapChipText, selected && styles.mapChipTextOn]}>
+                              {value === 'on' ? L.export.yes : L.export.no}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <Text style={styles.formatHint}>
+                      {mapMode === undefined
+                        ? mapAuto
+                          ? L.comment.mapAutoOn
+                          : L.comment.mapAutoOff
+                        : L.comment.mapNeedsOption}
+                    </Text>
+                  </>
+                )}
               </>
             )}
           </ScrollView>
@@ -312,7 +349,7 @@ export function CommentModal({ photo, onSave, onClose }: Props) {
             </Pressable>
             <Pressable
               style={[styles.btn, styles.btnPrimary]}
-              onPress={() => photo && onSave(photo.id, text.trim(), place.trim())}
+              onPress={() => photo && onSave(photo.id, text.trim(), place.trim(), mapMode)}
             >
               <Text style={styles.btnPrimaryText}>{L.common.save}</Text>
             </Pressable>
@@ -406,6 +443,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#EADDC4',
   },
   formatHint: { flex: 1, fontFamily: F.mono, fontSize: 12, color: '#9ca3af' },
+  mapChip: {
+    paddingHorizontal: 18,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EADDC4',
+  },
+  mapChipOn: { backgroundColor: '#A64B24' },
+  mapChipText: { fontFamily: F.monoBold, fontSize: 14, color: '#201B14' },
+  mapChipTextOn: { color: '#fff' },
   // Même gabarit que `input` (bordure, rayon, hauteur) : passer de la lecture à
   // la saisie ne doit pas faire sauter la mise en page.
   rendered: { justifyContent: 'space-between', backgroundColor: '#faf7f1' },

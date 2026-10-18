@@ -28,6 +28,69 @@ export interface Place {
   times: number[];
 }
 
+/** Coordonnées utilisables d'une photo (ni page de texte, ni GPS absent ou 0,0). */
+export function photoCoords(p: Photo): { lat: number; lon: number } | null {
+  if (p.kind === 'text' || !p.coords) return null;
+  const { lat, lon } = p.coords;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) return null;
+  return { lat, lon };
+}
+
+function placeParts(p: Photo): string[] {
+  return (p.place ?? '')
+    .replace(/\s+/g, ' ')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Clé d'un lieu : son nom, sinon ses coordonnées arrondies (~1 km). */
+export function placeKey(p: Photo): string | null {
+  const c = photoCoords(p);
+  if (!c) return null;
+  const parts = placeParts(p);
+  return parts.length ? parts.join(',').toLowerCase() : `${c.lat.toFixed(2)},${c.lon.toFixed(2)}`;
+}
+
+/**
+ * Photos qui auraient une carte d'office : une photo géolocalisée dont le lieu
+ * change par rapport à la photo géolocalisée précédente (quatre photos de
+ * Funchal à la suite → une seule carte). Ordre reçu = ordre de l'album.
+ */
+export function autoMapIds(photos: Photo[]): Set<string> {
+  const ids = new Set<string>();
+  let prev: string | null = null;
+  for (const p of photos) {
+    const key = placeKey(p);
+    if (!key) continue;
+    if (key !== prev) ids.add(p.id);
+    prev = key;
+  }
+  return ids;
+}
+
+/** Photos qui ont leur carte : la règle d'office, corrigée photo par photo (`mapMode`). */
+export function mapPhotoIds(photos: Photo[]): Set<string> {
+  const auto = autoMapIds(photos);
+  const ids = new Set<string>();
+  for (const p of photos) {
+    if (!photoCoords(p)) continue;
+    if (p.mapMode === 'on' || (p.mapMode !== 'off' && auto.has(p.id))) ids.add(p.id);
+  }
+  return ids;
+}
+
+/**
+ * Photos de la page « Nos lieux de visite » quand les photos ont leur carte :
+ * celles des lieux qui ont au moins une carte (toutes, pour garder toutes les
+ * dates du lieu). Décocher la carte d'une photo prise ailleurs retire ce lieu.
+ */
+export function photosOfMappedPlaces(photos: Photo[], mapIds: Set<string>): Photo[] {
+  const keys = new Set(photos.filter((p) => mapIds.has(p.id)).map(placeKey));
+  return photos.filter((p) => keys.has(placeKey(p)));
+}
+
 /**
  * Lieux des photos géolocalisées, regroupés par nom de lieu (sinon par
  * coordonnées arrondies à ~1 km), position moyenne, dans l'ordre chronologique.
@@ -39,15 +102,10 @@ export function collectPlaces(photos: Photo[], lang: Lang = 'fr'): Place[] {
     { name: string; country: string; lat: number; lon: number; k: number; times: number[] }
   >();
   for (const p of photos) {
-    if (p.kind === 'text' || !p.coords) continue;
-    const { lat, lon } = p.coords;
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-    if (Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0)) continue;
-    const parts = (p.place ?? '')
-      .replace(/\s+/g, ' ')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const c = photoCoords(p);
+    if (!c) continue;
+    const { lat, lon } = c;
+    const parts = placeParts(p);
     const key = parts.length
       ? parts.join(',').toLowerCase()
       : `${lat.toFixed(2)},${lon.toFixed(2)}`;
@@ -663,6 +721,71 @@ export function buildMapModel(
   });
 
   return { items };
+}
+
+/* --------------------------------------------------------------------------
+ * Carte à côté d'une photo
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Part de la largeur de l'image donnée à la carte quand une photo a la sienne
+ * (le reste à la photo), et blanc entre les deux — en points A4 (Skia × k).
+ */
+export const MAP_SHARE = 0.4;
+export const MAP_GAP = 6;
+/** Médaillon de carte posé sur une photo pleine page (points A4). */
+export const FULL_MAP = { w: 168, h: 112, margin: 18, border: 4 };
+
+/** Repère `MINI_W × MINI_H` de la carte : l'image ou le dessin y est cadré « cover ». */
+export const MINI_W = 600;
+export const MINI_H = 400;
+/** Largeur au sol d'une carte Apple Plans (m) : une île comme Madère, un pays de vignes. */
+export const MINI_SPAN_M = 40000;
+/** Carte de secours hors ligne : plus large, faute de noms et de relief. */
+const MINI_FALLBACK_KM = 150;
+
+/**
+ * Carte stylisée hors ligne d'un lieu (sans le repère), dans le repère
+ * `MINI_W × MINI_H` : Android (pas de clé Google), ou iPhone sans réseau au
+ * moment de l'export. Mêmes couleurs que la page « Nos lieux de visite ».
+ */
+export function buildMiniMapModel(lat: number, lon: number): MapModel {
+  const box: MapRect = { x: 0, y: 0, w: MINI_W, h: MINI_H };
+  // Points par radian de longitude pour couvrir MINI_FALLBACK_KM sur la largeur.
+  const s = (MINI_W * 6371 * Math.cos(lat * RAD)) / MINI_FALLBACK_KM;
+  const proj = makeProj(lon, merc(lat), s, MINI_W / 2, MINI_H / 2);
+  const items: MapItem[] = [{ kind: 'shape', d: rectPath(box), fill: SEA }];
+  let waves = '';
+  for (let j = 0; j < 8; j++) {
+    for (let i = 0; i < 8; i++) {
+      const wx = 24 + i * 74 + (j % 2) * 37;
+      const wy = 24 + j * 50;
+      waves += `M${wx},${wy}Q${wx + 6},${wy - 5} ${wx + 12},${wy}Q${wx + 18},${wy + 5} ${wx + 24},${wy}`;
+    }
+  }
+  items.push({ kind: 'shape', d: waves, stroke: WAVE, width: 1, opacity: 0.7, clip: box });
+  const land = landPath(proj, box, true, 1.5);
+  if (land) {
+    items.push({ kind: 'shape', d: land, fill: '#5c4a2a', opacity: 0.2, clip: box, offset: [0, 3] });
+    items.push({ kind: 'shape', d: land, fill: LAND, stroke: COAST, width: 1.4, clip: box });
+  }
+  return { items };
+}
+
+/** Repère d'une carte de photo, pointe en (x, y), à l'échelle `k` (1 = points A4). */
+export function miniPinItems(x: number, y: number, k = 1): MapItem[] {
+  const S = 1.15 * k;
+  const P = (u: number, v: number) => `${n1(x + u * S)},${n1(y + v * S)}`;
+  return [
+    {
+      kind: 'shape',
+      d: `M${P(0, 0)}C${P(-9, -12)} ${P(-9, -24)} ${P(0, -24)}C${P(9, -24)} ${P(9, -12)} ${P(0, 0)}Z`,
+      fill: PIN,
+      stroke: '#ffffff',
+      width: 1.6 * k,
+    },
+    { kind: 'shape', d: circlePath(x, y - 15 * S, 3.6 * S), fill: '#ffffff' },
+  ];
 }
 
 /** Vrai si la couleur (hex 6 chiffres) est sombre (même règle que les moteurs). */

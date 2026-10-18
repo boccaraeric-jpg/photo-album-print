@@ -12,13 +12,28 @@ import * as FileSystem from 'expo-file-system/legacy';
 import type { ExportOptions, Photo } from './types';
 import { formatPhotoDate, photoDate } from './dateFormat';
 import { dict, localeTag, type Lang } from './i18n';
-import { paginateEntries, PER_PAGE } from './paginate';
+import { paginateEntries, PER_PAGE, wideSlots } from './paginate';
 import { albumFileBase } from './pdf';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
 import { parseRich, type RichRun } from './richText';
 import { readPrintBase64 } from './photoFiles';
-import { buildMapModel, type MapModel } from './albumMap';
+import {
+  buildMapModel,
+  buildMiniMapModel,
+  FULL_MAP,
+  MAP_GAP,
+  MAP_SHARE,
+  mapPhotoIds,
+  MINI_H,
+  MINI_W,
+  miniPinItems,
+  photoCoords,
+  photosOfMappedPlaces,
+  type MapItem,
+  type MapModel,
+} from './albumMap';
+import { mapImagesFor } from './mapSnapshot';
 import {
   COVER_W,
   coverPicks,
@@ -506,6 +521,7 @@ async function renderPhotoPage(
   pro: boolean,
   startNumber: number,
   lang: Lang,
+  maps: MiniMaps = new Map(),
 ): Promise<PagePayload | null> {
   const D = dict(lang).doc;
   const surface = Skia.Surface.Make(W, H);
@@ -532,13 +548,21 @@ async function renderPhotoPage(
   const cellH = (contentH - (rows - 1) * gapY) / rows;
 
   const images = await Promise.all(group.map((p) => loadImage(p.uri)));
+  const mapImages = await Promise.all(group.map((p) => loadMiniMap(maps, p.id)));
+  // Grille 2×2 : une photo avec carte prend une ligne entière (cf. `wideSlots`,
+  // mêmes cases que le PDF).
+  const slots =
+    !pro && cols === 2 ? wideSlots(group, new Set(maps.keys())) : null;
 
   for (let i = 0; i < group.length; i++) {
     const photo = group[i];
-    const c = i % cols;
-    const r = Math.floor(i / cols);
+    const slot = slots ? slots[i][0] : i;
+    const c = slot % cols;
+    const r = Math.floor(slot / cols);
     const cellX = PAD + c * (cellW + gapX);
     const cellY = PAD + r * (cellH + gapY);
+    // Largeur de la case : deux colonnes pour une photo avec carte en grille.
+    const cw = slots && slots[i][1] === 2 ? contentW : cellW;
 
     if (pro) {
       // Rendu professionnel : numéro, photo entière encadrée, légende factuelle
@@ -647,14 +671,14 @@ async function renderPhotoPage(
       const card = Skia.Paint();
       card.setAntiAlias(true);
       card.setColor(Skia.Color('#ffffff'));
-      canvas.drawRRect(rrect(cellX, cellY, cellW, cellH, 10), card);
+      canvas.drawRRect(rrect(cellX, cellY, cw, cellH, 10), card);
     } else if (options.frame === 'border') {
       const stroke = Skia.Paint();
       stroke.setAntiAlias(true);
       stroke.setStyle(PaintStyle.Stroke);
       stroke.setStrokeWidth(3);
       stroke.setColor(Skia.Color(dark ? '#f3efe7' : '#1f1d1a'));
-      canvas.drawRRect(rrect(cellX + 1.5, cellY + 1.5, cellW - 3, cellH - 3, 12), stroke);
+      canvas.drawRRect(rrect(cellX + 1.5, cellY + 1.5, cw - 3, cellH - 3, 12), stroke);
     }
 
     const comment = photo.comment.trim();
@@ -669,10 +693,18 @@ async function renderPhotoPage(
 
     const imgX = cellX + pad;
     const imgY = cellY + pad;
-    const imgW = cellW - 2 * pad;
+    const imgW = cw - 2 * pad;
     const imgH = cellH - 2 * pad - captionH;
+    // Carte du lieu à droite de la photo (MAP_SHARE de la largeur, comme le PDF).
+    const hasMap = maps.has(photo.id);
+    const gap = MAP_GAP * (W / COVER_W);
+    const mapW = hasMap ? (imgW - gap) * MAP_SHARE : 0;
+    const photoW = hasMap ? imgW - gap - mapW : imgW;
+    if (hasMap) {
+      drawMiniMap(canvas, photo, mapImages[i], imgX + photoW + gap, imgY, mapW, imgH);
+    }
     // « contain » : photo entière, non rognée (comme le PDF).
-    const drawn = drawContainImage(canvas, images[i], imgX, imgY, imgW, imgH);
+    const drawn = drawContainImage(canvas, images[i], imgX, imgY, photoW, imgH);
 
     // Liseré BLANC autour de la photo (+ fin contour extérieur pour la définition).
     if (options.liseret && drawn) {
@@ -983,6 +1015,7 @@ async function renderFullPage(
   options: ExportOptions,
   title: string,
   pageNo: number,
+  maps: MiniMaps = new Map(),
 ): Promise<PagePayload | null> {
   const surface = Skia.Surface.Make(W, H);
   if (!surface) return null;
@@ -997,6 +1030,25 @@ async function renderFullPage(
   const capH = 150;
   const img = await loadImage(item.uri);
   drawCoverImage(canvas, img, 0, 0, W, H - capH, 0);
+
+  // Carte en médaillon dans le coin bas-droit de la photo (cf. `.full-map`).
+  if (maps.has(item.id)) {
+    const k = W / COVER_W;
+    const mw = FULL_MAP.w * k;
+    const mh = FULL_MAP.h * k;
+    const mx = W - FULL_MAP.margin * k - mw;
+    const my = H - capH - FULL_MAP.margin * k - mh;
+    const b = FULL_MAP.border * k;
+    const shadow = Skia.Paint();
+    shadow.setAntiAlias(true);
+    shadow.setColor(Skia.Color('rgba(0,0,0,0.3)'));
+    shadow.setMaskFilter(Skia.MaskFilter.MakeBlur(BlurStyle.Normal, 7 * k, true));
+    canvas.drawRect(Skia.XYWHRect(mx - b, my - b + 4 * k, mw + 2 * b, mh + 2 * b), shadow);
+    const frame = Skia.Paint();
+    frame.setColor(Skia.Color('#ffffff'));
+    canvas.drawRect(Skia.XYWHRect(mx - b, my - b, mw + 2 * b, mh + 2 * b), frame);
+    drawMiniMap(canvas, item, await loadMiniMap(maps, item.id), mx, my, mw, mh);
+  }
 
   const comment = limitWords(item.comment, 15);
   if (comment) {
@@ -1017,25 +1069,11 @@ async function renderFullPage(
 }
 
 /**
- * Page carte (Skia) : dessine le modèle de `albumMap.ts` tel quel, en points
- * A4 mis à l'échelle — même liste de tracés et de textes que le SVG du PDF.
+ * Dessine les éléments d'un modèle de carte (`albumMap.ts`) dans le repère
+ * courant du canevas — pendant Skia de `mapSvgParts` (`pdf.ts`).
  */
-function renderMapPage(
-  model: MapModel,
-  options: ExportOptions,
-  title: string,
-): PagePayload | null {
-  const surface = Skia.Surface.Make(W, H);
-  if (!surface) return null;
-  const canvas = surface.getCanvas();
-  const bg = Skia.Paint();
-  bg.setColor(Skia.Color(options.background));
-  canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
-
-  canvas.save();
-  const k = W / COVER_W;
-  canvas.scale(k, k);
-  for (const it of model.items) {
+function drawMapItems(canvas: SkCanvas, items: MapItem[]): void {
+  for (const it of items) {
     try {
       if (it.kind === 'shape') {
         const path = Skia.Path.MakeFromSVGString(it.d);
@@ -1086,6 +1124,68 @@ function renderMapPage(
       // Un élément illisible ne doit pas priver l'album du reste de la page.
     }
   }
+}
+
+/**
+ * Cartes des photos : id → fichier de l'image Apple Plans, `null` = carte hors
+ * ligne. Décodées page par page seulement (~4 Mo chacune une fois décodée).
+ */
+type MiniMaps = Map<string, string | null>;
+
+async function loadMiniMap(maps: MiniMaps, id: string) {
+  const uri = maps.get(id);
+  return uri ? loadImage(uri) : null;
+}
+
+/**
+ * Carte d'une photo dans un rectangle (pixels) : image Apple Plans ou carte
+ * stylisée hors ligne, cadrées « cover », puis le repère au centre.
+ */
+function drawMiniMap(
+  canvas: SkCanvas,
+  photo: Photo,
+  image: ReturnType<typeof Skia.Image.MakeImageFromEncoded> | null,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): void {
+  const c = photoCoords(photo);
+  if (!c) return;
+  canvas.save();
+  canvas.clipRect(Skia.XYWHRect(x, y, w, h), ClipOp.Intersect, true);
+  if (image) {
+    drawCoverImage(canvas, image, x, y, w, h, 0);
+  } else {
+    const s = Math.max(w / MINI_W, h / MINI_H);
+    canvas.translate(x + (w - MINI_W * s) / 2, y + (h - MINI_H * s) / 2);
+    canvas.scale(s, s);
+    drawMapItems(canvas, buildMiniMapModel(c.lat, c.lon).items);
+  }
+  canvas.restore();
+  drawMapItems(canvas, miniPinItems(x + w / 2, y + h / 2, W / COVER_W));
+}
+
+/**
+ * Page carte (Skia) : dessine le modèle de `albumMap.ts` tel quel, en points
+ * A4 mis à l'échelle — même liste de tracés et de textes que le SVG du PDF.
+ */
+function renderMapPage(
+  model: MapModel,
+  options: ExportOptions,
+  title: string,
+): PagePayload | null {
+  const surface = Skia.Surface.Make(W, H);
+  if (!surface) return null;
+  const canvas = surface.getCanvas();
+  const bg = Skia.Paint();
+  bg.setColor(Skia.Color(options.background));
+  canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
+
+  canvas.save();
+  const k = W / COVER_W;
+  canvas.scale(k, k);
+  drawMapItems(canvas, model.items);
   canvas.restore();
   return encodeSurface(surface, title, 0, '00b-carte');
 }
@@ -1145,9 +1245,22 @@ export async function buildAlbumImages(
     await renderCover(photoEntries, eff, title, pro, lang, coverPhotoId, scatterIds),
   );
 
+  // Cartes à côté des photos (familial) : images Apple Plans gardées sur le
+  // téléphone, sinon carte stylisée hors ligne (`null`).
+  const mapIds = !pro && eff.photoMaps ? mapPhotoIds(photos) : new Set<string>();
+  const maps: MiniMaps = new Map();
+  if (mapIds.size) {
+    for (const [id, uri] of await mapImagesFor(photos, mapIds)) maps.set(id, uri);
+  }
+
   // Carte des lieux juste après la couverture (familial ; rien sans GPS).
   if (!pro && eff.showMap) {
-    const model = buildMapModel(photos, eff.typeface, eff.background, lang);
+    const model = buildMapModel(
+      mapIds.size ? photosOfMappedPlaces(photos, mapIds) : photos,
+      eff.typeface,
+      eff.background,
+      lang,
+    );
     if (model) await push(renderMapPage(model, eff, title));
   }
 
@@ -1163,7 +1276,7 @@ export async function buildAlbumImages(
       : photos;
 
   // Les pages de texte s'intercalent dans les deux rendus (familial et pro).
-  const pages = paginateEntries(pageSource, perPage);
+  const pages = paginateEntries(pageSource, perPage, mapIds);
   let numbered = 0;
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
@@ -1172,11 +1285,11 @@ export async function buildAlbumImages(
       continue;
     }
     if (full) {
-      await push(await renderFullPage(page.items[0], eff, title, i + 1));
+      await push(await renderFullPage(page.items[0], eff, title, i + 1, maps));
       continue;
     }
     await push(
-      await renderPhotoPage(page.items, eff, title, i + 1, perPage, pro, numbered, lang),
+      await renderPhotoPage(page.items, eff, title, i + 1, perPage, pro, numbered, lang, maps),
     );
     numbered += page.items.length;
   }

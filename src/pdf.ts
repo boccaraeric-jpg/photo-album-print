@@ -9,7 +9,23 @@ import { paginateEntries, PER_PAGE } from './paginate';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
 import { richToHtml } from './richText';
-import { buildMapModel, type MapModel, type MapRect } from './albumMap';
+import {
+  buildMapModel,
+  buildMiniMapModel,
+  FULL_MAP,
+  MAP_GAP,
+  MAP_SHARE,
+  mapPhotoIds,
+  MINI_H,
+  MINI_W,
+  miniPinItems,
+  photoCoords,
+  photosOfMappedPlaces,
+  type MapItem,
+  type MapModel,
+  type MapRect,
+} from './albumMap';
+import { mapImagesFor } from './mapSnapshot';
 import {
   COVER_H,
   coverPicks,
@@ -91,6 +107,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   typeface: 'sans',
   cover: 'classic',
   showMap: false,
+  photoMaps: false,
 };
 
 /** Garde la valeur si elle fait partie des choix connus, sinon le défaut. */
@@ -136,6 +153,7 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     typeface: oneOf(o.typeface, ['sans', 'serif', 'script'] as const, d.typeface),
     cover: oneOf(o.cover, ['classic', 'scatter', 'filmstrip'] as const, d.cover),
     showMap: typeof o.showMap === 'boolean' ? o.showMap : d.showMap,
+    photoMaps: typeof o.photoMaps === 'boolean' ? o.photoMaps : d.photoMaps,
   };
 }
 
@@ -183,6 +201,8 @@ function isDark(hex: string): boolean {
 interface Item {
   photo: Photo;
   src: string;
+  /** Carte à côté de la photo (HTML prêt à poser), vide sinon. */
+  map?: string;
 }
 
 function figureHtml(
@@ -192,7 +212,7 @@ function figureHtml(
   showPlace: boolean,
   lang: Lang,
 ): string {
-  const { photo, src } = item;
+  const { photo, src, map } = item;
   const comment = photo.comment.trim();
   const place = showPlace ? photo.place?.trim() : undefined;
   const date = formatPhotoDate(photoDate(photo), dateFormat, lang);
@@ -207,9 +227,13 @@ function figureHtml(
           ${meta ? `<span class="date">${escapeHtml(meta)}</span>` : ''}
         </figcaption>`
       : '';
+  // Carte du lieu : partage la bande de la photo (photo à gauche, carte à droite).
+  const ph = map
+    ? `<div class="ph split"><div class="ph-photo">${img}</div><div class="ph-map">${map}</div></div>`
+    : `<div class="ph">${img}</div>`;
   return `
-    <figure class="card ${variant}">
-      <div class="ph">${img}</div>
+    <figure class="card ${variant}${map ? ' wide' : ''}">
+      ${ph}
       ${caption}
     </figure>`;
 }
@@ -243,14 +267,16 @@ function pageHtml(
 
 /** Photo pleine page (bord à bord) + légende courte (≤ 15 mots) en pied. */
 function fullPageHtml(item: Item, lang: Lang): string {
-  const { photo, src } = item;
+  const { photo, src, map } = item;
   const comment = limitWords(photo.comment, 15);
   const img = src
     ? `<img src="${src}" />`
     : `<span class="missing">${dict(lang).doc.imageUnavailable}</span>`;
+  // Pleine page : la carte se pose en médaillon dans le coin de la photo.
+  const inset = map ? `<div class="full-map">${map}</div>` : '';
   return `
     <section class="sheet full-sheet">
-      <div class="full-img">${img}</div>
+      <div class="full-img">${img}${inset}</div>
       <div class="full-cap">${comment ? richToHtml(comment, escapeHtml) : ''}</div>
     </section>`;
 }
@@ -496,7 +522,7 @@ function buildStyles(options: ExportOptions): string {
   /* --- Photo pleine page (bord à bord) --- */
   .full-sheet { padding: 0; page-break-after: always; }
   .full-sheet:last-of-type { page-break-after: auto; }
-  .full-img { height: 778px; overflow: hidden; }
+  .full-img { position: relative; height: 778px; overflow: hidden; }
   .full-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .full-cap {
     height: 64px; padding: 0 44px; display: flex; align-items: center; justify-content: center;
@@ -525,6 +551,30 @@ function buildStyles(options: ExportOptions): string {
     font-size: 26px; margin: 12px 0 6px; color: ${ink};
   }
   .end p { color: ${muted}; font-size: 13px; margin: 0; }
+
+  /* --- Carte à côté d'une photo (MAP_SHARE / MAP_GAP / FULL_MAP d'albumMap.ts) --- */
+  .grid4 .card.wide { width: 100%; }
+  .ph.split { display: flex; gap: ${MAP_GAP}px; background: transparent; align-items: stretch; }
+  .ph-photo {
+    flex: ${1 - MAP_SHARE} 1 0; min-width: 0; height: 100%; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: inherit;
+    background: ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(31,29,26,0.05)'};
+  }
+  .ph-map { flex: ${MAP_SHARE} 1 0; min-width: 0; position: relative; overflow: hidden; height: 100%; }
+  /* Sélecteurs plus précis que .card.large .ph img et le liseré (.ph img) :
+     la carte se cadre toujours « cover », sans bordure. */
+  .card .ph .ph-map img.mapimg, .ph-map svg.mm, .full-img .full-map img.mapimg, .full-map svg.mm {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    max-width: none; max-height: none; object-fit: cover;
+    border: 0; border-radius: 0; box-shadow: none;
+  }
+  .mpin { position: absolute; left: 50%; top: 50%; margin: -30px 0 0 -12px; }
+  .full-map {
+    position: absolute; right: ${FULL_MAP.margin}px; bottom: ${FULL_MAP.margin}px;
+    width: ${FULL_MAP.w}px; height: ${FULL_MAP.h}px; overflow: hidden;
+    outline: ${FULL_MAP.border}px solid #fff; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  }
 
   /* --- Carte des lieux : un SVG pleine page (cf. albumMap.ts) --- */
   .mappage { padding: 0; height: 842px; overflow: hidden; }
@@ -587,6 +637,26 @@ export async function buildAlbumHtml(
   // la date, alignement des pages de texte. Le reste reste imposé.
   if (options.style === 'pro') {
     return buildProDocument(items, title, options, lang);
+  }
+
+  // Cartes à côté des photos : images Apple Plans (créées une fois, gardées
+  // sur le téléphone), sinon carte stylisée hors ligne.
+  const mapIds = options.photoMaps ? mapPhotoIds(photos) : new Set<string>();
+  if (mapIds.size) {
+    const images = await mapImagesFor(photos, mapIds);
+    for (const it of items) {
+      if (!mapIds.has(it.photo.id)) continue;
+      const uri = images.get(it.photo.id);
+      let b64: string | null = null;
+      if (uri) {
+        try {
+          b64 = await readPrintBase64(uri, 1200, 0.8);
+        } catch {
+          b64 = null;
+        }
+      }
+      it.map = miniMapHtml(it.photo, b64);
+    }
   }
 
   // Les pages de texte ne comptent pas comme des photos (couverture, année).
@@ -672,12 +742,19 @@ export async function buildAlbumHtml(
   }
 
   // Carte des lieux juste après la couverture (rien si aucune photo n'a de GPS).
+  // Avec les cartes de photos, la page ne reprend que les lieux qui en ont une :
+  // décocher une photo prise ailleurs l'en retire aussi.
   const mapModel = options.showMap
-    ? buildMapModel(photos, options.typeface, options.background, lang)
+    ? buildMapModel(
+        mapIds.size ? photosOfMappedPlaces(photos, mapIds) : photos,
+        options.typeface,
+        options.background,
+        lang,
+      )
     : null;
   const mapHtml = mapModel ? mapPageHtml(mapModel) : '';
 
-  const pages = paginateEntries(pageSource, perPage)
+  const pages = paginateEntries(pageSource, perPage, mapIds)
     .map((page, index) => {
       const no = index + 1;
       if (page.type === 'text') return textPageHtml(page.item, title, no);
@@ -719,22 +796,26 @@ export async function buildAlbumHtml(
     </html>`;
 }
 
+/** Compteur des découpes SVG : plusieurs cartes cohabitent dans le même document. */
+let svgClipSeq = 0;
+
 /**
- * Page carte en SVG : simple transcription du modèle de `albumMap.ts` (tout le
- * placement y est calculé, à l'identique pour le rendu Skia).
+ * Éléments d'un modèle de carte (`albumMap.ts`) en SVG : `defs` (découpes) et
+ * corps. Simple transcription — tout le placement est calculé dans le modèle,
+ * à l'identique pour le rendu Skia (`drawMapItems`).
  */
-function mapPageHtml(model: MapModel): string {
+function mapSvgParts(items: MapItem[]): { defs: string; body: string } {
   const clips = new Map<string, string>();
   const clipId = (r: MapRect) => {
     const key = `${r.x},${r.y},${r.w},${r.h}`;
     let id = clips.get(key);
     if (!id) {
-      id = `mc${clips.size}`;
+      id = `mc${svgClipSeq++}`;
       clips.set(key, id);
     }
     return id;
   };
-  const body = model.items
+  const body = items
     .map((it) => {
       if (it.kind === 'shape') {
         const attrs = [
@@ -761,10 +842,39 @@ function mapPageHtml(model: MapModel): string {
       return `<clipPath id="${id}"><rect x="${x}" y="${y}" width="${w}" height="${h}"/></clipPath>`;
     })
     .join('');
+  return { defs, body };
+}
+
+/** Page « Nos lieux de visite » : un SVG pleine page. */
+function mapPageHtml(model: MapModel): string {
+  const { defs, body } = mapSvgParts(model.items);
   return `
         <section class="sheet mappage">
           <svg width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" viewBox="0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${body}</svg>
         </section>`;
+}
+
+/** Repère de la carte d'une photo : pointe au centre de la carte (cf. `.mpin`). */
+const MINI_PIN_SVG = (() => {
+  const { body } = mapSvgParts(miniPinItems(0, 0));
+  return `<svg class="mpin" viewBox="-12 -30 24 32" width="24" height="32" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
+})();
+
+/**
+ * Contenu de la carte d'une photo : l'image Apple Plans (base64) ou, à défaut,
+ * la carte stylisée hors ligne — cadrées « cover » toutes deux — et le repère.
+ */
+function miniMapHtml(photo: Photo, b64: string | null): string {
+  const c = photoCoords(photo);
+  if (!c) return '';
+  let art: string;
+  if (b64) {
+    art = `<img class="mapimg" src="data:image/jpeg;base64,${b64}" />`;
+  } else {
+    const { defs, body } = mapSvgParts(buildMiniMapModel(c.lat, c.lon).items);
+    art = `<svg class="mm" viewBox="0 0 ${MINI_W} ${MINI_H}" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${body}</svg>`;
+  }
+  return `${art}${MINI_PIN_SVG}`;
 }
 
 /** Une ligne factuelle « Clé : valeur » du rapport professionnel. */

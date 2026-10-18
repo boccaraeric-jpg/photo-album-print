@@ -86,6 +86,11 @@ export interface ExportOptions {
   cover: CoverStyle;
   /** Page « Nos lieux de visite » après la couverture — familial uniquement. */
   showMap: boolean;
+  /**
+   * Carte du lieu à côté des photos géolocalisées — familial uniquement. Quelles
+   * photos : règle d'office (le lieu change) corrigée par `Photo.mapMode`.
+   */
+  photoMaps: boolean;
 }
 
 /** Critère de tri de la liste des dossiers (écran d'accueil). */
@@ -126,6 +131,11 @@ export interface Photo {
   place?: string;
   /** Coordonnées GPS lues dans l'EXIF (pour re-géocoder au besoin) */
   coords?: { lat: number; lon: number };
+  /**
+   * Carte du lieu à côté de la photo : `on` / `off` choisis par l'utilisateur ;
+   * absent = d'office (une carte quand le lieu change, cf. `autoMapIds`).
+   */
+  mapMode?: 'on' | 'off';
   /** Timestamp d'ajout dans l'app (ms) — sert de repli et d'ordre par défaut */
   createdAt: number;
   /**
