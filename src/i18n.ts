@@ -211,7 +211,7 @@ const fr = {
     photoMapsNoName: 'Lieu sans nom',
     photoMapsOffline:
       'Cartes simplifiées sur cet appareil (cartes Apple Plans sur iPhone uniquement).',
-    mapLabel: 'Carte des lieux',
+    mapLabel: 'Page « Nos lieux de visite »',
     mapHint: (n: number) =>
       `Une page « Nos lieux de visite » après la couverture : ${n} lieu${n > 1 ? 'x' : ''} repéré${n > 1 ? 's' : ''}.`,
     mapNone:
@@ -554,7 +554,7 @@ const en: Dict = {
       'Tap a photo to add or remove its map. “Automatic” puts back one map each time the place changes.',
     photoMapsNoName: 'Unnamed place',
     photoMapsOffline: 'Simplified maps on this device (Apple Maps on iPhone only).',
-    mapLabel: 'Map of places',
+    mapLabel: '“Places we visited” page',
     mapHint: (n: number) =>
       `A “Places we visited” page after the cover: ${n} place${n > 1 ? 's' : ''} found.`,
     mapNone: 'No photo in this folder has a GPS position: the map cannot be drawn.',
