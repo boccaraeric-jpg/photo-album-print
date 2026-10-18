@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Album, AlbumSort, ExportOptions, Photo } from './types';
 import { newId } from './id';
 import { SUPPORTED, type Lang } from './i18n';
+import { rebaseImageUri } from './photoFiles';
 
 const ALBUMS_KEY = 'album.albums.v1';
 const PHOTOS_KEY = 'album.photos.v1';
@@ -71,10 +72,22 @@ export async function loadData(): Promise<StoredData> {
     );
   }
 
+  // Chemins des images recalculés dans le conteneur actuel : iOS le déplace à
+  // chaque mise à jour du build (cf. `rebaseImageUri`). Sans cela, toutes les
+  // photos devenaient des cadres vides après l'installation d'un nouveau build.
+  let moved = false;
+  photos = photos.map((p) => {
+    const uri = rebaseImageUri(p.uri);
+    const originalUri = rebaseImageUri(p.originalUri);
+    if (uri === p.uri && originalUri === p.originalUri) return p;
+    moved = true;
+    return { ...p, uri, originalUri };
+  });
+
   // Normalise le rang : chaque photo reçoit un `order` contigu au sein de son
   // dossier (dans l'ordre actuel). Ainsi le tri, l'ajout en fin et le
   // glisser-déposer manipulent tous des rangs cohérents.
-  if (normalizeOrder(photos)) await savePhotos(photos);
+  if (normalizeOrder(photos) || moved) await savePhotos(photos);
 
   return { albums, photos: photos.sort(comparePhotos) };
 }

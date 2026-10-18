@@ -140,6 +140,12 @@ dossier ; sinon la 1ʳᵉ photo sert de couverture par défaut).
 **Fichiers image, réglages & recadrage** (`src/photoFiles.ts`, `src/adjustments.ts`,
 `src/components/CropModal.tsx`) : les URI de la caméra/galerie sont temporaires → `persistImage()`
 **copie** vers `documentDirectory/album-photos/`. ⚠️ l'import est `expo-file-system/legacy`.
+> ⛔ **iOS déplace le conteneur de l'app à chaque nouveau build** (`…/Application/<UUID>/` change) :
+> une URI absolue enregistrée pointe alors dans le vide. Vécu au build 7 — toutes les photos en
+> cadres vides. `loadData` passe chaque `uri`/`originalUri` dans **`rebaseImageUri`** (seul le nom
+> de fichier sous `album-photos/` fait foi). Tout nouveau fichier durable doit vivre sous un dossier
+> de `documentDirectory` et être recalculé de la même façon — jamais une URI absolue persistée telle
+> quelle.
 `AdjustModal` prévisualise en direct via une **matrice couleur 4×5 Skia** ; `bakeAdjustedImage()`
 grave un nouveau JPEG (la photo garde `originalUri` + `uri` gravé + `adjustments`). `CropModal`
 recadre par **format + position** (pas de gestes : fiable en Expo Go) via `expo-image-manipulator` ;

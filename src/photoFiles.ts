@@ -3,7 +3,27 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 /** Répertoire de stockage persistant des images de l'album. */
-const PHOTOS_DIR = `${FileSystem.documentDirectory}album-photos/`;
+const PHOTOS_SUBDIR = 'album-photos/';
+const PHOTOS_DIR = `${FileSystem.documentDirectory}${PHOTOS_SUBDIR}`;
+
+/**
+ * Ramène l'URI d'une image de l'album dans le dossier documents **actuel**.
+ *
+ * ⚠️ iOS change le chemin du conteneur de l'app (`…/Application/<UUID>/Documents/`)
+ * à chaque mise à jour du build — et lors d'une restauration sur un autre
+ * iPhone. Les fichiers suivent, mais une URI absolue enregistrée avant pointe
+ * vers l'ancien conteneur : toutes les photos s'affichaient en cadres vides
+ * après l'installation d'un nouveau build TestFlight. Seul le nom de fichier
+ * dans `album-photos/` fait foi ; le reste du chemin est recalculé à chaque
+ * lancement (`loadData`). Une URI hors de ce dossier est rendue telle quelle.
+ */
+export function rebaseImageUri<T extends string | undefined>(uri: T): T {
+  if (!uri || !FileSystem.documentDirectory) return uri;
+  const marker = `/${PHOTOS_SUBDIR}`;
+  const i = uri.lastIndexOf(marker);
+  if (i < 0) return uri;
+  return `${PHOTOS_DIR}${uri.slice(i + marker.length)}` as T;
+}
 
 async function ensureDir(): Promise<void> {
   const info = await FileSystem.getInfoAsync(PHOTOS_DIR);
