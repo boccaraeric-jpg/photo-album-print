@@ -15,6 +15,35 @@ import { dict, localeTag, type Lang } from './i18n';
  * En Expo Go comme en développement, `expo-updates` est inerte : on retombe
  * alors sur la mention « intégrée ».
  */
+/**
+ * Applique tout de suite la dernière update publiée, pendant l'écran d'accueil.
+ *
+ * Par défaut, `expo-updates` lance la version déjà présente et ne télécharge la
+ * nouvelle qu'en arrière-plan, pour le lancement **suivant** — d'où les « deux
+ * ou trois relances » nécessaires, et, juste après l'installation d'un nouveau
+ * build TestFlight, une app qui tourne sur le JavaScript gravé dans ce build
+ * (plus ancien que les updates publiées depuis). Ici : vérification,
+ * téléchargement, puis redémarrage sur la nouvelle version — mais seulement si
+ * `stillWelcome()` est encore vrai : on ne recharge jamais l'app sous les
+ * doigts de quelqu'un qui a déjà touché « Commencer » (elle s'appliquera alors
+ * au lancement suivant, comme avant). Sans réseau ou en Expo Go : rien.
+ */
+export async function applyLatestUpdate(
+  stillWelcome: () => boolean,
+  onDownloading: () => void,
+): Promise<void> {
+  try {
+    if (__DEV__ || !Updates.isEnabled) return;
+    const check = await Updates.checkForUpdateAsync();
+    if (!check.isAvailable || !stillWelcome()) return;
+    onDownloading();
+    const fetched = await Updates.fetchUpdateAsync();
+    if (fetched.isNew && stillWelcome()) await Updates.reloadAsync();
+  } catch {
+    // Réseau absent ou serveur injoignable : la version en place convient.
+  }
+}
+
 export function versionLabel(lang: Lang): string {
   const D = dict(lang).version;
   const app = (require('../app.json') as { expo?: { version?: string } })?.expo

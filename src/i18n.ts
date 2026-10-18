@@ -103,6 +103,7 @@ const fr = {
   version: {
     embedded: 'version intégrée',
     update: 'maj',
+    updating: 'Mise à jour de l’app…',
   },
   spell: {
     progress: (i: number, n: number) => `Faute ${i} sur ${n}`,
@@ -449,6 +450,7 @@ const en: Dict = {
   version: {
     embedded: 'built-in version',
     update: 'upd',
+    updating: 'Updating the app…',
   },
   spell: {
     progress: (i: number, n: number) => `Mistake ${i} of ${n}`,

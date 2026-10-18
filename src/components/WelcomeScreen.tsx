@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -17,7 +18,7 @@ import {
 } from '@shopify/react-native-skia';
 import { C, F } from '../theme';
 import { useLang } from '../i18n';
-import { versionLabel } from '../appVersion';
+import { applyLatestUpdate, versionLabel } from '../appVersion';
 
 interface Props {
   /** L'utilisateur entre dans l'app (bouton « Commencer »). */
@@ -30,6 +31,19 @@ export function WelcomeScreen({ onEnter }: Props) {
   const { L, lang } = useLang();
   const insets = useSafeAreaInsets();
   const { width: W, height: H } = useWindowDimensions();
+  // Dernière update appliquée dès ce lancement (cf. `applyLatestUpdate`).
+  const [updating, setUpdating] = useState(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    applyLatestUpdate(
+      () => mounted.current,
+      () => mounted.current && setUpdating(true),
+    );
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   return (
     <View style={styles.root}>
@@ -90,7 +104,9 @@ export function WelcomeScreen({ onEnter }: Props) {
           </Pressable>
           {/* Version du JS réellement chargé : le numéro de build de TestFlight
               ne bouge pas quand un EAS Update remplace le JavaScript. */}
-          <Text style={styles.version}>{versionLabel(lang)}</Text>
+          <Text style={styles.version}>
+            {updating ? L.version.updating : versionLabel(lang)}
+          </Text>
         </View>
       </View>
     </View>

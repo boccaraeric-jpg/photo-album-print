@@ -488,7 +488,11 @@ sans `react-native-gesture-handler` ; ⚠️ **iOS uniquement** — sur Android 
 ne bouge **pas** quand un update remplace le JS : sans ce repère, impossible de dire à un testeur si
 la correction publiée est bien celle qu'il a sous les yeux. Prendre la **fin** de l'`updateId` (UUID
 ordonnés par le temps : leurs premiers caractères sont identiques d'un update à l'autre).
-`Updates.isEmbeddedLaunch` → mention « version intégrée » (bundle gravé dans le build, ou retour
+**`applyLatestUpdate`** (même fichier, lancé par `WelcomeScreen`) : vérifie, télécharge et
+**recharge** sur la dernière update pendant l'écran d'accueil — sans lui, une update n'arrivait
+qu'au lancement suivant, et un build TestFlight fraîchement installé tournait sur son JS gravé,
+plus ancien que les updates (vécu au build 7 : « choix des cartes » disparu). Jamais de rechargement
+après « Commencer ». `Updates.isEmbeddedLaunch` → mention « version intégrée » (bundle gravé dans le build, ou retour
 arrière après un update défaillant) ; en Expo Go `expo-updates` est inerte, d'où le `try/catch` ·
 `saveToPhotoLibrary()` (`src/mediaLibrary.ts`) renvoie `false` si la permission est refusée —
 l'ajout à l'album ne doit jamais échouer pour autant.
