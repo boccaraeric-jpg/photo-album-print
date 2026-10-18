@@ -515,10 +515,15 @@ function drawPolaroid(
   canvas.restore();
 }
 
-/** Grille (colonnes, lignes) pour un nombre de photos par page. */
-function gridFor(perPage: number, count: number): { cols: number; rows: number } {
-  if (perPage >= 4 && count > 1) return { cols: 2, rows: 2 };
-  if (perPage >= 2 && count > 1) return { cols: 1, rows: 2 };
+/**
+ * Grille (colonnes, lignes) d'une page. Photo seule agrandie (`solo`) : toute
+ * la page. Sinon la grille de la taille, même incomplète — une petite photo
+ * seule garde sa case, comme dans le PDF (cf. `AlbumPage.solo`).
+ */
+function gridFor(perPage: number, solo: boolean): { cols: number; rows: number } {
+  if (solo) return { cols: 1, rows: 1 };
+  if (perPage >= 4) return { cols: 2, rows: 2 };
+  if (perPage >= 2) return { cols: 1, rows: 2 };
   return { cols: 1, rows: 1 };
 }
 
@@ -532,6 +537,7 @@ async function renderPhotoPage(
   startNumber: number,
   lang: Lang,
   maps: MiniMaps = new Map(),
+  solo = group.length === 1,
 ): Promise<PagePayload | null> {
   const D = dict(lang).doc;
   const surface = Skia.Surface.Make(W, H);
@@ -548,7 +554,7 @@ async function renderPhotoPage(
   bg.setColor(Skia.Color(options.background));
   canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
 
-  const { cols, rows } = gridFor(perPage, group.length);
+  const { cols, rows } = gridFor(perPage, solo);
   const gapX = 30;
   const gapY = 36;
   const footerH = 46;
@@ -1327,6 +1333,7 @@ export async function buildAlbumImages(
         numbered,
         lang,
         maps,
+        page.solo,
       ),
     );
     numbered += page.items.length;

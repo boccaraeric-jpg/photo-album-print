@@ -276,22 +276,21 @@ function figureHtml(item: Item, variant: '' | 'solo' | 'large', ctx: PageCtx): s
 function pageHtml(
   group: Item[],
   size: PhotoSize,
+  solo: boolean,
   pageNo: number,
   ctx: PageCtx,
 ): string {
   const perPage = PER_PAGE[size];
-  // Page d'une seule photo : « large » si c'est la taille choisie,
-  // « solo » si c'est une exception (commentaire long ou photo restante).
-  const variant = group.length > 1 ? '' : perPage === 1 ? 'large' : 'solo';
+  // Page d'une seule photo : « large » si c'est la taille choisie, « solo »
+  // (agrandie) seulement si la pagination l'a voulu (cf. `AlbumPage.solo`).
+  const variant = perPage === 1 ? 'large' : solo ? 'solo' : '';
   const pageCtx = { ...ctx, pageIds: group.map((it) => it.photo.id) };
   const figures = group
     .map((item) => figureHtml(item, variant, pageCtx))
     .join('');
-  // En taille « petite », les photos s'organisent en grille 2 colonnes.
-  const body =
-    perPage === 4 && group.length > 1
-      ? `<div class="grid4">${figures}</div>`
-      : figures;
+  // En taille « petite », les photos s'organisent en grille 2 colonnes — même
+  // seule sur sa page, une petite photo garde sa case.
+  const body = perPage === 4 && !solo ? `<div class="grid4">${figures}</div>` : figures;
   const paint = paintAttrs(pageBackground(group.map((it) => it.photo)), ctx.frame);
   return `
     <section class="sheet sz-${size}${paint.cls}"${paint.style}>
@@ -859,7 +858,7 @@ export async function buildAlbumHtml(
         (p) => items.find((it) => it.photo.id === p.id)!,
       );
       if (page.size === 'full') return fullPageHtml(groupItems[0], ctx);
-      return pageHtml(groupItems, page.size, no, ctx);
+      return pageHtml(groupItems, page.size, page.solo, no, ctx);
     })
     .join('');
 

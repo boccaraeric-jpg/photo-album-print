@@ -24,7 +24,19 @@ export function isLongComment(photo: Photo, scale = 1): boolean {
 
 /** Une page de l'album : soit des photos (d'une seule taille), soit une page de texte seule. */
 export type AlbumPage =
-  | { type: 'photos'; items: Photo[]; size: PhotoSize }
+  | {
+      type: 'photos';
+      items: Photo[];
+      size: PhotoSize;
+      /**
+       * Photo seule **agrandie** (gabarit « solo ») : commentaire très long, ou
+       * dernière photo restante qui suit la taille de l'album. Une photo dont la
+       * taille a été choisie (`Photo.size`) n'est jamais agrandie : seule sur sa
+       * page, une « petite » garde sa case de grille, une « moyenne » sa
+       * demi-page.
+       */
+      solo: boolean;
+    }
   | { type: 'text'; item: Photo };
 
 /** Couleur de fond propre à une page (`Photo.pageBg`), si valable. */
@@ -66,7 +78,9 @@ export function paginateEntries(
   let groupSize: PhotoSize = albumSize;
   const flush = () => {
     if (group.length) {
-      pages.push({ type: 'photos', items: group, size: groupSize });
+      const chosen = perPhotoSize && !!group[0].size;
+      const solo = group.length === 1 && PER_PAGE[groupSize] > 1 && !chosen;
+      pages.push({ type: 'photos', items: group, size: groupSize, solo });
       group = [];
     }
   };
@@ -82,7 +96,7 @@ export function paginateEntries(
     groupSize = size;
     if (perPage <= 1 || isLongComment(e, commentScale)) {
       flush();
-      pages.push({ type: 'photos', items: [e], size });
+      pages.push({ type: 'photos', items: [e], size, solo: perPage > 1 });
       continue;
     }
     const w = perPage === 4 ? wide : undefined;
