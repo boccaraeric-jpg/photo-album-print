@@ -161,6 +161,11 @@ d'entrée** (ils pilotent aussi les libellés) :
   corps défilant, barre d'action fixe gérant `insets.bottom`. Pas une feuille basse : la version
   précédente imitait une sheet système (`Modal transparent` + fond assombri + poignée dessinée) sans
   ses comportements, et son contenu ne défilait pas.
+  Corps en **rubriques repliables** (`Section`, une seule ouverte, aucune à l'ouverture) : **Style**
+  (typo, couverture, fond), **Photos**, **Textes**, **Cartes** — en pro seulement Photos et Textes.
+  Chaque en-tête **résume** les choix en cours (`joinSummary`, clés `L.export.sum*`) ; les oui/non
+  sont des **interrupteurs** (`SwitchRow`). L'écran alignait 16 réglages à plat : tout nouveau
+  réglage va dans une rubrique existante **et** dans son résumé.
 - En **pro**, `ExportModal` affiche **encadrement**, **lieu de prise de vue**, **date sous les
   photos**, **position de la date** et **alignement du texte** ; seuls **taille**, **fond** et **liseré** restent imposés
   (photo pleine largeur sur fond blanc). Ces quatre réglages sont honorés par les **deux** moteurs :

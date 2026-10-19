@@ -3,10 +3,12 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  LayoutAnimation,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
@@ -129,6 +131,92 @@ function Tile({
   );
 }
 
+/** Rubriques repliables de l'écran (une seule ouverte à la fois). */
+type SectionKey = 'style' | 'photos' | 'texts' | 'maps';
+
+/** Assemble le résumé d'une rubrique en sautant les parties absentes. */
+function joinSummary(...parts: (string | false | undefined)[]): string {
+  return parts.filter(Boolean).join(' · ');
+}
+
+/**
+ * Rubrique repliable : titre et résumé des choix en cours sur une ligne,
+ * réglages dépliés au toucher. Le résumé suffit à relire la mise en page
+ * sans rien ouvrir.
+ */
+function Section({
+  title,
+  summary,
+  swatch,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  summary: string;
+  /** Couleur résumée par une pastille (fond de l'album). */
+  swatch?: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <View style={[styles.section, open && styles.sectionOpen]}>
+      <Pressable
+        style={styles.sectionHead}
+        onPress={onToggle}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityHint={summary}
+      >
+        <View style={styles.sectionText}>
+          <Text style={styles.sectionTitle}>{title}</Text>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summary} numberOfLines={1}>
+              {summary}
+            </Text>
+            {!!swatch && <View style={[styles.summaryDot, { backgroundColor: swatch }]} />}
+          </View>
+        </View>
+        <Text style={[styles.chevron, open && styles.chevronOpen]}>›</Text>
+      </Pressable>
+      {open && <View style={styles.sectionBody}>{children}</View>}
+    </View>
+  );
+}
+
+/** Réglage oui/non : libellé à gauche, interrupteur iOS à droite. */
+function SwitchRow({
+  label,
+  hint,
+  value,
+  onChange,
+  first,
+}: {
+  label: string;
+  hint?: string;
+  value: boolean;
+  onChange: (value: boolean) => void;
+  /** Premier réglage de la rubrique : pas de marge haute. */
+  first?: boolean;
+}) {
+  return (
+    <View style={[styles.switchBlock, first && styles.switchFirst]}>
+      <View style={styles.switchRow}>
+        <Text style={styles.switchLabel}>{label}</Text>
+        <Switch
+          value={value}
+          onValueChange={onChange}
+          trackColor={{ true: C.sienna, false: C.tan }}
+          ios_backgroundColor={C.tan}
+          accessibilityLabel={label}
+        />
+      </View>
+      {!!hint && <Text style={styles.switchHint}>{hint}</Text>}
+    </View>
+  );
+}
+
 /** Schéma miniature d'une page de couverture (pas de photo réelle : lisible d'un coup d'œil). */
 function CoverSketch({ kind }: { kind: CoverStyle }) {
   if (kind === 'classic') {
@@ -230,8 +318,12 @@ export function ExportModal({
     onSetMapModes?.(modes);
     setMapDraft(null);
   };
-  // En pro les sections sont peu nombreuses : on les aère davantage.
-  const labelStyle = isPro ? [styles.label, styles.labelSpaced] : styles.label;
+  // Rubrique dépliée (aucune à l'ouverture : l'écran se lit d'un coup d'œil).
+  const [openSection, setOpenSection] = useState<SectionKey | null>(null);
+  const toggleSection = (key: SectionKey) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpenSection((cur) => (cur === key ? null : key));
+  };
 
   // Repart des dernières options à chaque ouverture. En pro, un encadrement
   // « Polaroïd » hérité d'un export familial n'est plus proposé : on le ramène
@@ -247,6 +339,7 @@ export function ExportModal({
     setPicked(validScatterPicks(photos, scatterIds).map((p) => p.id));
     setDraft(null);
     setMapDraft(null);
+    setOpenSection(null);
     // `photos` change à chaque édition du dossier : la sélection n'est relue
     // qu'à l'ouverture, pas pendant le réglage.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -278,12 +371,23 @@ export function ExportModal({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator
         >
-          {/* Typographie et couverture : familial seulement (le pro garde sa
-              page de garde factuelle en Montserrat). En tête de l'écran : ce
-              sont les deux choix qui changent le plus l'allure de l'album. */}
+          {/* Rubriques repliables : chacune résume ses choix en une ligne, une
+              seule s'ouvre à la fois. L'écran alignait jusqu'à seize réglages à
+              plat — on ne déplie que ce qu'on veut changer. */}
+
+          {/* Style : typographie, couverture et fond — familial seulement (le
+              pro garde sa page de garde factuelle en Montserrat, sur fond
+              blanc). En tête : ce sont les choix qui changent le plus l'allure
+              de l'album. */}
           {!isPro && (
-            <>
-              <Text style={styles.label}>{L.export.typefaceLabel}</Text>
+            <Section
+              title={L.export.sections.style}
+              summary={`${L.export.typefaces[options.typeface]} · ${L.export.covers[options.cover]}`}
+              swatch={options.background}
+              open={openSection === 'style'}
+              onToggle={() => toggleSection('style')}
+            >
+              <Text style={[styles.label, styles.labelFirst]}>{L.export.typefaceLabel}</Text>
               <View style={styles.tiles}>
                 {TYPEFACE_KEYS.map((value) => (
                   <Tile
@@ -340,20 +444,199 @@ export function ExportModal({
                 </View>
               )}
 
-              {placeCount > 0 && (
+              <Text style={styles.label}>{L.export.bgLabel}</Text>
+              <View style={styles.chips}>
+                {BACKGROUNDS.map((color) => {
+                  const selected = options.background === color;
+                  return (
+                    <Pressable
+                      key={color}
+                      style={[
+                        styles.swatch,
+                        { backgroundColor: color },
+                        selected && styles.swatchSelected,
+                      ]}
+                      onPress={() => setOptions((o) => ({ ...o, background: color }))}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                    />
+                  );
+                })}
+              </View>
+            </Section>
+          )}
+
+          {/* Photos. Taille et liseré n'existent qu'en familial : le gabarit
+              pro impose une photo pleine largeur. */}
+          <Section
+            title={L.export.sections.photos}
+            summary={joinSummary(
+              !isPro && L.export.sizes[options.photoSize],
+              L.export.frames[options.frame],
+              !isPro && options.liseret && L.export.sumLiseret,
+            )}
+            open={openSection === 'photos'}
+            onToggle={() => toggleSection('photos')}
+          >
+            {!isPro && (
+              <>
+                <Text style={[styles.label, styles.labelFirst]}>{L.export.sizeLabel}</Text>
+                <View style={styles.chips}>
+                  {SIZE_KEYS.map((value) => (
+                    <Chip
+                      key={value}
+                      selected={options.photoSize === value}
+                      label={L.export.sizes[value]}
+                      hint={L.export.sizeHints[value]}
+                      onPress={() => setOptions((o) => ({ ...o, photoSize: value }))}
+                    />
+                  ))}
+                </View>
+              </>
+            )}
+
+            <Text style={[styles.label, isPro && styles.labelFirst]}>
+              {L.export.frameLabel}
+            </Text>
+            <View style={styles.chips}>
+              {(isPro ? PRO_FRAME_KEYS : FRAME_KEYS).map((value) => (
+                <Chip
+                  key={value}
+                  selected={options.frame === value}
+                  label={L.export.frames[value]}
+                  onPress={() => setOptions((o) => ({ ...o, frame: value }))}
+                />
+              ))}
+            </View>
+
+            {!isPro && (
+              <SwitchRow
+                label={L.export.liseretLabel}
+                value={options.liseret}
+                onChange={(liseret) => setOptions((o) => ({ ...o, liseret }))}
+              />
+            )}
+          </Section>
+
+          {/* Textes : commentaire (familial), lieu, date, pages de texte. */}
+          <Section
+            title={L.export.sections.texts}
+            summary={joinSummary(
+              !isPro && L.export.sumComment(L.export.commentSizes[options.commentSize]),
+              options.showPlace && L.export.sumPlace,
+              options.dateFormat === 'none'
+                ? L.export.sumNoDate
+                : L.export.sumDate(L.export.dateFormats[options.dateFormat]),
+            )}
+            open={openSection === 'texts'}
+            onToggle={() => toggleSection('texts')}
+          >
+            {!isPro && (
+              <>
+                <Text style={[styles.label, styles.labelFirst]}>
+                  {L.export.commentSizeLabel}
+                </Text>
+                <View style={styles.chips}>
+                  {COMMENT_SIZE_KEYS.map((value) => (
+                    <Chip
+                      key={value}
+                      selected={options.commentSize === value}
+                      label={L.export.commentSizes[value]}
+                      onPress={() => setOptions((o) => ({ ...o, commentSize: value }))}
+                    />
+                  ))}
+                </View>
+
+                <Text style={styles.label}>{L.export.commentPosLabel}</Text>
+                <View style={styles.chips}>
+                  {COMMENT_POS_KEYS.map((value) => (
+                    <Chip
+                      key={value}
+                      selected={options.commentVAlign === value}
+                      label={L.export.commentPos[value]}
+                      onPress={() => setOptions((o) => ({ ...o, commentVAlign: value }))}
+                    />
+                  ))}
+                </View>
+              </>
+            )}
+
+            <SwitchRow
+              label={L.export.placeLabel}
+              value={options.showPlace}
+              onChange={(showPlace) => setOptions((o) => ({ ...o, showPlace }))}
+              first={isPro}
+            />
+
+            <Text style={styles.label}>{L.export.dateLabel}</Text>
+            <View style={styles.chips}>
+              {DATE_FORMAT_KEYS.map((value) => (
+                <Chip
+                  key={value}
+                  selected={options.dateFormat === value}
+                  label={L.export.dateFormats[value]}
+                  hint={L.export.dateHints[value]}
+                  onPress={() => setOptions((o) => ({ ...o, dateFormat: value }))}
+                />
+              ))}
+            </View>
+
+            {options.dateFormat !== 'none' && (
+              <>
+                <Text style={styles.label}>{L.export.datePosLabel}</Text>
+                <View style={styles.chips}>
+                  {ALIGN_KEYS.map((value) => (
+                    <Chip
+                      key={value}
+                      selected={options.dateAlign === value}
+                      label={L.export.aligns[value]}
+                      onPress={() => setOptions((o) => ({ ...o, dateAlign: value }))}
+                    />
+                  ))}
+                </View>
+              </>
+            )}
+
+            <Text style={styles.label}>{L.export.textAlignLabel}</Text>
+            <View style={styles.chips}>
+              {ALIGN_KEYS.map((value) => (
+                <Chip
+                  key={value}
+                  selected={options.textAlign === value}
+                  label={L.export.aligns[value]}
+                  onPress={() => setOptions((o) => ({ ...o, textAlign: value }))}
+                />
+              ))}
+            </View>
+          </Section>
+
+          {/* Cartes : à côté des photos et page « Nos lieux » — familial
+              seulement, et seulement avec des photos géolocalisées. */}
+          {!isPro && (
+            <Section
+              title={L.export.sections.maps}
+              summary={
+                placeCount === 0
+                  ? L.export.sumNoPlaces
+                  : joinSummary(
+                      options.photoMaps
+                        ? L.export.photoMapsChosen(photoMapCount)
+                        : L.export.sumNoMaps,
+                      options.showMap && L.export.sumMapPage,
+                    )
+              }
+              open={openSection === 'maps'}
+              onToggle={() => toggleSection('maps')}
+            >
+              {placeCount > 0 ? (
                 <>
-                  <Text style={styles.label}>{L.export.photoMapsLabel}</Text>
-                  <View style={styles.chips}>
-                    {([true, false] as const).map((value) => (
-                      <Chip
-                        key={String(value)}
-                        selected={options.photoMaps === value}
-                        label={value ? L.export.yes : L.export.no}
-                        onPress={() => setOptions((o) => ({ ...o, photoMaps: value }))}
-                      />
-                    ))}
-                  </View>
-                  <Text style={styles.note}>{L.export.photoMapsHint}</Text>
+                  <SwitchRow
+                    label={L.export.photoMapsLabel}
+                    hint={L.export.photoMapsHint}
+                    value={options.photoMaps}
+                    onChange={(photoMaps) => setOptions((o) => ({ ...o, photoMaps }))}
+                    first
+                  />
                   {options.photoMaps && !!onSetMapModes && (
                     <View style={styles.pickRow}>
                       <View style={styles.pickInfo}>
@@ -369,180 +652,22 @@ export function ExportModal({
                       </Pressable>
                     </View>
                   )}
-                  {!appleMapsAvailable && (
+                  {options.photoMaps && !appleMapsAvailable && (
                     <Text style={styles.note}>{L.export.photoMapsOffline}</Text>
                   )}
-                </>
-              )}
 
-              <Text style={styles.label}>{L.export.mapLabel}</Text>
-              {placeCount > 0 ? (
-                <>
-                  <View style={styles.chips}>
-                    {([true, false] as const).map((value) => (
-                      <Chip
-                        key={String(value)}
-                        selected={options.showMap === value}
-                        label={value ? L.export.yes : L.export.no}
-                        onPress={() => setOptions((o) => ({ ...o, showMap: value }))}
-                      />
-                    ))}
-                  </View>
-                  <Text style={styles.note}>{L.export.mapHint(placeCount)}</Text>
+                  <SwitchRow
+                    label={L.export.mapLabel}
+                    hint={L.export.mapHint(placeCount)}
+                    value={options.showMap}
+                    onChange={(showMap) => setOptions((o) => ({ ...o, showMap }))}
+                  />
                 </>
               ) : (
-                <Text style={styles.note}>{L.export.mapNone}</Text>
+                <Text style={[styles.note, styles.noteFirst]}>{L.export.mapNone}</Text>
               )}
-            </>
+            </Section>
           )}
-
-          {/* Taille, fond et liseré n'existent qu'en familial : le gabarit pro
-              impose une photo pleine largeur sur fond blanc. */}
-          {!isPro && (
-            <>
-              <Text style={styles.label}>{L.export.sizeLabel}</Text>
-              <View style={styles.chips}>
-                {SIZE_KEYS.map((value) => (
-                  <Chip
-                    key={value}
-                    selected={options.photoSize === value}
-                    label={L.export.sizes[value]}
-                    hint={L.export.sizeHints[value]}
-                    onPress={() => setOptions((o) => ({ ...o, photoSize: value }))}
-                  />
-                ))}
-              </View>
-
-              <Text style={styles.label}>{L.export.bgLabel}</Text>
-              <View style={styles.chips}>
-                {BACKGROUNDS.map((color) => {
-                  const selected = options.background === color;
-                  return (
-                    <Pressable
-                      key={color}
-                      style={[
-                        styles.swatch,
-                        { backgroundColor: color },
-                        selected && styles.swatchSelected,
-                      ]}
-                      onPress={() => setOptions((o) => ({ ...o, background: color }))}
-                    />
-                  );
-                })}
-              </View>
-            </>
-          )}
-
-          <Text style={labelStyle}>{L.export.frameLabel}</Text>
-          <View style={styles.chips}>
-            {(isPro ? PRO_FRAME_KEYS : FRAME_KEYS).map((value) => (
-              <Chip
-                key={value}
-                selected={options.frame === value}
-                label={L.export.frames[value]}
-                onPress={() => setOptions((o) => ({ ...o, frame: value }))}
-              />
-            ))}
-          </View>
-
-          {!isPro && (
-            <>
-              <Text style={styles.label}>{L.export.liseretLabel}</Text>
-              <View style={styles.chips}>
-                {([true, false] as const).map((value) => (
-                  <Chip
-                    key={String(value)}
-                    selected={options.liseret === value}
-                    label={value ? L.export.yes : L.export.no}
-                    onPress={() => setOptions((o) => ({ ...o, liseret: value }))}
-                  />
-                ))}
-              </View>
-            </>
-          )}
-
-          <Text style={labelStyle}>{L.export.placeLabel}</Text>
-          <View style={styles.chips}>
-            {([true, false] as const).map((value) => (
-              <Chip
-                key={String(value)}
-                selected={options.showPlace === value}
-                label={value ? L.export.yes : L.export.no}
-                onPress={() => setOptions((o) => ({ ...o, showPlace: value }))}
-              />
-            ))}
-          </View>
-
-          <Text style={labelStyle}>{L.export.dateLabel}</Text>
-          <View style={styles.chips}>
-            {DATE_FORMAT_KEYS.map((value) => (
-              <Chip
-                key={value}
-                selected={options.dateFormat === value}
-                label={L.export.dateFormats[value]}
-                hint={L.export.dateHints[value]}
-                onPress={() => setOptions((o) => ({ ...o, dateFormat: value }))}
-              />
-            ))}
-          </View>
-
-          {options.dateFormat !== 'none' && (
-            <>
-              <Text style={labelStyle}>{L.export.datePosLabel}</Text>
-              <View style={styles.chips}>
-                {ALIGN_KEYS.map((value) => (
-                  <Chip
-                    key={value}
-                    selected={options.dateAlign === value}
-                    label={L.export.aligns[value]}
-                    onPress={() => setOptions((o) => ({ ...o, dateAlign: value }))}
-                  />
-                ))}
-              </View>
-            </>
-          )}
-
-          {!isPro && (
-            <>
-              <Text style={styles.label}>{L.export.commentSizeLabel}</Text>
-              <View style={styles.chips}>
-                {COMMENT_SIZE_KEYS.map((value) => (
-                  <Chip
-                    key={value}
-                    selected={options.commentSize === value}
-                    label={L.export.commentSizes[value]}
-                    onPress={() => setOptions((o) => ({ ...o, commentSize: value }))}
-                  />
-                ))}
-              </View>
-
-              <Text style={styles.label}>{L.export.commentPosLabel}</Text>
-              <View style={styles.chips}>
-                {COMMENT_POS_KEYS.map((value) => (
-                  <Chip
-                    key={value}
-                    selected={options.commentVAlign === value}
-                    label={L.export.commentPos[value]}
-                    onPress={() =>
-                      setOptions((o) => ({ ...o, commentVAlign: value }))
-                    }
-                  />
-                ))}
-              </View>
-            </>
-          )}
-
-          <Text style={labelStyle}>{L.export.textAlignLabel}</Text>
-          <View style={styles.chips}>
-            {ALIGN_KEYS.map((value) => (
-              <Chip
-                key={value}
-                selected={options.textAlign === value}
-                label={L.export.aligns[value]}
-                onPress={() => setOptions((o) => ({ ...o, textAlign: value }))}
-              />
-            ))}
-          </View>
         </ScrollView>
 
         <View
@@ -748,22 +873,62 @@ const styles = StyleSheet.create({
   },
   // Seul le corps défile ; en-tête et barre d'action restent visibles.
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 24 },
-  label: {
-    // Gras + corps 13 (≈ +18 % sur l'ancien 11) : les intitulés de section
-    // devaient ressortir du reste. `fontWeight` serait ignoré sur iOS avec une
-    // famille custom — c'est la clé `F` qui porte la graisse.
-    fontFamily: F.monoBold,
-    fontSize: 13,
-    letterSpacing: 1,
-    // `C.ink` (encre quasi noire), pas `C.inkSoft` (brun) : les intitulés
-    // doivent trancher franchement sur le fond crème.
-    color: C.ink,
-    textTransform: 'uppercase',
-    marginTop: 18,
-    marginBottom: 8,
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, gap: 12 },
+  // Rubrique : carte claire sur le fond crème, titre + résumé, chevron.
+  section: {
+    backgroundColor: C.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.line,
+    overflow: 'hidden',
   },
-  labelSpaced: { marginTop: 34 },
+  sectionOpen: { borderColor: C.sienna },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    minHeight: 72,
+  },
+  sectionText: { flex: 1 },
+  sectionTitle: { fontFamily: F.display, fontSize: 18, color: C.ink },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  summary: { flexShrink: 1, fontFamily: F.mono, fontSize: 13, color: C.inkSoft },
+  summaryDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  chevron: { fontFamily: F.mono, fontSize: 26, color: C.muted, lineHeight: 28 },
+  chevronOpen: { transform: [{ rotate: '90deg' }], color: C.sienna },
+  sectionBody: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 20,
+    borderTopWidth: 1,
+    borderTopColor: C.line,
+  },
+  label: {
+    // Intitulé d'un réglage dans sa rubrique : gras, encre franche, sans
+    // majuscules — la rubrique porte déjà le titre fort. `fontWeight` serait
+    // ignoré sur iOS avec une famille custom : c'est la clé `F` qui porte la
+    // graisse.
+    fontFamily: F.monoBold,
+    fontSize: 14,
+    color: C.ink,
+    marginTop: 22,
+    marginBottom: 10,
+  },
+  labelFirst: { marginTop: 0 },
+  switchBlock: { marginTop: 22 },
+  switchFirst: { marginTop: 0 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  switchLabel: { flex: 1, fontFamily: F.monoBold, fontSize: 14, color: C.ink },
+  switchHint: { fontFamily: F.mono, fontSize: 12, color: C.muted, marginTop: 6, lineHeight: 17 },
+  noteFirst: { marginTop: 0 },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
