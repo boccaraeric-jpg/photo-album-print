@@ -52,6 +52,7 @@ import {
   SCATTER_TITLE,
   seedOf,
   TYPE_SPECS,
+  mutedInk,
   type FontFam,
 } from './albumStyle';
 
@@ -546,7 +547,7 @@ async function renderPhotoPage(
 
   const dark = isDark(options.background);
   const ink = dark ? '#f3efe7' : '#1f1d1a';
-  const muted = dark ? '#8f8a80' : '#a89f8d';
+  const muted = mutedInk(options.background);
   const whiteFrame = options.frame === 'card' || options.frame === 'polaroid';
 
   // Fond de page.
@@ -869,7 +870,7 @@ async function renderCover(
 
   const dark = isDark(options.background);
   const ink = dark ? '#f3efe7' : '#1f1d1a';
-  const muted = dark ? '#8f8a80' : '#a89f8d';
+  const muted = mutedInk(options.background);
   const accent = dark ? '#e3a455' : '#b45309';
 
   const bg = Skia.Paint();
@@ -994,7 +995,7 @@ function renderTextPage(
   const canvas = surface.getCanvas();
   const dark = isDark(options.background);
   const ink = dark ? '#f3efe7' : '#1f1d1a';
-  const muted = dark ? '#8f8a80' : '#a89f8d';
+  const muted = mutedInk(options.background);
 
   const bg = Skia.Paint();
   bg.setColor(Skia.Color(options.background));

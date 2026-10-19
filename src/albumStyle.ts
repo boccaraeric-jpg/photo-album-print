@@ -91,6 +91,21 @@ export const META_INK = '#4d473e';
 export const META_INK_DARK = '#e0dbd0';
 
 /**
+ * Gris des petits textes (pied de page, numéros, sous-titres) selon le fond.
+ * Le gris d'origine se perdait sur les fonds naturels (kraft, taupe, sauge) :
+ * en dessous de 215 de luminance, un gris plus foncé. Les fonds clairs gardent
+ * exactement l'ancien gris.
+ */
+export function mutedInk(bg: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(bg.trim());
+  if (!m) return '#a89f8d';
+  const n = parseInt(m[1], 16);
+  const luma = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+  if (luma < 128) return '#8f8a80';
+  return luma < 215 ? '#6b6253' : '#a89f8d';
+}
+
+/**
  * Hauteur prise à la photo pour loger un commentaire plus grand que le corps
  * normal (deux lignes de plus de hauteur) : la carte garde sa hauteur, la
  * pagination ne bouge pas (même principe que les bandes de `pdf.ts`).

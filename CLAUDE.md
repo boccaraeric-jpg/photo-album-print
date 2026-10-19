@@ -304,6 +304,13 @@ d'entrée** (ils pilotent aussi les libellés) :
   `.sz-<taille>` (`sizeCss`), pagination par taille (`paginateEntries(..., albumSize,
   { perPhotoSize })` : une page ne mélange pas deux tailles) ; Skia passe `{ ...options,
   background }` page par page. `size`/`pageBg` ne sont **pas** portés par sauvegarde ni `.comclic`.
+  En aperçu, les pages sont posées en **feuilles** sur un plan de travail gris (`DESK_CSS`, `body.desk`,
+  viewport élargi de `DESK_GAP`) : format exact, ombre, écart — jamais dans le PDF envoyé.
+- **Fonds** : `ALBUM_BACKGROUND_GROUPS` (`theme.ts`) = 18 couleurs en trois familles (clairs, naturels,
+  profonds), pastilles groupées dans `ExportModal` et `PreviewModal`. Pas de tons moyens (texte
+  illisible en encre sombre comme claire). Gris des petits textes partagé par les deux moteurs :
+  **`mutedInk(bg)`** (`albumStyle.ts`), plus foncé sous 215 de luminance (kraft, taupe, sauge).
+  Ne jamais changer la valeur d'une couleur existante : elle est enregistrée dans les réglages.
 - `PreviewModal` rend **le même HTML** dans une **WebView**. L'envoi JPEG : `src/pageImages.ts`
   compose chaque page en **Skia** (déterministe, hors-ligne — la capture de WebView est peu fiable
   sur iOS) ; plusieurs pages → **ZIP** (`src/albumZip.ts`, `jszip`).

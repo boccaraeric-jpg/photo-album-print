@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ALBUM_BACKGROUNDS, C, F } from '../theme';
+import { ALBUM_BACKGROUND_GROUPS, BACKGROUND_GROUP_KEYS, C, F } from '../theme';
 import { useLang } from '../i18n';
 import { effectiveCover, SCATTER_MAX, SCATTER_MIN, validScatterPicks } from '../albumStyle';
 import { autoMapIds, collectPlaces, mapPhotoIds, photoCoords } from '../albumMap';
@@ -68,8 +68,6 @@ const TYPEFACE_FONTS: Record<Typeface, string> = {
   serif: F.serifBold,
   script: F.scriptBold,
 };
-
-const BACKGROUNDS = ALBUM_BACKGROUNDS;
 
 /** Puce de choix (libellé + précision facultative). */
 function Chip({
@@ -445,24 +443,29 @@ export function ExportModal({
               )}
 
               <Text style={styles.label}>{L.export.bgLabel}</Text>
-              <View style={styles.chips}>
-                {BACKGROUNDS.map((color) => {
-                  const selected = options.background === color;
-                  return (
-                    <Pressable
-                      key={color}
-                      style={[
-                        styles.swatch,
-                        { backgroundColor: color },
-                        selected && styles.swatchSelected,
-                      ]}
-                      onPress={() => setOptions((o) => ({ ...o, background: color }))}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                    />
-                  );
-                })}
-              </View>
+              {BACKGROUND_GROUP_KEYS.map((group) => (
+                <View key={group} style={styles.bgGroup}>
+                  <Text style={styles.bgGroupLabel}>{L.export.bgGroups[group]}</Text>
+                  <View style={styles.chips}>
+                    {ALBUM_BACKGROUND_GROUPS[group].map((color) => {
+                      const selected = options.background === color;
+                      return (
+                        <Pressable
+                          key={color}
+                          style={[
+                            styles.swatch,
+                            { backgroundColor: color },
+                            selected && styles.swatchSelected,
+                          ]}
+                          onPress={() => setOptions((o) => ({ ...o, background: color }))}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                        />
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
             </Section>
           )}
 
@@ -1078,6 +1081,8 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: C.sienna,
   },
+  bgGroup: { marginBottom: 12 },
+  bgGroupLabel: { fontFamily: F.mono, fontSize: 12, color: C.muted, marginBottom: 6 },
   actions: {
     flexDirection: 'row',
     gap: 12,

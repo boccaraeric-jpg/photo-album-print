@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 
-import { ALBUM_BACKGROUNDS, C, F } from '../theme';
+import { ALBUM_BACKGROUND_GROUPS, BACKGROUND_GROUP_KEYS, C, F } from '../theme';
 import { useLang } from '../i18n';
 import { stripMarks } from '../richText';
 import { pageBackground } from '../paginate';
@@ -228,26 +228,33 @@ export function PreviewModal({
                 </>
               )}
               <Text style={styles.panelLabel}>{L.preview.entryBg}</Text>
-              <View style={styles.chips}>
-                {ALBUM_BACKGROUNDS.map((color) => {
-                  const on = currentBg === color;
-                  return (
-                    <Pressable
-                      key={color}
-                      style={[styles.swatch, { backgroundColor: color }, on && styles.swatchSelected]}
-                      onPress={() => !on && edit({ pageBg: color })}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: on }}
-                    >
-                      {on && (
-                        <Text style={[styles.swatchCheck, isDarkHex(color) && styles.swatchCheckLight]}>
-                          ✓
-                        </Text>
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </View>
+              {BACKGROUND_GROUP_KEYS.map((group) => (
+                <View key={group} style={styles.bgGroup}>
+                  <Text style={styles.bgGroupLabel}>{L.export.bgGroups[group]}</Text>
+                  <View style={styles.chips}>
+                    {ALBUM_BACKGROUND_GROUPS[group].map((color) => {
+                      const on = currentBg === color;
+                      return (
+                        <Pressable
+                          key={color}
+                          style={[styles.swatch, { backgroundColor: color }, on && styles.swatchSelected]}
+                          onPress={() => !on && edit({ pageBg: color })}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: on }}
+                        >
+                          {on && (
+                            <Text
+                              style={[styles.swatchCheck, isDarkHex(color) && styles.swatchCheckLight]}
+                            >
+                              ✓
+                            </Text>
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
               {pageBg ? (
                 <Pressable onPress={() => edit({ pageBg: null })} hitSlop={8}>
                   <Text style={styles.reset}>{L.preview.resetBg}</Text>
@@ -384,6 +391,8 @@ const styles = StyleSheet.create({
   webWrap: { flex: 1, backgroundColor: '#e5e7eb' },
   web: { flex: 1, backgroundColor: 'transparent' },
   webHidden: { opacity: 0 },
+  bgGroup: { marginBottom: 10 },
+  bgGroupLabel: { fontFamily: F.mono, fontSize: 12, color: C.muted, marginBottom: 6 },
   reset: { fontFamily: F.monoBold, fontSize: 13, color: C.sienna, marginTop: 10 },
   hint: { fontFamily: F.mono, fontSize: 12, color: C.muted, marginTop: 10 },
   swatchCheck: { fontFamily: F.monoBold, fontSize: 16, color: C.ink },

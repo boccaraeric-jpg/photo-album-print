@@ -46,6 +46,7 @@ import {
   SCATTER_TITLE,
   seedOf,
   TYPE_SPECS,
+  mutedInk,
   type FontFam,
 } from './albumStyle';
 
@@ -339,6 +340,22 @@ function textPageHtml(item: Photo, pageNo: number, ctx: PageCtx): string {
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
 
+/**
+ * Aperçu : chaque page posée comme une feuille sur un plan de travail neutre —
+ * format exact, fond propre, ombre, écart régulier — pour voir où une page
+ * finit et où la suivante commence. Écran seulement : le PDF envoyé est
+ * construit sans (`interactive` faux) et garde sa pagination par sauts.
+ */
+const DESK_GAP = 14;
+const DESK_CSS = `
+  body.desk { background: #cdc7bc; padding: ${DESK_GAP}px ${DESK_GAP}px 2px; }
+  body.desk .sheet {
+    width: ${PAGE_WIDTH}px; height: ${PAGE_HEIGHT}px; overflow: hidden;
+    background: var(--bg); color: var(--ink);
+    margin: 0 0 ${DESK_GAP + 4}px;
+    box-shadow: 0 0 0 1px rgba(31,29,26,0.12), 0 3px 12px rgba(31,29,26,0.28);
+  }`;
+
 /** Hauteur de la zone image (px) selon la taille choisie. */
 /**
  * Hauteur de la bande réservée au commentaire quand il est centré ou aligné en
@@ -385,7 +402,7 @@ function themeVars(bg: string, frame: ExportOptions['frame']): string {
   const vars: Record<string, string> = {
     '--bg': bg,
     '--ink': ink,
-    '--muted': dark ? '#8f8a80' : '#a89f8d',
+    '--muted': mutedInk(bg),
     '--accent': dark ? '#e3a455' : '#b45309',
     '--cap-ink': whiteFrame ? CAPTION_INK : dark ? ink : CAPTION_INK,
     '--meta-ink': !whiteFrame && dark ? META_INK_DARK : META_INK,
@@ -868,11 +885,12 @@ export async function buildAlbumHtml(
         <meta charset="utf-8" />
         ${CSP_META}
         <!-- width = largeur de page A4 en points : l'aperçu WebView met la page
-             à l'échelle de l'écran ; ignoré par expo-print (dimensions fournies). -->
-        <meta name="viewport" content="width=${PAGE_WIDTH}, initial-scale=1" />
-        <style>${buildStyles(options)}</style>
+             à l'échelle de l'écran ; ignoré par expo-print (dimensions fournies).
+             En aperçu, la largeur ajoute les marges du plan de travail. -->
+        <meta name="viewport" content="width=${interactive ? PAGE_WIDTH + 2 * DESK_GAP : PAGE_WIDTH}, initial-scale=1" />
+        <style>${buildStyles(options)}${interactive ? DESK_CSS : ''}</style>
       </head>
-      <body>
+      <body${interactive ? ' class="desk"' : ''}>
         ${coverHtml}
         ${mapHtml}
         ${pages}
