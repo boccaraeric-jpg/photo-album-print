@@ -56,6 +56,7 @@ import {
   useLang,
   type Lang,
 } from './src/i18n';
+import { effectiveFormat } from './src/pageFormat';
 import { newId } from './src/id';
 import { extractTakenAt } from './src/exif';
 import {
@@ -1556,7 +1557,7 @@ onBack,
         lang,
         album.scatterPhotoIds,
       );
-      const uri = await htmlToPdfFile(html, albumTitle);
+      const uri = await htmlToPdfFile(html, albumTitle, effectiveFormat(exportOptions));
       await shareFile(uri, albumTitle, 'application/pdf', 'com.adobe.pdf');
       setPreviewVisible(false);
     } catch {

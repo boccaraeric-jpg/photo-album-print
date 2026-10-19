@@ -59,6 +59,9 @@ export type CoverStyle = 'classic' | 'scatter' | 'filmstrip';
 export type CommentSize = 'normal' | 'large' | 'xlarge';
 
 /** Options de personnalisation du mini album exporté. */
+/** Format de page de l'album (cf. `pageFormat.ts`). */
+export type PageFormat = 'a4' | '16x21';
+
 export interface ExportOptions {
   /** Rendu global (familial personnalisable ou professionnel sobre). */
   style: RenderStyle;
@@ -96,6 +99,8 @@ export interface ExportOptions {
    * photos : règle d'office (le lieu change) corrigée par `Photo.mapMode`.
    */
   photoMaps: boolean;
+  /** Format de page — familial uniquement (le pro reste en A4). */
+  format: PageFormat;
 }
 
 /** Critère de tri de la liste des dossiers (écran d'accueil). */

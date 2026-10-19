@@ -1,7 +1,7 @@
 import { dict, localeTag, type Lang } from './i18n';
 import type { Photo, Typeface } from './types';
 import { photoDate } from './dateFormat';
-import { COVER_H, COVER_W, TYPE_SPECS, type FontFam } from './albumStyle';
+import { COVER_H, COVER_W, mutedInk, TYPE_SPECS, type FontFam } from './albumStyle';
 import { landRings, ringContains } from './worldMap';
 
 /*
@@ -405,6 +405,8 @@ export function buildMapModel(
   typeface: Typeface,
   background: string,
   lang: Lang = 'fr',
+  /** Hauteur de la page (unités de mise en page, cf. `pageFormat.ts`). */
+  pageH: number = COVER_H,
 ): MapModel | null {
   const places = collectPlaces(photos, lang);
   if (!places.length) return null;
@@ -412,7 +414,7 @@ export function buildMapModel(
   const spec = TYPE_SPECS[typeface];
   const dark = isDark(background);
   const ink = dark ? '#f3efe7' : '#1f1d1a';
-  const muted = dark ? '#8f8a80' : '#a89f8d';
+  const muted = mutedInk(background);
   const soft = dark ? '#cbc5b8' : '#6b6456';
   const accent = dark ? '#e3a455' : '#b45309';
   const items: MapItem[] = [];
@@ -455,7 +457,7 @@ export function buildMapModel(
   const rowH = compact ? 30 : 36;
   const rows = Math.ceil(places.length / 2);
   const box: MapRect = { x: 40, y: 128, w: 515, h: 0 };
-  box.h = COVER_H - box.y - 26 - rows * rowH - 34;
+  box.h = pageH - box.y - 26 - rows * rowH - 34;
 
   // --- Cadrage : les repères, étendus aux petites îles qui les portent (une
   // île coupée au bord du cadre fait « erreur »).
@@ -710,7 +712,7 @@ export function buildMapModel(
 
   text({
     x: COVER_W / 2,
-    y: COVER_H - 18,
+    y: pageH - 18,
     text: D.mapCredit.toUpperCase(),
     size: 6.5,
     bold: false,

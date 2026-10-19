@@ -18,12 +18,14 @@ import { useLang } from '../i18n';
 import { effectiveCover, SCATTER_MAX, SCATTER_MIN, validScatterPicks } from '../albumStyle';
 import { autoMapIds, collectPlaces, mapPhotoIds, photoCoords } from '../albumMap';
 import { appleMapsAvailable } from '../mapSnapshot';
+import { PAGE_FORMAT_KEYS } from '../pageFormat';
 import type {
   CommentSize,
   CoverStyle,
   DateFormat,
   ExportOptions,
   FrameStyle,
+  PageFormat,
   Photo,
   PhotoSize,
   Typeface,
@@ -215,6 +217,23 @@ function SwitchRow({
   );
 }
 
+/**
+ * Silhouette d'une page au format choisi, à l'échelle (A4 21 × 29,7 cm ;
+ * 16 × 21 cm) : la différence de taille se voit avant même de lire.
+ */
+function FormatSketch({ format }: { format: PageFormat }) {
+  const cm = 2.1; // points d'écran par centimètre
+  const [w, h] = format === 'a4' ? [21, 29.7] : [16, 21];
+  return (
+    <View style={styles.formatBox}>
+      <View style={[styles.formatPage, { width: w * cm, height: h * cm }]}>
+        <View style={[styles.sketchPhoto, { width: w * cm - 12, height: h * cm * 0.38 }]} />
+        <View style={[styles.sketchPhoto, { width: w * cm - 12, height: h * cm * 0.38 }]} />
+      </View>
+    </View>
+  );
+}
+
 /** Schéma miniature d'une page de couverture (pas de photo réelle : lisible d'un coup d'œil). */
 function CoverSketch({ kind }: { kind: CoverStyle }) {
   if (kind === 'classic') {
@@ -380,12 +399,31 @@ export function ExportModal({
           {!isPro && (
             <Section
               title={L.export.sections.style}
-              summary={`${L.export.typefaces[options.typeface]} · ${L.export.covers[options.cover]}`}
+              summary={joinSummary(
+                L.export.formats[options.format],
+                L.export.typefaces[options.typeface],
+                L.export.covers[options.cover],
+              )}
               swatch={options.background}
               open={openSection === 'style'}
               onToggle={() => toggleSection('style')}
             >
-              <Text style={[styles.label, styles.labelFirst]}>{L.export.typefaceLabel}</Text>
+              <Text style={[styles.label, styles.labelFirst]}>{L.export.formatLabel}</Text>
+              <View style={styles.tiles}>
+                {PAGE_FORMAT_KEYS.map((value) => (
+                  <Tile
+                    key={value}
+                    label={L.export.formats[value]}
+                    hint={L.export.formatHints[value]}
+                    selected={options.format === value}
+                    onPress={() => setOptions((o) => ({ ...o, format: value }))}
+                  >
+                    <FormatSketch format={value} />
+                  </Tile>
+                ))}
+              </View>
+
+              <Text style={styles.label}>{L.export.typefaceLabel}</Text>
               <View style={styles.tiles}>
                 {TYPEFACE_KEYS.map((value) => (
                   <Tile
@@ -1045,6 +1083,15 @@ const styles = StyleSheet.create({
     borderColor: C.line,
     alignItems: 'center',
     overflow: 'hidden',
+  },
+  // Cadre fixe : les deux silhouettes s'alignent par le bas, à la même échelle.
+  formatBox: { height: 64, justifyContent: 'flex-end', alignItems: 'center' },
+  formatPage: {
+    backgroundColor: '#fffdf8',
+    borderWidth: 1,
+    borderColor: C.line,
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
   },
   sketchLine: { height: 3, borderRadius: 1.5, backgroundColor: C.ink },
   sketchPhoto: { backgroundColor: C.muted },

@@ -1,7 +1,12 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import type { ExportOptions, Photo, PhotoSize } from './types';
+import type {
+  ExportOptions,
+  PageFormat,
+  Photo,
+  PhotoSize,
+} from './types';
 import { readPrintBase64 } from './photoFiles';
 import { fileDateStamp, formatPhotoDate, photoDate } from './dateFormat';
 import { dict, localeTag, SUPPORTED, type Lang } from './i18n';
@@ -31,7 +36,6 @@ import {
   COMMENT_BASE,
   COMMENT_SCALE,
   commentShrink,
-  COVER_H,
   coverPicks,
   effectiveCover,
   famsUsed,
@@ -49,6 +53,12 @@ import {
   mutedInk,
   type FontFam,
 } from './albumStyle';
+import {
+  effectiveFormat,
+  heightCut,
+  PAGE_FORMATS,
+  pageHeight,
+} from './pageFormat';
 
 /** Polices embarquées en base64 par famille (graisse normale + grasse), pour un
  *  rendu identique et hors-ligne dans le PDF/aperçu. */
@@ -117,6 +127,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   commentSize: 'large',
   showMap: false,
   photoMaps: false,
+  format: 'a4',
 };
 
 /** Garde la valeur si elle fait partie des choix connus, sinon le défaut. */
@@ -164,6 +175,7 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     cover: oneOf(o.cover, ['classic', 'scatter', 'filmstrip'] as const, d.cover),
     showMap: typeof o.showMap === 'boolean' ? o.showMap : d.showMap,
     photoMaps: typeof o.photoMaps === 'boolean' ? o.photoMaps : d.photoMaps,
+    format: oneOf(o.format, ['a4', '16x21'] as const, d.format),
   };
 }
 
@@ -339,6 +351,7 @@ function textPageHtml(item: Photo, pageNo: number, ctx: PageCtx): string {
  */
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
+// Hauteur d'une page selon le format : `pageHeight(effectiveFormat(options))`.
 
 /**
  * Aperçu : chaque page posée comme une feuille sur un plan de travail neutre —
@@ -347,10 +360,10 @@ const PAGE_HEIGHT = 842;
  * construit sans (`interactive` faux) et garde sa pagination par sauts.
  */
 const DESK_GAP = 14;
-const DESK_CSS = `
+const deskCss = (pageH: number) => `
   body.desk { background: #cdc7bc; padding: ${DESK_GAP}px ${DESK_GAP}px 2px; }
   body.desk .sheet {
-    width: ${PAGE_WIDTH}px; height: ${PAGE_HEIGHT}px; overflow: hidden;
+    width: ${PAGE_WIDTH}px; height: ${pageH}px; overflow: hidden;
     background: var(--bg); color: var(--ink);
     margin: 0 0 ${DESK_GAP + 4}px;
     box-shadow: 0 0 0 1px rgba(31,29,26,0.12), 0 3px 12px rgba(31,29,26,0.28);
@@ -435,12 +448,19 @@ function sizeCss(size: PhotoSize, options: ExportOptions): string {
     commentShrink(baseSize, options.typeface, options.commentSize);
   const captionSize =
     Math.round(baseSize * spec.captionScale * COMMENT_SCALE[options.commentSize] * 10) / 10;
+  // Format moins haut que l'A4 : la hauteur perdue est prise sur les photos —
+  // partagée entre les deux rangées (petite, moyenne), entière pour une photo
+  // agrandie (commentaire long : il lui faut sa marge), à moitié pour la grande
+  // (sa page gardait déjà du blanc en A4). Les légendes gardent leur place : la
+  // pagination ne change pas.
+  const cut = heightCut(effectiveFormat(options));
+  const rowCut = size === 'large' ? cut : Math.round(cut / 2);
   const z = `.sz-${size}`;
   return `
   ${z} .card { margin-bottom: ${size === 'small' ? 12 : 16}px; }
-  ${z} .ph { height: ${parseInt(PH_HEIGHTS[size], 10) - shrink}px; }
-  ${z} .card.solo .ph { height: ${380 - shrink}px; }
-  ${z} .card.large .ph { height: ${480 - shrink}px; }
+  ${z} .ph { height: ${parseInt(PH_HEIGHTS[size], 10) - shrink - rowCut}px; }
+  ${z} .card.solo .ph { height: ${380 - shrink - cut}px; }
+  ${z} .card.large .ph { height: ${480 - shrink - Math.round(cut / 2)}px; }
   ${z} .caption { font-size: ${captionSize}px; }
   ${
     band
@@ -467,6 +487,11 @@ function buildStyles(options: ExportOptions): string {
   const regular = (f: FontFam) => FACES[f].regular[0];
   const bold = (f: FontFam) => FACES[f].bold[0];
   const commentScale = COMMENT_SCALE[options.commentSize];
+  // Format de page : hauteur des pages, et hauteur perdue sur l'A4 que les
+  // gabarits verticaux (couverture, pleine page, fin) retranchent.
+  const format = effectiveFormat(options);
+  const pageH = pageHeight(format);
+  const cut = heightCut(format);
   const captionWeight = spec.captionBold ? bold(spec.caption) : regular(spec.caption);
 
   // Encadré : les cadres à fond blanc gardent un texte sombre (`--cap-ink`) ;
@@ -525,7 +550,7 @@ function buildStyles(options: ExportOptions): string {
   .sheet:last-of-type { page-break-after: auto; }
   /* Page à fond propre : hauteur de page exacte, pour que la couleur la
      couvre jusqu'en bas (le fond du body reste celui de l'album). */
-  .sheet.painted { height: ${PAGE_HEIGHT}px; overflow: hidden; background: var(--bg); color: var(--ink); }
+  .sheet.painted { height: ${pageH}px; overflow: hidden; background: var(--bg); color: var(--ink); }
   .footer {
     display: flex; justify-content: center; align-items: center;
     margin: 6px 4px 0; font-size: 10px; letter-spacing: 2.5px;
@@ -559,7 +584,7 @@ function buildStyles(options: ExportOptions): string {
 
   /* --- Couvertures montées (pêle-mêle, grille) : gabarit calculé dans
      albumStyle.ts, posé en absolu pour coller au rendu Skia --- */
-  .cover-abs { position: relative; height: ${COVER_H}px; padding: 0; overflow: hidden; }
+  .cover-abs { position: relative; height: ${pageH}px; padding: 0; overflow: hidden; }
   .cv-head {
     position: absolute; top: ${SCATTER_TITLE.top}px;
     left: ${SCATTER_TITLE.side}px; right: ${SCATTER_TITLE.side}px; text-align: center;
@@ -575,7 +600,7 @@ function buildStyles(options: ExportOptions): string {
   .pola img, .cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .cell { position: absolute; overflow: hidden; background: rgba(31,29,26,0.08); }
   .cover-hero {
-    height: 470px; margin: 40px 0 0; overflow: hidden;
+    height: ${470 - cut}px; margin: 40px 0 0; overflow: hidden;
     border: 6px solid #fff; box-shadow: 0 8px 22px rgba(0, 0, 0, ${dark ? '0.55' : '0.22'});
   }
   .cover-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -621,7 +646,7 @@ function buildStyles(options: ExportOptions): string {
   /* --- Photo pleine page (bord à bord) --- */
   .full-sheet { padding: 0; page-break-after: always; }
   .full-sheet:last-of-type { page-break-after: auto; }
-  .full-img { position: relative; height: 778px; overflow: hidden; }
+  .full-img { position: relative; height: ${778 - cut}px; overflow: hidden; }
   .full-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .full-cap {
     height: 64px; padding: 0 44px; display: flex; align-items: center; justify-content: center;
@@ -632,7 +657,7 @@ function buildStyles(options: ExportOptions): string {
 
   /* --- Page de texte seule (texte centré verticalement sur la page) --- */
   .textpage {
-    position: relative; height: 842px; padding: 90px 60px;
+    position: relative; height: ${pageH}px; padding: 90px 60px;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     page-break-after: always;
   }
@@ -645,7 +670,7 @@ function buildStyles(options: ExportOptions): string {
   }
 
   /* --- Page de fin --- */
-  .end { text-align: center; padding-top: 330px; }
+  .end { text-align: center; padding-top: ${330 - Math.round(cut / 2)}px; }
   .end .orn { font-size: 22px; color: var(--accent); margin: 0; }
   .end h2 {
     font-family: ${fam(spec.title)}; font-weight: ${bold(spec.title)};
@@ -678,7 +703,7 @@ function buildStyles(options: ExportOptions): string {
   }
 
   /* --- Carte des lieux : un SVG pleine page (cf. albumMap.ts) --- */
-  .mappage { padding: 0; height: 842px; overflow: hidden; }
+  .mappage { padding: 0; height: ${pageH}px; overflow: hidden; }
   .mappage svg { display: block; }
   ${
     options.liseret
@@ -785,6 +810,8 @@ export async function buildAlbumHtml(
       : photos;
 
   const spec = TYPE_SPECS[options.typeface];
+  const format = effectiveFormat(options);
+  const pageH = pageHeight(format);
   const coverTitle = escapeHtml(spec.uppercaseTitle ? title.toUpperCase() : title);
   const coverYear = escapeHtml(photoEntries.length ? yearLabel(photoEntries) : '');
   const srcOf = (p: Photo) => items.find((it) => it.photo.id === p.id)?.src ?? '';
@@ -795,7 +822,7 @@ export async function buildAlbumHtml(
   let coverHtml: string;
   if (coverStyle === 'scatter') {
     const picks = coverPicks(photoEntries, 'scatter', coverPhotoId, scatterIds);
-    const slots = scatterSlots(picks.length, seedOf(picks.map((p) => p.id)));
+    const slots = scatterSlots(picks.length, seedOf(picks.map((p) => p.id)), pageH);
     const polas = picks
       .map((p, i) => {
         const s = slots[i];
@@ -813,7 +840,7 @@ export async function buildAlbumHtml(
         </section>`;
   } else if (coverStyle === 'filmstrip') {
     const picks = coverPicks(photoEntries, 'filmstrip', coverPhotoId);
-    const layout = gridLayout(picks.length);
+    const layout = gridLayout(picks.length, pageH);
     const cells = picks
       .map((p, i) => {
         const c = layout.cells[i];
@@ -852,9 +879,10 @@ export async function buildAlbumHtml(
         options.typeface,
         options.background,
         lang,
+        pageH,
       )
     : null;
-  const mapHtml = mapModel ? mapPageHtml(mapModel) : '';
+  const mapHtml = mapModel ? mapPageHtml(mapModel, pageH) : '';
 
   const ctx: PageCtx = {
     dateFormat: options.dateFormat,
@@ -888,7 +916,7 @@ export async function buildAlbumHtml(
              à l'échelle de l'écran ; ignoré par expo-print (dimensions fournies).
              En aperçu, la largeur ajoute les marges du plan de travail. -->
         <meta name="viewport" content="width=${interactive ? PAGE_WIDTH + 2 * DESK_GAP : PAGE_WIDTH}, initial-scale=1" />
-        <style>${buildStyles(options)}${interactive ? DESK_CSS : ''}</style>
+        <style>${buildStyles(options)}${interactive ? deskCss(pageH) : printScale(format)}</style>
       </head>
       <body${interactive ? ' class="desk"' : ''}>
         ${coverHtml}
@@ -900,6 +928,19 @@ export async function buildAlbumHtml(
         </section>
       </body>
     </html>`;
+}
+
+/**
+ * PDF d'un format plus petit que l'A4 : la page mise en page sur 595 unités de
+ * large est réduite à sa largeur réelle (16 cm = 453,5 pt). Rien en A4. Jamais
+ * dans l'aperçu, qui montre les pages à l'échelle de l'écran.
+ */
+function printScale(format: PageFormat): string {
+  const { zoom, print } = PAGE_FORMATS[format];
+  if (zoom === 1) return '';
+  return `
+  @page { size: ${print.width.toFixed(2)}pt ${print.height.toFixed(2)}pt; margin: 0; }
+  html { zoom: ${zoom.toFixed(5)}; }`;
 }
 
 /** Compteur des découpes SVG : plusieurs cartes cohabitent dans le même document. */
@@ -952,11 +993,11 @@ function mapSvgParts(items: MapItem[]): { defs: string; body: string } {
 }
 
 /** Page « Nos lieux de visite » : un SVG pleine page. */
-function mapPageHtml(model: MapModel): string {
+function mapPageHtml(model: MapModel, pageH: number): string {
   const { defs, body } = mapSvgParts(model.items);
   return `
         <section class="sheet mappage">
-          <svg width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" viewBox="0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${body}</svg>
+          <svg width="${PAGE_WIDTH}" height="${pageH}" viewBox="0 0 ${PAGE_WIDTH} ${pageH}" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${body}</svg>
         </section>`;
 }
 
@@ -1130,11 +1171,15 @@ export function albumFileBase(title: string): string {
  * (« Nom de l'album JJ-MM-AAAA.pdf ») pour qu'il soit identifiable au partage.
  * @returns l'URI du PDF nommé.
  */
-export async function htmlToPdfFile(html: string, title: string): Promise<string> {
+export async function htmlToPdfFile(
+  html: string,
+  title: string,
+  /** Format des pages (A4 par défaut ; cf. `effectiveFormat`). */
+  format: PageFormat = 'a4',
+): Promise<string> {
   const { uri } = await Print.printToFileAsync({
     html,
-    width: PAGE_WIDTH,
-    height: PAGE_HEIGHT,
+    ...PAGE_FORMATS[format].print,
   });
   const dest = `${FileSystem.cacheDirectory}${albumFileBase(title)}.pdf`;
   try {

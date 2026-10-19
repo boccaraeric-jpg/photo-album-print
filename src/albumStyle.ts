@@ -125,7 +125,10 @@ export function famsUsed(t: Typeface): FontFam[] {
  * Couvertures
  * ------------------------------------------------------------------------ */
 
-/** Dimensions de la page A4 en points (= px CSS du PDF). */
+/**
+ * Dimensions de la page A4 en points (= px CSS du PDF) : largeur commune à tous
+ * les formats, hauteur de l'A4 (cf. `pageFormat.ts` pour les autres).
+ */
 export const COVER_W = 595;
 export const COVER_H = 842;
 
@@ -250,14 +253,26 @@ const SCATTER_LAYOUTS: Record<number, [number, number, number][]> = {
 };
 
 /** Gabarit du pêle-mêle : l'indice 0 est la photo principale (au centre, au-dessus). */
-export function scatterSlots(count: number, seed: number): PolaroidSlot[] {
+export function scatterSlots(
+  count: number,
+  seed: number,
+  pageH: number = COVER_H,
+): PolaroidSlot[] {
   const rand = rng(seed);
   const jitter = (n: number) => (rand() * 2 - 1) * n;
   const n = Math.min(SCATTER_MAX, Math.max(SCATTER_MIN, count));
+  // Page moins haute que l'A4 (16 × 21) : le gabarit entier est réduit dans la
+  // même proportion, centré en largeur — l'équilibre du montage est conservé.
+  const s = Math.min(1, pageH / COVER_H);
+  const mid = COVER_W / 2;
   // Recalage commun des gabarits : remontés vers le titre et légèrement
   // agrandis — une bande vide de ~100 pt séparait le titre des photos.
   const [hero, ...others] = SCATTER_LAYOUTS[n].map(
-    ([cx, cy, size]): [number, number, number] => [cx, cy - 18, Math.round(size * 1.06)],
+    ([cx, cy, size]): [number, number, number] => [
+      mid + (cx - mid) * s,
+      (cy - 18) * s,
+      Math.round(size * 1.06 * s),
+    ],
   );
   const slots = others.map(([cx, cy, size], i): PolaroidSlot => {
     // Inclinaison franche (3° à 9°), sens alterné : un angle quasi nul
@@ -311,14 +326,18 @@ const GRID_TITLE_BLOCK = 110;
  * grille + titre est centré verticalement : une grille de 2 rangées calée en
  * haut laissait un tiers de page vide sous le titre.
  */
-export function gridLayout(count: number): GridLayout {
-  const { cols, rows, height } = gridShape(count);
+export function gridLayout(count: number, pageH: number = COVER_H): GridLayout {
+  const shape = gridShape(count);
+  const { cols, rows } = shape;
+  // Page moins haute (16 × 21) : la grille perd en hauteur dans la même
+  // proportion que la page, les cellules restent proches du même format.
+  const height = Math.round(shape.height * Math.min(1, pageH / COVER_H));
   const width = COVER_W - 2 * GRID.margin;
   const w = (width - (cols - 1) * GRID.gap) / cols;
   const h = (height - (rows - 1) * GRID.gap) / rows;
   const top = Math.max(
     GRID.margin,
-    (COVER_H - (height + GRID_TITLE_GAP + GRID_TITLE_BLOCK)) / 2,
+    (pageH - (height + GRID_TITLE_GAP + GRID_TITLE_BLOCK)) / 2,
   );
   const cells = [];
   for (let r = 0; r < rows; r++) {

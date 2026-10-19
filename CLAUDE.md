@@ -314,6 +314,14 @@ d'entrée** (ils pilotent aussi les libellés) :
 - `PreviewModal` rend **le même HTML** dans une **WebView**. L'envoi JPEG : `src/pageImages.ts`
   compose chaque page en **Skia** (déterministe, hors-ligne — la capture de WebView est peu fiable
   sur iOS) ; plusieurs pages → **ZIP** (`src/albumZip.ts`, `jszip`).
+- **Format de page** (`ExportOptions.format`, `src/pageFormat.ts`, familial ; le pro reste en A4 via
+  `effectiveFormat`) : **A4** ou **16 × 21 cm**. Tout se met en page sur **595 unités de large** ; seule
+  la hauteur change (842 / 780) et `heightCut` se retranche des gabarits verticaux (photos, photo de
+  couverture, pleine page, fin) ; pêle-mêle, grille et page « Nos lieux » reçoivent `pageH`. Le PDF est
+  ensuite **réduit** à sa vraie taille (`printScale` : `html { zoom }` + `@page`, et `print` passé à
+  `expo-print`) — 16 × 21 cm = 453,5 × 595,3 pt ; 780 et non 781, sinon une fraction de point déborde
+  en page blanche. Images Skia : 1240 px de large, `imageH` de haut. Contrôlé sous Chrome (taille et
+  nombre de pages) ; ⚠️ le `zoom` à l'impression iOS reste à confirmer sur appareil.
 - Contraintes de mise en page PDF **à ne pas casser** : dimensionner en **px = points** (A4
   595×842), **jamais de `vh`**, **hauteurs fixes** en familial (pas de flex vertical), et
   `print-color-adjust: exact` (sinon iOS supprime fonds/ombres).

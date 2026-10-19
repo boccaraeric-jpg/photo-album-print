@@ -55,6 +55,7 @@ import {
   mutedInk,
   type FontFam,
 } from './albumStyle';
+import { effectiveFormat, PAGE_FORMATS, pageHeight } from './pageFormat';
 
 /** Tronque un texte à `n` mots (légende de pleine page). */
 function limitWords(text: string, n: number): string {
@@ -62,10 +63,22 @@ function limitWords(text: string, n: number): string {
   return words.length <= n ? text.trim() : `${words.slice(0, n).join(' ')}…`;
 }
 
-/** Page A4 à ~150 dpi : bonne qualité d'impression pour un poids raisonnable. */
+/**
+ * Page à ~150 dpi (A4) : bonne qualité d'impression pour un poids raisonnable.
+ * Largeur fixe ; la hauteur suit le format (`imageHeight`, cf. `pageFormat.ts`).
+ */
 const W = 1240;
-const H = 1754;
 const PAD = 70;
+
+/** Hauteur des images de page selon le format de l'album. */
+function imageHeight(options: ExportOptions): number {
+  return PAGE_FORMATS[effectiveFormat(options)].imageH;
+}
+
+/** Hauteur de page en unités de mise en page (gabarits partagés avec le PDF). */
+function layoutHeight(options: ExportOptions): number {
+  return pageHeight(effectiveFormat(options));
+}
 
 interface PagePayload {
   base64: string;
@@ -541,6 +554,7 @@ async function renderPhotoPage(
   solo = group.length === 1,
 ): Promise<PagePayload | null> {
   const D = dict(lang).doc;
+  const H = imageHeight(options);
   const surface = Skia.Surface.Make(W, H);
   if (!surface) return null;
   const canvas = surface.getCanvas();
@@ -826,6 +840,7 @@ async function renderCover(
   coverPhotoId?: string,
   scatterIds?: string[],
 ): Promise<PagePayload | null> {
+  const H = imageHeight(options);
   const surface = Skia.Surface.Make(W, H);
   if (!surface) return null;
   const canvas = surface.getCanvas();
@@ -918,14 +933,18 @@ async function renderCover(
 
     if (style === 'scatter') {
       head(SCATTER_TITLE.top, SCATTER_TITLE.size);
-      const slots = scatterSlots(picks.length, seedOf(picks.map((p) => p.id)));
+      const slots = scatterSlots(
+        picks.length,
+        seedOf(picks.map((p) => p.id)),
+        layoutHeight(options),
+      );
       // Ordre d'empilement : la photo étoilée en dernier, donc au-dessus.
       const order = slots.map((_, i) => i).sort((a, b) => slots[a].z - slots[b].z);
       for (const i of order) {
         drawPolaroid(canvas, thumbs[i], slots[i], k, dark);
       }
     } else {
-      const layout = gridLayout(picks.length);
+      const layout = gridLayout(picks.length, layoutHeight(options));
       picks.forEach((_, i) => {
         const c = layout.cells[i];
         const x = c.x * k;
@@ -942,13 +961,15 @@ async function renderCover(
     return encodeSurface(surface, title, 0);
   }
 
+  // Format moins haut que l'A4 : la photo de couverture cède la hauteur perdue.
+  const heroH = 1040 - (imageHeight({ ...options, format: 'a4' }) - H);
   const cover = photos.find((p) => p.id === coverPhotoId) ?? photos[0];
   if (cover) {
     const img = await loadImage(cover.uri);
-    drawCoverImage(canvas, img, PAD, PAD, W - 2 * PAD, 1040, 40);
+    drawCoverImage(canvas, img, PAD, PAD, W - 2 * PAD, heroH, 40);
   }
 
-  let ty = PAD + 1040 + 60;
+  let ty = PAD + heroH + 60;
   ty += drawText(canvas, dict(lang).home.kicker, PAD, ty, W - 2 * PAD, {
     color: accent,
     size: 22,
@@ -990,6 +1011,7 @@ function renderTextPage(
   title: string,
   pageNo: number,
 ): PagePayload | null {
+  const H = imageHeight(options);
   const surface = Skia.Surface.Make(W, H);
   if (!surface) return null;
   const canvas = surface.getCanvas();
@@ -1044,6 +1066,7 @@ async function renderFullPage(
   pageNo: number,
   maps: MiniMaps = new Map(),
 ): Promise<PagePayload | null> {
+  const H = imageHeight(options);
   const surface = Skia.Surface.Make(W, H);
   if (!surface) return null;
   const canvas = surface.getCanvas();
@@ -1202,6 +1225,7 @@ function renderMapPage(
   options: ExportOptions,
   title: string,
 ): PagePayload | null {
+  const H = imageHeight(options);
   const surface = Skia.Surface.Make(W, H);
   if (!surface) return null;
   const canvas = surface.getCanvas();
@@ -1285,6 +1309,7 @@ export async function buildAlbumImages(
       eff.typeface,
       eff.background,
       lang,
+      layoutHeight(eff),
     );
     if (model) await push(renderMapPage(model, eff, title));
   }
