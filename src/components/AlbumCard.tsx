@@ -1,4 +1,5 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { Album } from '../types';
 import { C, F } from '../theme';
 import { localeTag, useLang } from '../i18n';
@@ -57,28 +58,36 @@ export function AlbumCard({
           )}
         </Text>
       </View>
+      {/* Mêmes icônes vectorielles que la carte d'une photo (poubelle comprise) :
+          des caractères (✎ ⧉ ✕) s'affichaient différemment d'un iPhone à l'autre
+          et la croix ne disait pas « supprimer ». */}
       <View style={styles.actions}>
         <Pressable
           style={styles.iconBtn}
           hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={L.home.renameTitle}
           onPress={() => onRename(album)}
         >
-          <Text style={styles.iconText}>✎</Text>
+          <Ionicons name="create-outline" size={16} color={C.inkSoft} />
         </Pressable>
         <Pressable
           style={styles.iconBtn}
           hitSlop={10}
+          accessibilityRole="button"
           accessibilityLabel={L.common.duplicate}
           onPress={() => onDuplicate(album)}
         >
-          <Text style={styles.iconText}>⧉</Text>
+          <Ionicons name="copy-outline" size={16} color={C.inkSoft} />
         </Pressable>
         <Pressable
           style={styles.iconBtn}
           hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={L.common.delete}
           onPress={() => onDelete(album)}
         >
-          <Text style={styles.iconText}>✕</Text>
+          <Ionicons name="trash-outline" size={16} color={C.inkSoft} />
         </Pressable>
       </View>
     </Pressable>
@@ -140,10 +149,5 @@ const styles = StyleSheet.create({
     backgroundColor: C.tan,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  iconText: {
-    fontFamily: F.monoBold,
-    color: C.inkSoft,
-    fontSize: 14,
   },
 });
