@@ -297,7 +297,7 @@ Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un
     noMatchTitle: 'Aucun dossier trouvé',
     noMatchText: 'Essayez un autre mot : la recherche porte sur le nom du dossier.',
     newFolder: '＋  Nouveau dossier',
-    importAlbum: '⤓  Importer / restaurer',
+    importAlbum: '⤓  Importer un album ComClic',
     backupAll: '💾  Sauvegarder tout',
     createTitle: 'Nouveau dossier',
     createSubmit: 'Créer',
