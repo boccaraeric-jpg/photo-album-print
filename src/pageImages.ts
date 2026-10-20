@@ -562,6 +562,8 @@ async function renderPhotoPage(
   lang: Lang,
   maps: MiniMaps = new Map(),
   solo = group.length === 1,
+  /** Dernière page du rapport pro : porte la mention de l'app. */
+  credit = false,
 ): Promise<PagePayload | null> {
   const D = dict(lang).doc;
   const H = imageHeight(options);
@@ -854,6 +856,7 @@ async function renderPhotoPage(
     }
   }
 
+  if (credit) drawProCredit(canvas, H);
   // Pied de page : numéro seul (le titre ne figure que sur la couverture).
   drawText(canvas, String(pageNo), PAD, H - PAD - 24, contentW, {
     color: muted,
@@ -1044,6 +1047,8 @@ function renderTextPage(
   options: ExportOptions,
   title: string,
   pageNo: number,
+  /** Dernière page du rapport pro : porte la mention de l'app. */
+  credit = false,
 ): PagePayload | null {
   const H = imageHeight(options);
   const surface = Skia.Surface.Make(W, H);
@@ -1083,6 +1088,7 @@ function renderTextPage(
     maxLines: 12,
     fam: bodyFam,
   });
+  if (credit) drawProCredit(canvas, H);
   drawText(canvas, String(pageNo), PAD, H - PAD - 24, W - 2 * PAD, {
     color: muted,
     size: 18,
@@ -1279,6 +1285,20 @@ function renderMapPage(
 }
 
 /**
+ * Mention `ALBUM_CREDIT` en bas de la dernière page du rapport pro (le pro n'a
+ * pas de page de fin), au-dessus du numéro, dans le corps des valeurs.
+ */
+function drawProCredit(canvas: SkCanvas, H: number): void {
+  drawText(canvas, ALBUM_CREDIT, PAD, H - PAD - 24 - 40, W - 2 * PAD, {
+    color: '#6b7280',
+    size: 20,
+    align: TextAlign.Center,
+    maxLines: 1,
+    letterSpacing: 1,
+  });
+}
+
+/**
  * Page de fin (Skia), pendant de `.end` du PDF : ornement, période de l'album
  * et, en pied, la mention `ALBUM_CREDIT` dans le corps des dates.
  */
@@ -1444,8 +1464,9 @@ export async function buildAlbumImages(
     const bg = pro ? undefined : pageBackground(entries);
     // Fond propre : toutes les couleurs de la page en découlent (cf. `isDark`).
     const pageOpts = bg ? { ...eff, background: bg } : eff;
+    const credit = pro && i === pages.length - 1;
     if (page.type === 'text') {
-      await push(renderTextPage(page.item, pageOpts, title, i + 1));
+      await push(renderTextPage(page.item, pageOpts, title, i + 1, credit));
       continue;
     }
     if (page.size === 'full') {
@@ -1464,6 +1485,7 @@ export async function buildAlbumImages(
         lang,
         maps,
         page.solo,
+        credit,
       ),
     );
     numbered += page.items.length;

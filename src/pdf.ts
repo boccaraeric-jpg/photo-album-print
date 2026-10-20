@@ -1176,7 +1176,13 @@ function buildProDocument(
     .meta .row.date dd { flex: 1; text-align: ${dateAlign}; }
     .pro-textpage { page-break-before: always; page-break-after: always;
       padding: 64px 56px 0; text-align: ${textAlign}; white-space: pre-wrap;
-      font-size: 20px; line-height: 1.7; color: #14181f; }`;
+      font-size: 20px; line-height: 1.7; color: #14181f; }
+    /* Mention de l'app en fin de rapport, dans le corps des valeurs (date…),
+       en gris des intitulés. Une page de texte finale ne la renvoie pas seule
+       sur une page blanche. */
+    .pages > .pro-textpage:last-child { page-break-after: auto; }
+    .credit { margin: 36px 0 0; text-align: center; font-size: 12px;
+      letter-spacing: 0.6px; color: #6b7280; page-break-inside: avoid; }`;
 
   const D = dict(lang).doc;
   return `<!DOCTYPE html>
@@ -1197,6 +1203,7 @@ function buildProDocument(
           </dl>
         </section>
         <main class="pages">${entries}</main>
+        <p class="credit">${escapeHtml(ALBUM_CREDIT)}</p>
       </body>
     </html>`;
 }
