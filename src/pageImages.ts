@@ -617,10 +617,10 @@ async function renderPhotoPage(
     rowSpan.set(r, (rowSpan.get(r) ?? 0) + span);
   }
   const usedRows = Math.max(1, ...[...rowSpan.keys()].map((r) => r + 1));
-  // Le rapport pro coule en haut de page, comme son PDF.
+  // Le rapport pro coule en haut de page, comme son PDF ; mais une rangée
+  // incomplète (petite fiche seule) se centre en largeur, comme ses lignes.
   const offsetY = pro ? 0 : ((rows - usedRows) * (cellH + gapY)) / 2;
-  const offsetX = (r: number) =>
-    pro ? 0 : ((cols - (rowSpan.get(r) ?? cols)) * (cellW + gapX)) / 2;
+  const offsetX = (r: number) => ((cols - (rowSpan.get(r) ?? cols)) * (cellW + gapX)) / 2;
 
   for (let i = 0; i < group.length; i++) {
     const photo = group[i];

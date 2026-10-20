@@ -1224,12 +1224,17 @@ function buildProDocument(
     .cover dt { width: 150px; color: #6b7280; margin: 0; }
     .cover dd { margin: 0; font-weight: 600; }
     /* Fiches en flux. Les petites se posent deux par ligne (inline-block, que
-       le moteur d'impression ne coupe jamais) : la gouttière vient de la marge
-       droite de chaque fiche, compensée par le retrait droit du conteneur. */
-    .pages { padding: 40px 36px 40px 56px; font-size: 0; }
-    .entry { page-break-inside: avoid; margin: 0 20px 28px 0; font-size: 12px; }
+       le moteur d'impression ne coupe jamais) ; la gouttière vient des marges
+       latérales de chaque fiche, compensées par le retrait du conteneur. Les
+       lignes sont centrées : une petite fiche SEULE (voisine d'une autre
+       taille) se centre au lieu de rester calée à gauche ; deux petites
+       remplissent la ligne, le centrage ne les déplace pas. */
+    .pages { padding: 40px 46px; font-size: 0; text-align: center; }
+    .entry {
+      page-break-inside: avoid; margin: 0 10px 28px; font-size: 12px; text-align: left;
+    }
     .entry.sz-small { display: inline-block; vertical-align: top; width: calc(50% - 20.5px); }
-    .pro-textpage { margin-right: 20px; }
+    .pro-textpage { margin: 0 10px; }
     a.edit { display: block; color: inherit; text-decoration: none; }
     .num { font-size: 13px; font-weight: 700; color: #111827; margin-bottom: 8px;
       letter-spacing: 0.5px; }

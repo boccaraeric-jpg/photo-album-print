@@ -353,7 +353,8 @@ d'entrée** (ils pilotent aussi les libellés) :
 - **Taille des photos du rapport pro** (`Photo.proSize`, **distinct** de `size` du Loisir) : réglée
   dans l'aperçu (aperçu désormais interactif dans les deux styles ; en pro, taille seule — prop `pro`
   de `PreviewModal`, pas de fond). PDF : vignette `PRO_FRAME_H` (190/300/470), les **petites** en
-  `inline-block` deux par ligne (jamais de flex : la fragmentation d'impression le coupe mal).
+  `inline-block` deux par ligne (jamais de flex : la fragmentation d'impression le coupe mal), lignes
+  centrées pour qu'une petite **seule** ne reste pas calée à gauche (Skia : `offsetX` vaut aussi en pro).
   Skia : `proSize` mappé sur `size` avant `paginateEntries` (petite = grille 2×2, grande = 1/page).
   Pas porté par la sauvegarde ni le `.comclic`.
 - Contraintes de mise en page PDF **à ne pas casser** : dimensionner en **px = points** (A4
