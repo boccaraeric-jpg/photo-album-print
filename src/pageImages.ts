@@ -9,10 +9,19 @@ import {
   type SkTypeface,
 } from '@shopify/react-native-skia';
 import * as FileSystem from 'expo-file-system/legacy';
-import type { ExportOptions, Photo } from './types';
+import type { ExportOptions, Photo, ProPhotoSize } from './types';
 import { formatPhotoDate, photoDate } from './dateFormat';
 import { dict, localeTag, type Lang } from './i18n';
-import { pageBackground, paginateEntries, PER_PAGE, wideSlots } from './paginate';
+import {
+  pageBackground,
+  paginateEntries,
+  PER_PAGE,
+  wideSlots,
+  paginateProEntries,
+  PRO_LAYOUT,
+  proFrameH,
+  PRO_SMALL_DT,
+} from './paginate';
 import { albumFileBase, formatRange } from './pdf';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
@@ -632,107 +641,6 @@ async function renderPhotoPage(
     // Largeur de la case : deux colonnes pour une photo avec carte en grille.
     const cw = slots && slots[i][1] === 2 ? contentW : cellW;
 
-    if (pro) {
-      // Rendu professionnel : numéro, photo entière encadrée, légende factuelle
-      // (lieu, date selon le réglage, description). L'encadrement suit le même
-      // choix que le PDF pro (cf. `frameCss` dans `pdf.ts`).
-      const numH = 34;
-      drawText(canvas, D.photoNo(startNumber + i + 1), cellX, cellY, cellW, {
-        color: '#111827',
-        size: 24,
-        bold: true,
-        maxLines: 1,
-      });
-      const captionH = 150;
-      const imgY = cellY + numH;
-      const imgH = cellH - numH - captionH;
-
-      const plate =
-        options.frame === 'polaroid'
-          ? '#ffffff'
-          : options.frame === 'none'
-            ? null
-            : '#f8f9fa';
-      const strokeColor =
-        options.frame === 'border'
-          ? '#d7dbe0'
-          : options.frame === 'polaroid'
-            ? '#e5e7eb'
-            : null;
-      // Le polaroïd garde une marge blanche épaisse autour de la vignette.
-      const inset = options.frame === 'polaroid' ? 16 : 4;
-
-      if (plate) {
-        const back = Skia.Paint();
-        back.setAntiAlias(true);
-        back.setColor(Skia.Color(plate));
-        canvas.drawRRect(rrect(cellX, imgY, cellW, imgH, 6), back);
-      }
-      drawContainImage(
-        canvas,
-        images[i],
-        cellX + inset,
-        imgY + inset,
-        cellW - 2 * inset,
-        imgH - 2 * inset,
-      );
-      if (strokeColor) {
-        const border = Skia.Paint();
-        border.setAntiAlias(true);
-        border.setStyle(PaintStyle.Stroke);
-        border.setStrokeWidth(2);
-        border.setColor(Skia.Color(strokeColor));
-        canvas.drawRRect(rrect(cellX + 1, imgY + 1, cellW - 2, imgH - 2, 6), border);
-      }
-
-      // « Aucune » retire la ligne de date entière.
-      const date =
-        options.dateFormat === 'none'
-          ? ''
-          : formatPhotoDate(photoDate(photo), options.dateFormat, lang) || '—';
-      const dateAlign =
-        options.dateAlign === 'center'
-          ? TextAlign.Center
-          : options.dateAlign === 'right'
-            ? TextAlign.Right
-            : TextAlign.Left;
-      // Comme la date, la ligne « Lieu » disparaît quand l'option est décochée.
-      const place = options.showPlace ? photo.place?.trim() || '—' : '';
-      const desc = photo.comment.trim() || '—';
-      let ty = imgY + imgH + 14;
-      if (place) {
-        ty +=
-          drawText(canvas, `${D.place} : ${place}`, cellX, ty, cellW, {
-            color: '#14181f',
-            size: 20,
-            maxLines: 1,
-          }) + 4;
-      }
-      if (date) {
-        ty +=
-          drawText(canvas, `${D.date} : ${date}`, cellX, ty, cellW, {
-            color: '#14181f',
-            size: 20,
-            maxLines: 1,
-            align: dateAlign,
-          }) + 4;
-      }
-      // Description : même texte riche que la légende familiale. Le gabarit pro
-      // n'a pas de position verticale — sa fiche coule, comme dans le PDF.
-      const descLabelW = fontFor(false, 20).getTextWidth(`${D.description} : `);
-      drawText(canvas, `${D.description} : `, cellX, ty, cellW, {
-        color: '#14181f',
-        size: 20,
-        maxLines: 1,
-      });
-      drawRichText(canvas, desc, cellX + descLabelW, ty, cellW - descLabelW, {
-        color: '#14181f',
-        size: 20,
-        maxLines: 2,
-      });
-      continue;
-    }
-
     // Cadre (familial).
     const pad = whiteFrame ? 20 : options.frame === 'border' ? 14 : 0;
     if (whiteFrame) {
@@ -1080,16 +988,26 @@ function renderTextPage(
   // Centrage vertical du bloc de texte dans la page : on mesure d'abord sa
   // hauteur (mêmes règles que drawText), puis on choisit le y de départ.
   const bodyText = item.comment.trim();
-  const bodySize = 46;
+  const isPro = options.style === 'pro';
+  // Pro : même corps que le PDF (20 pt × échelle du texte du rapport).
+  const bodySize = isPro ? 20 * (W / COVER_W) * COMMENT_SCALE[options.proTextSize ?? 'normal'] : 46;
   // Pro : Montserrat imposée (cf. `buildAlbumImages`, typeface forcée à `sans`).
   const bodyFam = TYPE_SPECS[options.typeface].text;
   const bodyFont = fontFor(false, bodySize, bodyFam);
   const bodyLines = wrapLines(bodyFont, bodyText, W - 2 * PAD, 12);
   const blockH = bodyLines.length * bodySize * 1.32;
-  // Pro : texte en HAUT à gauche (présentation « document ») ; familial : centré
-  // verticalement.
-  const isPro = options.style === 'pro';
-  const startY = isPro ? PAD + 20 : Math.max(PAD + 40, (H - blockH) / 2);
+  // Position choisie dans l'aperçu (`textVAlign`) ; par défaut en haut dans le
+  // rapport pro (présentation « document »), au milieu en Loisir.
+  const k = W / COVER_W;
+  const vAlign = item.textVAlign ?? (isPro ? 'top' : 'middle');
+  const top = isPro ? 64 * k : PAD + 40;
+  const bottom = H - (isPro ? PRO_LAYOUT.padBottom * k : PAD + 60);
+  const startY =
+    vAlign === 'top'
+      ? top
+      : vAlign === 'bottom'
+        ? Math.max(top, bottom - blockH)
+        : Math.max(top, (H - blockH) / 2);
   const bodyAlign =
     options.textAlign === 'left'
       ? TextAlign.Left
@@ -1103,7 +1021,11 @@ function renderTextPage(
     maxLines: 12,
     fam: bodyFam,
   });
-  if (credit) drawProCredit(canvas, H);
+  if (isPro) {
+    if (credit) drawProCredit(canvas, H);
+    drawProFooter(canvas, H, pageNo);
+    return encodeSurface(surface, title, pageNo);
+  }
   drawText(canvas, String(pageNo), PAD, H - PAD - 24, W - 2 * PAD, {
     color: muted,
     size: 18,
@@ -1304,7 +1226,150 @@ function renderMapPage(
  * pas de page de fin), au-dessus du numéro, dans le corps des valeurs.
  */
 function drawProCredit(canvas: SkCanvas, H: number): void {
-  drawCredit(canvas, H - PAD - 24 - 40, 20, '#6b7280', 'sans');
+  const k = W / COVER_W;
+  drawCredit(canvas, H - 44 * k - lineHeightFor(12 * k), 12 * k, '#6b7280', 'sans');
+}
+
+/** Numéro de page du rapport pro (pendant de `.footer` du PDF). */
+function drawProFooter(canvas: SkCanvas, H: number, pageNo: number): void {
+  const k = W / COVER_W;
+  drawText(canvas, String(pageNo), PAD, H - 22 * k - lineHeightFor(10 * k), W - 2 * PAD, {
+    color: '#9ca3af',
+    size: 10 * k,
+    align: TextAlign.Center,
+    maxLines: 1,
+  });
+}
+
+/**
+ * Page de fiches du rapport pro (Skia), pendant de `.pro-page` du PDF : mêmes
+ * pages (`paginateProEntries`), mêmes mesures (`PRO_LAYOUT`, `proFrameH`) —
+ * fiches empilées depuis le haut, petites deux par ligne, description entière.
+ */
+async function renderProPage(
+  group: Photo[],
+  size: ProPhotoSize,
+  options: ExportOptions,
+  title: string,
+  pageNo: number,
+  startNumber: number,
+  lang: Lang,
+  credit: boolean,
+): Promise<PagePayload | null> {
+  const D = dict(lang).doc;
+  const H = imageHeight(options);
+  const surface = Skia.Surface.Make(W, H);
+  if (!surface) return null;
+  const canvas = surface.getCanvas();
+  const k = W / COVER_W;
+  const L = PRO_LAYOUT;
+  const scale = COMMENT_SCALE[options.proTextSize ?? 'normal'];
+  const labelScale = 1 + (scale - 1) / 2;
+
+  const bg = Skia.Paint();
+  bg.setColor(Skia.Color('#ffffff'));
+  canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
+
+  // Colonne de 483 pt (marges 56), deux demi-colonnes pour les petites.
+  const left = 56 * k;
+  const full = (COVER_W - 112) * k;
+  const gutter = 20 * k;
+  const colW = size === 'small' ? (full - gutter) / 2 : full;
+  const frameH = proFrameH(size, scale) * k;
+  const valueSize = 12 * scale * k;
+  const labelSize = 10 * labelScale * k;
+  const dtW = (size === 'small' ? PRO_SMALL_DT : 96) * labelScale * k;
+  const ink = '#14181f';
+  const grey = '#6b7280';
+  const plate =
+    options.frame === 'polaroid' ? '#ffffff' : options.frame === 'none' ? null : '#f8f9fa';
+  const strokeColor =
+    options.frame === 'border' ? '#d7dbe0' : options.frame === 'polaroid' ? '#e5e7eb' : null;
+  const inset = options.frame === 'polaroid' ? 14 * k : 0;
+  const rule = Skia.Paint();
+  rule.setColor(Skia.Color('#f1f2f4'));
+
+  const images = await Promise.all(group.map((p) => loadImage(p.uri)));
+  const dateAlign =
+    options.dateAlign === 'center'
+      ? TextAlign.Center
+      : options.dateAlign === 'right'
+        ? TextAlign.Right
+        : TextAlign.Left;
+
+  /** Dessine une fiche en (x, y) ; renvoie sa hauteur. */
+  const drawEntry = (i: number, x: number, y: number): number => {
+    const photo = group[i];
+    let ty = y;
+    ty +=
+      drawText(canvas, D.photoNo(startNumber + i + 1), x, ty, colW, {
+        color: '#111827',
+        size: 13 * scale * k,
+        bold: true,
+        maxLines: 1,
+      }) +
+      8 * k;
+    if (plate) {
+      const back = Skia.Paint();
+      back.setAntiAlias(true);
+      back.setColor(Skia.Color(plate));
+      canvas.drawRRect(rrect(x, ty, colW, frameH, 6 * k), back);
+    }
+    drawContainImage(canvas, images[i], x + inset, ty + inset, colW - 2 * inset, frameH - 2 * inset);
+    if (strokeColor) {
+      const border = Skia.Paint();
+      border.setAntiAlias(true);
+      border.setStyle(PaintStyle.Stroke);
+      border.setStrokeWidth(1 * k);
+      border.setColor(Skia.Color(strokeColor));
+      canvas.drawRRect(rrect(x, ty, colW, frameH, 4 * k), border);
+    }
+    ty += frameH + L.metaTop * k;
+
+    // Lignes « Clé : valeur » (cf. `.meta` du PDF).
+    const row = (label: string, value: string, rich: boolean, align = TextAlign.Left) => {
+      const pad = 5 * k;
+      drawText(canvas, label.toUpperCase(), x, ty + pad + 2 * k, dtW, {
+        color: grey,
+        size: labelSize,
+        maxLines: 1,
+      });
+      const vx = x + dtW + 12 * k;
+      const vw = colW - dtW - 12 * k;
+      const opts = { color: ink, size: valueSize, maxLines: 60 };
+      const h = rich
+        ? drawRichText(canvas, value, vx, ty + pad, vw, opts)
+        : drawText(canvas, value, vx, ty + pad, vw, { ...opts, align });
+      ty += Math.max(h, lineHeightFor(labelSize)) + 2 * pad;
+      canvas.drawRect(Skia.XYWHRect(x, ty - 1 * k, colW, 1 * k), rule);
+    };
+    if (options.showPlace) row(D.place, photo.place?.trim() || '—', false);
+    if (options.dateFormat !== 'none') {
+      row(D.date, formatPhotoDate(photoDate(photo), options.dateFormat, lang) || '—', false, dateAlign);
+    }
+    row(D.description, photo.comment.trim() || '—', true);
+    return ty - y;
+  };
+
+  let y = L.padTop * k;
+  if (size === 'small') {
+    for (let i = 0; i < group.length; i += 2) {
+      const pair = group.slice(i, i + 2);
+      // Petite seule sur sa ligne : centrée, comme dans le PDF.
+      const x0 = pair.length === 1 ? left + (full - colW) / 2 : left;
+      const h0 = drawEntry(i, x0, y);
+      const h1 = pair.length === 2 ? drawEntry(i + 1, left + colW + gutter, y) : 0;
+      y += Math.max(h0, h1) + L.entryGap * k;
+    }
+  } else {
+    group.forEach((_, i) => {
+      y += drawEntry(i, left, y) + L.entryGap * k;
+    });
+  }
+
+  if (credit) drawProCredit(canvas, H);
+  drawProFooter(canvas, H, pageNo);
+  return encodeSurface(surface, title, pageNo);
 }
 
 /** Monogramme décodé une fois (vectoriel : redessiné net à chaque taille). */
@@ -1498,14 +1563,17 @@ export async function buildAlbumImages(
   // Rapport pro : chaque photo prend sa taille de rapport (`proSize`) —
   // petite = grille 2×2, moyenne = deux par page, grande = une par page, comme
   // les fiches du PDF. `size` (Loisir) n'y joue aucun rôle.
-  const source = pro
-    ? pageSource.map((p) => ({ ...p, size: p.proSize ?? ('medium' as const) }))
-    : pageSource;
-  const pages = paginateEntries(source, pro ? 'medium' : eff.photoSize, {
-    wide: mapIds,
-    commentScale: pro ? 1 : COMMENT_SCALE[eff.commentSize],
-    perPhotoSize: true,
-  });
+  const pages = pro
+    ? paginateProEntries(
+        pageSource,
+        COMMENT_SCALE[eff.proTextSize ?? 'normal'],
+        (eff.showPlace ? 1 : 0) + (eff.dateFormat === 'none' ? 0 : 1),
+      )
+    : paginateEntries(pageSource, eff.photoSize, {
+        wide: mapIds,
+        commentScale: COMMENT_SCALE[eff.commentSize],
+        perPhotoSize: true,
+      });
   let numbered = 0;
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
@@ -1516,6 +1584,22 @@ export async function buildAlbumImages(
     const credit = pro && i === pages.length - 1;
     if (page.type === 'text') {
       await push(renderTextPage(page.item, pageOpts, title, i + 1, credit));
+      continue;
+    }
+    if (pro) {
+      await push(
+        await renderProPage(
+          page.items,
+          page.size as ProPhotoSize,
+          pageOpts,
+          title,
+          i + 1,
+          numbered,
+          lang,
+          credit,
+        ),
+      );
+      numbered += page.items.length;
       continue;
     }
     if (page.size === 'full') {

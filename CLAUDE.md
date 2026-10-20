@@ -350,6 +350,16 @@ d'entrée** (ils pilotent aussi les libellés) :
 - **Logo après la mention** : `LOGO_MARK_SVG` (`albumStyle.ts`, copie de `design/logo-mark.svg` à garder
   synchrone) — SVG en ligne dans le PDF (`creditHtml`, `.credit` en flex), `Skia.SVG.MakeFromString` +
   `drawSvg` dans les images (`drawCredit`). Hauteur = `LOGO_MARK_SCALE` × corps du texte.
+- **Rapport pro en pages explicites** (plus de flux) : \`paginateProEntries\` (\`paginate.ts\`) range les
+  fiches par page d'après leur **hauteur estimée** (\`PRO_LAYOUT\`, \`proEntryHeight\` : vignette + lignes de
+  description) — une page ne mélange pas deux tailles, une grande a sa page. Le PDF (\`.sheet.pro-page\`,
+  \`min-height\` A4 : une estimation fausse allonge la feuille au lieu de tronquer une description) et les
+  images (\`renderProPage\`, mêmes mesures, description entière) suivent **les mêmes pages**. Aperçu pro
+  en feuilles sur plan de travail, numéros de page, mention de l'app en pied de la dernière.
+  **Taille du texte pro** : \`ExportOptions.proTextSize\` (normal par défaut, \`COMMENT_SCALE\`), vignettes
+  réduites d'autant (\`proFrameH\`), intitulés grandissant moitié moins.
+- **Position d'une page de texte** (\`Photo.textVAlign\` haut/milieu/bas, réglée dans l'aperçu, les deux
+  styles) : défaut milieu en Loisir, haut en pro. \`.tv-*\` des deux gabarits, \`startY\` de \`renderTextPage\`.
 - **Taille des photos du rapport pro** (`Photo.proSize`, **distinct** de `size` du Loisir) : réglée
   dans l'aperçu (aperçu désormais interactif dans les deux styles ; en pro, taille seule — prop `pro`
   de `PreviewModal`, pas de fond). PDF : vignette `PRO_FRAME_H` (190/300/470), les **petites** en

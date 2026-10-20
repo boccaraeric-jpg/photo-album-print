@@ -1,4 +1,4 @@
-import type { Photo, PhotoSize } from './types';
+import type { Photo, PhotoSize, ProPhotoSize } from './types';
 import { stripMarks } from './richText';
 
 /**
@@ -130,4 +130,113 @@ function slotsUsed(group: Photo[], wide?: Set<string>): number {
   const s = wideSlots(group, wide);
   const last = s[s.length - 1];
   return last ? last[0] + last[1] : 0;
+}
+
+/* --------------------------------------------------------------------------
+ * Rapport professionnel : pages explicites
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Gabarit des pages du rapport pro (points A4), partagé par le PDF et les
+ * images. Les fiches s'empilent depuis le haut ; leur hauteur est **estimée**
+ * (vignette + lignes de la fiche) pour ne jamais dépasser une page.
+ */
+export const PRO_LAYOUT = {
+  pageH: 842,
+  padTop: 40,
+  /** Pied : numéro de page, et mention de l'app sur la dernière. */
+  padBottom: 76,
+  /** Vignette par taille ; réduite quand le texte grandit (`proFrameH`). */
+  frame: { small: 150, medium: 210, large: 470 } as Record<ProPhotoSize, number>,
+  /** « Photo n° » + son écart. */
+  head: 21,
+  metaTop: 12,
+  row: 26,
+  descLine: 18,
+  entryGap: 22,
+  /** Caractères par ligne de description (corps normal) : pleine / demi-largeur. */
+  charsFull: 58,
+  charsHalf: 20,
+};
+
+/**
+ * Colonne des intitulés d'une petite fiche (points A4, corps normal) : assez
+ * large pour « DESCRIPTION » en capitales espacées, le plus long.
+ */
+export const PRO_SMALL_DT = 88;
+
+/** Hauteur de la vignette d'une fiche pro, réduite quand le texte grandit. */
+export function proFrameH(size: ProPhotoSize, scale: number): number {
+  const give = size === 'large' ? 150 : 90;
+  return PRO_LAYOUT.frame[size] - Math.round((scale - 1) * give);
+}
+
+/** Hauteur estimée d'une fiche pro (points A4). */
+export function proEntryHeight(
+  photo: Photo,
+  size: ProPhotoSize,
+  scale: number,
+  rows: number,
+): number {
+  const L = PRO_LAYOUT;
+  const perLine = Math.max(8, Math.floor((size === 'small' ? L.charsHalf : L.charsFull) / scale));
+  const text = stripMarks(photo.comment).trim() || '—';
+  const lines = text
+    .split('\n')
+    .reduce((n, para) => n + Math.max(1, Math.ceil(para.length / perLine)), 0);
+  return (
+    L.head * scale +
+    proFrameH(size, scale) +
+    L.metaTop +
+    // Demi-largeur : lieu et date passent souvent sur deux lignes.
+    rows * L.row * scale * (size === 'small' ? 1.7 : 1) +
+    lines * L.descLine * scale +
+    10 +
+    L.entryGap
+  );
+}
+
+/**
+ * Pages du rapport pro. Une page ne mélange pas deux tailles ; les petites se
+ * rangent deux par ligne ; une grande a toujours sa page. Une page se ferme
+ * dès que la fiche suivante la ferait déborder (hauteur estimée). Les pages de
+ * texte restent autonomes. `rows` = lignes fixes de chaque fiche (lieu, date).
+ */
+export function paginateProEntries(
+  entries: Photo[],
+  scale: number,
+  rows: number,
+): AlbumPage[] {
+  const L = PRO_LAYOUT;
+  const room = L.pageH - L.padTop - L.padBottom;
+  const pages: AlbumPage[] = [];
+  let group: Photo[] = [];
+  let size: ProPhotoSize = 'medium';
+  const height = (g: Photo[], sz: ProPhotoSize) => {
+    if (sz !== 'small') return g.reduce((h, p) => h + proEntryHeight(p, sz, scale, rows), 0);
+    let h = 0;
+    for (let i = 0; i < g.length; i += 2) {
+      h += Math.max(...g.slice(i, i + 2).map((p) => proEntryHeight(p, sz, scale, rows)));
+    }
+    return h;
+  };
+  const flush = () => {
+    if (group.length) pages.push({ type: 'photos', items: group, size, solo: false });
+    group = [];
+  };
+  for (const e of entries) {
+    if (e.kind === 'text') {
+      flush();
+      pages.push({ type: 'text', item: e });
+      continue;
+    }
+    const sz = e.proSize ?? 'medium';
+    if (group.length && (sz !== size || sz === 'large' || height([...group, e], sz) > room)) {
+      flush();
+    }
+    size = sz;
+    group.push(e);
+  }
+  flush();
+  return pages;
 }

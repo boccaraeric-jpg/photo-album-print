@@ -24,6 +24,9 @@ export type PhotoSize = 'small' | 'medium' | 'large' | 'full';
  */
 export type ProPhotoSize = 'small' | 'medium' | 'large';
 
+/** Position verticale d'un texte sur sa page (pages de texte). */
+export type TextVAlign = 'top' | 'middle' | 'bottom';
+
 /** Support de la photo (mutuellement exclusif). */
 export type FrameStyle = 'card' | 'border' | 'polaroid' | 'none';
 
@@ -108,6 +111,11 @@ export interface ExportOptions {
   photoMaps: boolean;
   /** Format de page — familial uniquement (le pro reste en A4). */
   format: PageFormat;
+  /**
+   * Corps du texte du rapport professionnel (valeurs des fiches, pages de
+   * texte) — pendant de `commentSize` du Loisir, défaut « normal ».
+   */
+  proTextSize: CommentSize;
 }
 
 /** Critère de tri de la liste des dossiers (écran d'accueil). */
@@ -160,6 +168,11 @@ export interface Photo {
   size?: PhotoSize;
   /** Taille dans le rapport professionnel (absent = moyenne), réglée dans l'aperçu. */
   proSize?: ProPhotoSize;
+  /**
+   * Page de texte : position verticale du texte sur sa page, réglée dans
+   * l'aperçu. Absent = milieu en Loisir, haut dans le rapport professionnel.
+   */
+  textVAlign?: TextVAlign;
   /**
    * Fond de la page qui porte cette photo (hex 6 chiffres), choisi dans
    * l'aperçu ; sinon le fond de l'album. Rattaché à la photo et non à un numéro

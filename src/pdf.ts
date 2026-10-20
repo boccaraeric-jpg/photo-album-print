@@ -11,7 +11,15 @@ import type {
 import { readPrintBase64 } from './photoFiles';
 import { fileDateStamp, formatPhotoDate, photoDate } from './dateFormat';
 import { dict, localeTag, SUPPORTED, type Lang } from './i18n';
-import { pageBackground, paginateEntries, PER_PAGE } from './paginate';
+import {
+  pageBackground,
+  paginateEntries,
+  PER_PAGE,
+  paginateProEntries,
+  PRO_LAYOUT,
+  proFrameH,
+  PRO_SMALL_DT,
+} from './paginate';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
 import { richToHtml } from './richText';
@@ -135,6 +143,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   showMap: false,
   photoMaps: false,
   format: 'a4',
+  proTextSize: 'normal',
 };
 
 /** Garde la valeur si elle fait partie des choix connus, sinon le défaut. */
@@ -183,6 +192,7 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     showMap: typeof o.showMap === 'boolean' ? o.showMap : d.showMap,
     photoMaps: typeof o.photoMaps === 'boolean' ? o.photoMaps : d.photoMaps,
     format: oneOf(o.format, ['a4', '16x21', '16x16'] as const, d.format),
+    proTextSize: oneOf(o.proTextSize, ['normal', 'large', 'xlarge'] as const, d.proTextSize),
   };
 }
 
@@ -344,7 +354,7 @@ function textPageHtml(item: Photo, pageNo: number, ctx: PageCtx): string {
   const body = `<div class="textpage-body">${text}</div>`;
   const paint = paintAttrs(pageBackground([item]), ctx.frame);
   return `
-    <section class="sheet textpage${paint.cls}" id="e-${escapeHtml(item.id)}"${paint.style}>
+    <section class="sheet textpage tv-${item.textVAlign ?? 'middle'}${paint.cls}" id="e-${escapeHtml(item.id)}"${paint.style}>
       ${ctx.interactive ? `<a class="edit" href="${editHref(item.id)}">${body}</a>` : body}
       <p class="footer"><span>${pageNo}</span></p>
     </section>`;
@@ -725,6 +735,9 @@ function buildStyles(options: ExportOptions): string {
     page-break-after: always;
   }
   .textpage:last-of-type { page-break-after: auto; }
+  /* Position du texte choisie dans l'aperçu (milieu par défaut). */
+  .textpage.tv-top { justify-content: flex-start; }
+  .textpage.tv-bottom { justify-content: flex-end; }
   .textpage .footer { position: absolute; left: 0; right: 0; bottom: 30px; margin: 0; }
   .textpage a.edit { width: 100%; }
   .textpage-body {
@@ -1124,12 +1137,15 @@ function proMeta(label: string, value: string, cls = '', rich = false): string {
   return `<div class="row ${cls}"><dt>${label}</dt><dd>${body}</dd></div>`;
 }
 
-/**
- * Hauteur de la vignette d'une fiche pro selon sa taille. Grande : la fiche
- * remplit seule sa page (vignette + fiche descriptive). Petite : deux fiches
- * côte à côte sur une ligne.
- */
-const PRO_FRAME_H: Record<ProPhotoSize, number> = { small: 190, medium: 300, large: 470 };
+/** Corps du texte d'un rapport pro, rapporté au corps normal (`proTextSize`). */
+function proScale(options: ExportOptions): number {
+  return COMMENT_SCALE[options.proTextSize ?? 'normal'];
+}
+
+/** Lignes fixes d'une fiche pro (lieu, date) selon les réglages. */
+function proRows(options: ExportOptions): number {
+  return (options.showPlace ? 1 : 0) + (options.dateFormat === 'none' ? 0 : 1);
+}
 
 function proEntryHtml(
   item: Item,
@@ -1166,34 +1182,64 @@ function proEntryHtml(
     </article>`;
 }
 
-/** Page de texte seule dans le rapport professionnel (pleine page, sobre). */
-function proTextPageHtml(item: Photo): string {
+/**
+ * Page de texte seule du rapport : sa propre page, texte en haut par défaut
+ * (présentation « document »), au milieu ou en bas selon `textVAlign`.
+ */
+function proTextPageHtml(item: Photo, pageNo: number, interactive: boolean, last: string): string {
   const text = escapeHtml(item.comment.trim()).replace(/\n/g, '<br/>');
-  return `<div class="pro-textpage">${text}</div>`;
+  const body = `<div class="pro-text-body">${text}</div>`;
+  return `
+    <section class="sheet pro-text tv-${item.textVAlign ?? 'top'}" id="e-${escapeHtml(item.id)}">
+      ${interactive ? `<a class="edit" href="${editHref(item.id)}">${body}</a>` : body}
+      ${last}
+      <p class="footer">${pageNo}</p>
+    </section>`;
 }
 
 /**
- * Rapport photographique sobre (fond blanc, factuel). Mise en page en flux avec
- * `page-break-inside: avoid` sur chaque fiche : ~2 photos par page, sans jamais
- * tronquer une description (essentiel pour une expertise).
+ * Rapport photographique sobre (fond blanc, factuel), en **pages explicites**
+ * (`paginateProEntries`) : les mêmes que les images du rapport. Chaque page ne
+ * reçoit que les fiches qui y tiennent (hauteur estimée) ; si une estimation
+ * se trompe, la feuille s'allonge (`min-height`) plutôt que de tronquer une
+ * description — essentiel pour une expertise. En aperçu, les pages sont posées
+ * en feuilles sur un plan de travail, comme l'album Loisir.
  */
 function buildProDocument(
   items: Item[],
   title: string,
   options: ExportOptions,
   lang: Lang,
-  /** Aperçu : fiches cliquables pour régler la taille de la photo. */
+  /** Aperçu : fiches et pages de texte cliquables (taille, position du texte). */
   interactive = false,
 ): string {
   const { textAlign, dateAlign, dateFormat, showPlace } = options;
-  // Les photos sont numérotées ; les pages de texte s'intercalent en pleine page.
+  const scale = proScale(options);
+  const pages = paginateProEntries(
+    items.map((it) => it.photo),
+    scale,
+    proRows(options),
+  );
+  const byId = new Map(items.map((it) => [it.photo.id, it]));
+  const credit = `<p class="credit">${creditHtml()}</p>`;
+  // Les photos sont numérotées dans l'ordre ; la mention de l'app se pose en
+  // pied de la dernière page.
   let photoNo = 0;
-  const entries = items
-    .map((it) =>
-      it.photo.kind === 'text'
-        ? proTextPageHtml(it.photo)
-        : proEntryHtml(it, ++photoNo, dateFormat, showPlace, lang, interactive),
-    )
+  const sheets = pages
+    .map((page, i) => {
+      const no = i + 1;
+      const last = i === pages.length - 1 ? credit : '';
+      if (page.type === 'text') return proTextPageHtml(page.item, no, interactive, last);
+      const entries = page.items
+        .map((p) => proEntryHtml(byId.get(p.id)!, ++photoNo, dateFormat, showPlace, lang, interactive))
+        .join('');
+      return `
+    <section class="sheet pro-page sz-${page.size}">
+      ${entries}
+      ${last}
+      <p class="footer">${no}</p>
+    </section>`;
+    })
     .join('');
   const today = new Date().toLocaleDateString(localeTag(lang), {
     day: 'numeric',
@@ -1202,7 +1248,7 @@ function buildProDocument(
   });
 
   // Encadrement des photos : seule la caisse change, la hauteur de la vignette
-  // reste fixe pour ne pas déplacer les fiches d'une page à l'autre.
+  // ne dépend que de la taille (et du corps du texte).
   const frameCss = {
     card: 'background: #f8f9fa; border: 0; border-radius: 6px;',
     border: 'background: #f8f9fa; border: 1px solid #d7dbe0; border-radius: 4px;',
@@ -1210,59 +1256,75 @@ function buildProDocument(
       'background: #ffffff; border: 1px solid #e5e7eb; border-radius: 2px; padding: 14px 14px 20px;',
     none: 'background: transparent; border: 0; border-radius: 0;',
   }[options.frame];
+  const L = PRO_LAYOUT;
+  const px = (n: number) => `${Math.round(n * 10) / 10}px`;
+  // Intitulés gris : ils grandissent moitié moins que les valeurs.
+  const labelScale = 1 + (scale - 1) / 2;
 
   const styles = `
     ${MONTSERRAT_FACE}
     * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact; }
     body { margin: 0; background: #ffffff; color: #14181f;
       font-family: 'Montserrat', Georgia, serif; font-size: 12px; }
-    .cover { padding: 96px 56px 0; page-break-after: always; }
+    @page { size: ${PAGE_WIDTH}pt ${L.pageH}pt; margin: 0; }
+    /* Feuille A4 : hauteur minimale d'une page, saut après chacune. */
+    .sheet { position: relative; min-height: ${L.pageH}px; background: #ffffff;
+      page-break-after: always; }
+    .sheet:last-of-type { page-break-after: auto; }
+    .cover { padding: 96px 56px 0; }
     .cover .kicker { font-size: 12px; letter-spacing: 5px; color: #6b7280; font-weight: 700; }
     .cover h1 { font-size: 34px; font-weight: 700; margin: 10px 0 18px; color: #111827; }
     .cover .rule { height: 2px; background: #111827; width: 64px; margin-bottom: 26px; }
     .cover .row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid #eef0f3; }
     .cover dt { width: 150px; color: #6b7280; margin: 0; }
     .cover dd { margin: 0; font-weight: 600; }
-    /* Fiches en flux. Les petites se posent deux par ligne (inline-block, que
-       le moteur d'impression ne coupe jamais) ; la gouttière vient des marges
-       latérales de chaque fiche, compensées par le retrait du conteneur. Les
-       lignes sont centrées : une petite fiche SEULE (voisine d'une autre
-       taille) se centre au lieu de rester calée à gauche ; deux petites
-       remplissent la ligne, le centrage ne les déplace pas. */
-    .pages { padding: 40px 46px; font-size: 0; text-align: center; }
-    .entry {
-      page-break-inside: avoid; margin: 0 10px 28px; font-size: 12px; text-align: left;
-    }
+    /* Page de fiches : depuis le haut. Les petites se posent deux par ligne
+       (inline-block) ; lignes centrées, pour qu'une petite seule ne reste pas
+       calée à gauche. */
+    .pro-page { padding: ${L.padTop}px 46px ${L.padBottom}px; font-size: 0; text-align: center; }
+    .entry { margin: 0 10px ${L.entryGap}px; font-size: ${px(12 * scale)}; text-align: left; }
     .entry.sz-small { display: inline-block; vertical-align: top; width: calc(50% - 20.5px); }
-    .pro-textpage { margin: 0 10px; }
     a.edit { display: block; color: inherit; text-decoration: none; }
-    .num { font-size: 13px; font-weight: 700; color: #111827; margin-bottom: 8px;
+    .num { font-size: ${px(13 * scale)}; font-weight: 700; color: #111827; margin-bottom: 8px;
       letter-spacing: 0.5px; }
-    .frame { height: ${PRO_FRAME_H.medium}px; overflow: hidden;
+    .frame { overflow: hidden;
       display: flex; align-items: center; justify-content: center; ${frameCss} }
+    .sz-small .frame { height: ${proFrameH('small', scale)}px; }
+    .sz-medium .frame { height: ${proFrameH('medium', scale)}px; }
+    .sz-large .frame { height: ${proFrameH('large', scale)}px; }
     .frame img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
-    .sz-small .frame { height: ${PRO_FRAME_H.small}px; }
-    .sz-small .meta dt { width: 70px; }
-    .sz-large .frame { height: ${PRO_FRAME_H.large}px; }
     .missing { color: #9ca3af; font-style: italic; }
-    .meta { margin: 12px 0 0; }
+    .meta { margin: ${L.metaTop}px 0 0; }
     .meta .row { display: flex; gap: 12px; padding: 5px 0; border-bottom: 1px solid #f1f2f4; }
-    .meta dt { width: 96px; flex-shrink: 0; color: #6b7280; margin: 0; text-transform: uppercase;
-      font-size: 10px; letter-spacing: 1px; padding-top: 2px; }
+    .meta dt { width: ${px(96 * labelScale)}; flex-shrink: 0; color: #6b7280; margin: 0;
+      text-transform: uppercase; font-size: ${px(10 * labelScale)}; letter-spacing: 1px;
+      padding-top: 2px; }
+    .sz-small .meta dt { width: ${px(PRO_SMALL_DT * labelScale)}; }
     .meta dd { margin: 0; color: #14181f; line-height: 1.5; }
     /* La valeur de date occupe toute la largeur restante pour que son
        alignement (gauche / centre / droite) soit visible. */
     .meta .row.date dd { flex: 1; text-align: ${dateAlign}; }
-    .pro-textpage { page-break-before: always; page-break-after: always;
-      padding: 64px 56px 0; text-align: ${textAlign}; white-space: pre-wrap;
-      font-size: 20px; line-height: 1.7; color: #14181f; }
-    /* Mention de l'app en fin de rapport, dans le corps des valeurs (date…),
-       en gris des intitulés. Une page de texte finale ne la renvoie pas seule
-       sur une page blanche. */
-    .pages > .pro-textpage:last-child { page-break-after: auto; }
-    .credit { margin: 36px 0 0; text-align: center; font-size: 12px;
-      letter-spacing: 0.6px; color: #6b7280; page-break-inside: avoid; }
-    ${CREDIT_LOGO_CSS}`;
+    /* Page de texte : position verticale choisie dans l'aperçu (haut par défaut). */
+    .pro-text { padding: 64px 56px ${L.padBottom}px; display: flex; flex-direction: column; }
+    .pro-text.tv-top { justify-content: flex-start; }
+    .pro-text.tv-middle { justify-content: center; }
+    .pro-text.tv-bottom { justify-content: flex-end; }
+    .pro-text-body { text-align: ${textAlign}; white-space: pre-wrap;
+      font-size: ${px(20 * scale)}; line-height: 1.7; color: #14181f; }
+    .footer { position: absolute; left: 0; right: 0; bottom: 22px; margin: 0;
+      text-align: center; font-size: 10px; letter-spacing: 2px; color: #9ca3af; }
+    /* Mention de l'app en pied de la dernière page, au-dessus du numéro. */
+    .credit { position: absolute; left: 0; right: 0; bottom: 44px; margin: 0;
+      font-size: 12px; letter-spacing: 0.6px; color: #6b7280; }
+    ${CREDIT_LOGO_CSS}
+    ${
+      interactive
+        ? `
+    body.desk { background: #cdc7bc; padding: ${DESK_GAP}px ${DESK_GAP}px 2px; }
+    body.desk .sheet { width: ${PAGE_WIDTH}px; margin: 0 0 ${DESK_GAP + 4}px;
+      box-shadow: 0 0 0 1px rgba(31,29,26,0.12), 0 3px 12px rgba(31,29,26,0.28); }`
+        : ''
+    }`;
 
   const D = dict(lang).doc;
   return `<!DOCTYPE html>
@@ -1270,20 +1332,19 @@ function buildProDocument(
       <head>
         <meta charset="utf-8" />
         ${CSP_META}
-        <meta name="viewport" content="width=${PAGE_WIDTH}, initial-scale=1" />
+        <meta name="viewport" content="width=${interactive ? PAGE_WIDTH + 2 * DESK_GAP : PAGE_WIDTH}, initial-scale=1" />
         <style>${styles}</style>
       </head>
-      <body>
-        <section class="cover">
+      <body${interactive ? ' class="desk"' : ''}>
+        <section class="sheet cover">
           <h1>${escapeHtml(title)}</h1>
           <div class="rule"></div>
           <dl>
             ${proMeta(D.establishedOn, today)}
-            ${proMeta(D.photoCountLabel, String(items.length))}
+            ${proMeta(D.photoCountLabel, String(items.filter((it) => it.photo.kind !== 'text').length))}
           </dl>
         </section>
-        <main class="pages">${entries}</main>
-        <p class="credit">${creditHtml()}</p>
+        ${sheets}
       </body>
     </html>`;
 }

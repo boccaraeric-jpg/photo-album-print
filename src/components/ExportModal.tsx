@@ -565,7 +565,9 @@ export function ExportModal({
           <Section
             title={L.export.sections.texts}
             summary={joinSummary(
-              !isPro && L.export.sumComment(L.export.commentSizes[options.commentSize]),
+              isPro
+                ? L.export.sumProText(L.export.commentSizes[options.proTextSize])
+                : L.export.sumComment(L.export.commentSizes[options.commentSize]),
               options.showPlace && L.export.sumPlace,
               options.dateFormat === 'none'
                 ? L.export.sumNoDate
@@ -618,11 +620,28 @@ export function ExportModal({
               </>
             )}
 
+            {/* Pro : corps du texte des fiches et des pages de texte (pendant de
+                la taille des commentaires du Loisir). */}
+            {isPro && (
+              <>
+                <Text style={[styles.label, styles.labelFirst]}>{L.export.proTextSizeLabel}</Text>
+                <View style={styles.chips}>
+                  {COMMENT_SIZE_KEYS.map((value) => (
+                    <Chip
+                      key={value}
+                      selected={options.proTextSize === value}
+                      label={L.export.commentSizes[value]}
+                      onPress={() => setOptions((o) => ({ ...o, proTextSize: value }))}
+                    />
+                  ))}
+                </View>
+              </>
+            )}
+
             <SwitchRow
               label={L.export.placeLabel}
               value={options.showPlace}
               onChange={(showPlace) => setOptions((o) => ({ ...o, showPlace }))}
-              first={isPro}
             />
 
             <Text style={styles.label}>{L.export.dateLabel}</Text>

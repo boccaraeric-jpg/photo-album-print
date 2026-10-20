@@ -1566,6 +1566,9 @@ onBack,
         if (p.id === id && 'proSize' in patch) {
           next = { ...next, proSize: patch.proSize ?? undefined };
         }
+        if (p.id === id && 'textVAlign' in patch) {
+          next = { ...next, textVAlign: patch.textVAlign ?? undefined };
+        }
         if ('pageBg' in patch) {
           // Le fond est commun à la page : la photo touchée le porte, ses
           // voisines de page perdent le leur (sinon il l'emporterait).

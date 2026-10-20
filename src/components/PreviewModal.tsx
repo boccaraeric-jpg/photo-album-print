@@ -15,19 +15,22 @@ import { ALBUM_BACKGROUND_GROUPS, BACKGROUND_GROUP_KEYS, C, F } from '../theme';
 import { useLang } from '../i18n';
 import { stripMarks } from '../richText';
 import { pageBackground } from '../paginate';
-import type { Photo, PhotoSize, ProPhotoSize } from '../types';
+import type { Photo, PhotoSize, ProPhotoSize, TextVAlign } from '../types';
 
 /** Réglages d'une entrée depuis l'aperçu ; `null` = revenir à celui de l'album. */
 export interface EntryPatch {
   size?: PhotoSize | null;
   /** Taille dans le rapport professionnel (`Photo.proSize`). */
   proSize?: ProPhotoSize | null;
+  /** Position du texte d'une page de texte (`Photo.textVAlign`). */
+  textVAlign?: TextVAlign | null;
   pageBg?: string | null;
 }
 
 const SIZE_KEYS: PhotoSize[] = ['small', 'medium', 'large', 'full'];
 // Rapport pro : pas de pleine page ni de fond (fiches sur blanc).
 const PRO_SIZE_KEYS: ProPhotoSize[] = ['small', 'medium', 'large'];
+const TEXT_POS_KEYS: TextVAlign[] = ['top', 'middle', 'bottom'];
 const EDIT_SCHEME = 'comclic-edit://e/';
 
 interface Props {
@@ -137,6 +140,9 @@ export function PreviewModal({
   const sizeChosen = pro ? !!selected?.proSize : !!selected?.size;
   const setSize = (size: PhotoSize | null) =>
     edit(pro ? { proSize: size as ProPhotoSize | null } : { size });
+  // Page de texte : position par défaut = haut en pro, milieu en Loisir.
+  const defaultTextPos: TextVAlign = pro ? 'top' : 'middle';
+  const currentTextPos: TextVAlign = selected?.textVAlign ?? defaultTextPos;
   const currentBg = pageBg ?? albumBg;
 
   return (
@@ -247,6 +253,30 @@ export function PreviewModal({
               </Pressable>
             </View>
             <ScrollView>
+              {selected.kind === 'text' && (
+                <>
+                  <Text style={styles.panelLabel}>{L.preview.textPos}</Text>
+                  <View style={styles.chips}>
+                    {TEXT_POS_KEYS.map((pos) => (
+                      <Chip
+                        key={pos}
+                        label={L.export.commentPos[pos]}
+                        selected={currentTextPos === pos}
+                        onPress={() => pos !== currentTextPos && edit({ textVAlign: pos })}
+                      />
+                    ))}
+                  </View>
+                  {selected.textVAlign ? (
+                    <Pressable onPress={() => edit({ textVAlign: null })} hitSlop={8}>
+                      <Text style={styles.reset}>
+                        {L.preview.resetTextPos(L.export.commentPos[defaultTextPos])}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={styles.hint}>{L.preview.textPosIsDefault}</Text>
+                  )}
+                </>
+              )}
               {selected.kind !== 'text' && (
                 <>
                   <Text style={styles.panelLabel}>{L.preview.entrySize}</Text>
