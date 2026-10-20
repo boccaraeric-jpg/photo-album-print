@@ -200,9 +200,36 @@ export function PreviewModal({
           </View>
         )}
 
+        <View style={[styles.toolbar, { paddingBottom: insets.bottom + 12 }]}>
+          <Pressable
+            style={[styles.btn, styles.btnGhost]}
+            onPress={onEditLayout}
+            disabled={sending}
+          >
+            <Text style={styles.btnGhostText}>{L.preview.layout}</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.btn, styles.btnPrimary, sending && styles.btnDisabled]}
+            onPress={onSend}
+            disabled={sending || !html}
+          >
+            {sending ? (
+              <View style={styles.progressRow}>
+                <ActivityIndicator color="#fff" />
+                {progress ? <Text style={styles.btnPrimaryText}>{progress}</Text> : null}
+              </View>
+            ) : (
+              <Text style={styles.btnPrimaryText}>{sendLabel} →</Text>
+            )}
+          </Pressable>
+        </View>
+
         {/* Panneau de réglage de l'entrée touchée : surcouche <View>, pas de
             <Modal> imbriqué (iOS ne les présente pas). Chaque choix redessine
-            l'aperçu aussitôt ; « OK » referme. */}
+            l'aperçu aussitôt ; « OK » referme. Posé APRÈS la barre d'action,
+            donc au-dessus d'elle : avant, la barre recouvrait le bas du
+            panneau — en Professionnel, où il ne porte que la taille, tout
+            entier (retour testeur). */}
         {selected && editable && (
           <View style={[styles.panel, { paddingBottom: insets.bottom + 12 }]}>
             <View style={styles.panelHead}>
@@ -290,30 +317,6 @@ export function PreviewModal({
             </ScrollView>
           </View>
         )}
-
-        <View style={[styles.toolbar, { paddingBottom: insets.bottom + 12 }]}>
-          <Pressable
-            style={[styles.btn, styles.btnGhost]}
-            onPress={onEditLayout}
-            disabled={sending}
-          >
-            <Text style={styles.btnGhostText}>{L.preview.layout}</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.btn, styles.btnPrimary, sending && styles.btnDisabled]}
-            onPress={onSend}
-            disabled={sending || !html}
-          >
-            {sending ? (
-              <View style={styles.progressRow}>
-                <ActivityIndicator color="#fff" />
-                {progress ? <Text style={styles.btnPrimaryText}>{progress}</Text> : null}
-              </View>
-            ) : (
-              <Text style={styles.btnPrimaryText}>{sendLabel} →</Text>
-            )}
-          </Pressable>
-        </View>
       </View>
     </Modal>
   );
@@ -362,6 +365,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    zIndex: 10,
     maxHeight: '55%',
     paddingHorizontal: 20,
     paddingTop: 14,
