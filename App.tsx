@@ -1068,6 +1068,15 @@ function HomeScreen({
             <Text style={styles.btnGhostText}>{L.home.backupAll}</Text>
           </Pressable>
         </View>
+        {/* Le bouton d'import restaure aussi une sauvegarde complète, ce que son
+            nom ne dit pas : la marche à suivre est à un toucher. */}
+        <Pressable
+          onPress={() => Alert.alert(L.backup.howToTitle, L.backup.howToBody)}
+          hitSlop={8}
+          accessibilityRole="button"
+        >
+          <Text style={styles.howTo}>{L.backup.howToLink}</Text>
+        </Pressable>
       </View>
 
       <NameModal
@@ -2086,6 +2095,13 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   rowBtn: { flex: 1 },
+  howTo: {
+    fontFamily: F.mono,
+    fontSize: 13,
+    color: C.sienna,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+  },
   topActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
   topBtn: {
     flex: 1,

@@ -264,6 +264,13 @@ La préparation peut prendre un moment et ne peut pas être interrompue.`,
     building: 'Préparation de la sauvegarde…',
     restoring: 'Restauration en cours…',
     fileBase: 'ComClic sauvegarde',
+    howToLink: 'Comment restaurer une sauvegarde ?',
+    howToTitle: 'Restaurer une sauvegarde',
+    howToBody:
+      '1. Touchez « Importer un album ComClic ».\n' +
+      '2. Dans Fichiers, ouvrez l’endroit où vous aviez déposé la sauvegarde (iCloud Drive, Sur mon iPhone…) et choisissez le fichier « ComClic sauvegarde » suivi de sa date. Reçue par mail : enregistrez d’abord la pièce jointe dans Fichiers.\n' +
+      '3. ComClic annonce le nombre de dossiers et de photos qu’elle contient : confirmez.\n\n' +
+      'Les dossiers restaurés s’ajoutent à ceux déjà présents : rien n’est effacé ni remplacé. La langue et les réglages de mise en page sont aussi rétablis.',
     shareTitle: 'Sauvegarde ComClic',
     emptyTitle: 'Rien à sauvegarder',
     emptyBody: 'Créez au moins un dossier avant de lancer une sauvegarde.',
@@ -629,6 +636,13 @@ Preparing it may take a while and cannot be interrupted.`,
     building: 'Preparing backup…',
     restoring: 'Restoring…',
     fileBase: 'ComClic backup',
+    howToLink: 'How do I restore a backup?',
+    howToTitle: 'Restore a backup',
+    howToBody:
+      '1. Tap “Import ComClic File”.\n' +
+      '2. In Files, open the place where you saved the backup (iCloud Drive, On My iPhone…) and pick the “ComClic backup” file followed by its date. Received by email? Save the attachment to Files first.\n' +
+      '3. ComClic shows how many folders and photos it contains: confirm.\n\n' +
+      'Restored folders are added to the ones already in the app: nothing is deleted or replaced. Your language and layout settings are restored too.',
     shareTitle: 'ComClic backup',
     emptyTitle: 'Nothing to back up',
     emptyBody: 'Create at least one folder before running a backup.',
