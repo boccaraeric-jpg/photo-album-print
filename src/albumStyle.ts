@@ -286,12 +286,15 @@ export function scatterSlots(
   // Page moins haute que l'A4 (16 × 21) : le gabarit entier est réduit dans la
   // même proportion, centré en largeur — l'équilibre du montage est conservé.
   const s = Math.min(1, pageH / COVER_H);
+  // En largeur, on réduit moins (page carrée : la largeur ne manque pas) ;
+  // les photos s'écartent un peu plus que dans le gabarit A4.
+  const sx = Math.min(1, s * 1.2);
   const mid = COVER_W / 2;
   // Recalage commun des gabarits : remontés vers le titre et légèrement
   // agrandis — une bande vide de ~100 pt séparait le titre des photos.
   const [hero, ...others] = SCATTER_LAYOUTS[n].map(
     ([cx, cy, size]): [number, number, number] => [
-      mid + (cx - mid) * s,
+      mid + (cx - mid) * sx,
       (cy - 18) * s,
       Math.round(size * 1.06 * s),
     ],
@@ -353,13 +356,16 @@ export function gridLayout(count: number, pageH: number = COVER_H): GridLayout {
   const { cols, rows } = shape;
   // Page moins haute (16 × 21) : la grille perd en hauteur dans la même
   // proportion que la page, les cellules restent proches du même format.
-  const height = Math.round(shape.height * Math.min(1, pageH / COVER_H));
+  const s = Math.min(1, pageH / COVER_H);
+  const height = Math.round(shape.height * s);
+  // L'écart grille → titre se resserre dans la même proportion (page carrée).
+  const titleGap = Math.round(GRID_TITLE_GAP * s);
   const width = COVER_W - 2 * GRID.margin;
   const w = (width - (cols - 1) * GRID.gap) / cols;
   const h = (height - (rows - 1) * GRID.gap) / rows;
   const top = Math.max(
     GRID.margin,
-    (pageH - (height + GRID_TITLE_GAP + GRID_TITLE_BLOCK)) / 2,
+    (pageH - (height + titleGap + GRID_TITLE_BLOCK)) / 2,
   );
   const cells = [];
   for (let r = 0; r < rows; r++) {
@@ -372,5 +378,5 @@ export function gridLayout(count: number, pageH: number = COVER_H): GridLayout {
       });
     }
   }
-  return { cells, titleY: top + height + GRID_TITLE_GAP };
+  return { cells, titleY: top + height + titleGap };
 }

@@ -455,7 +455,9 @@ export function buildMapModel(
   // --- Cadre de carte : la légende prend ce qu'il lui faut en dessous
   const compact = places.length > 8;
   const rowH = compact ? 30 : 36;
-  const rows = Math.ceil(places.length / 2);
+  // Page carrée : légende sur trois colonnes, sinon elle mangerait la carte.
+  const cols = pageH < 700 ? 3 : 2;
+  const rows = Math.ceil(places.length / cols);
   const box: MapRect = { x: 40, y: 128, w: 515, h: 0 };
   box.h = pageH - box.y - 26 - rows * rowH - 34;
 
@@ -670,13 +672,13 @@ export function buildMapModel(
   shape({ d: rectPath({ x: box.x - 4, y: box.y - 4, w: box.w + 8, h: box.h + 8 }), stroke: ink, width: 0.6 });
 
   // --- Légende : deux colonnes, nom en gras puis les dates
-  const colW = box.w / 2;
+  const colW = box.w / cols;
   const top = box.y + box.h + 26;
   const nameSize = compact ? 11 : 12;
   const dateSize = compact ? 9.5 : 10;
   places.forEach((p, i) => {
-    const lx = box.x + (i % 2) * colW;
-    const rt = top + Math.floor(i / 2) * rowH;
+    const lx = box.x + (i % cols) * colW;
+    const rt = top + Math.floor(i / cols) * rowH;
     shape({ d: circlePath(lx + 10, rt + 8, 9.5), fill: accent });
     text({
       x: lx + 10,

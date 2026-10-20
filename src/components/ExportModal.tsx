@@ -219,11 +219,11 @@ function SwitchRow({
 
 /**
  * Silhouette d'une page au format choisi, à l'échelle (A4 21 × 29,7 cm ;
- * 16 × 21 cm) : la différence de taille se voit avant même de lire.
+ * 16 × 21 ; 16 × 16 cm) : la différence de taille se voit avant même de lire.
  */
 function FormatSketch({ format }: { format: PageFormat }) {
   const cm = 2.1; // points d'écran par centimètre
-  const [w, h] = format === 'a4' ? [21, 29.7] : [16, 21];
+  const [w, h] = format === 'a4' ? [21, 29.7] : format === '16x21' ? [16, 21] : [16, 16];
   return (
     <View style={styles.formatBox}>
       <View style={[styles.formatPage, { width: w * cm, height: h * cm }]}>

@@ -58,7 +58,7 @@ import {
   PHOTO_RADIUS,
   type FontFam,
 } from './albumStyle';
-import { effectiveFormat, PAGE_FORMATS, pageHeight } from './pageFormat';
+import { effectiveFormat, isSquare, PAGE_FORMATS, pageHeight } from './pageFormat';
 
 /** Tronque un texte à `n` mots (légende de pleine page). */
 function limitWords(text: string, n: number): string {
@@ -544,10 +544,15 @@ function drawPolaroid(
  * la page. Sinon la grille de la taille, même incomplète — une petite photo
  * seule garde sa case, comme dans le PDF (cf. `AlbumPage.solo`).
  */
-function gridFor(perPage: number, solo: boolean): { cols: number; rows: number } {
+function gridFor(
+  perPage: number,
+  solo: boolean,
+  /** Page carrée : les moyennes se posent côte à côte (`.fmt-square` du PDF). */
+  square = false,
+): { cols: number; rows: number } {
   if (solo) return { cols: 1, rows: 1 };
   if (perPage >= 4) return { cols: 2, rows: 2 };
-  if (perPage >= 2) return { cols: 1, rows: 2 };
+  if (perPage >= 2) return square ? { cols: 2, rows: 1 } : { cols: 1, rows: 2 };
   return { cols: 1, rows: 1 };
 }
 
@@ -581,7 +586,8 @@ async function renderPhotoPage(
   bg.setColor(Skia.Color(options.background));
   canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
 
-  const { cols, rows } = gridFor(perPage, solo);
+  const square = !pro && isSquare(effectiveFormat(options));
+  const { cols, rows } = gridFor(perPage, solo, square);
   const gapX = 30;
   const gapY = 36;
   const footerH = 46;
@@ -594,8 +600,9 @@ async function renderPhotoPage(
   const mapImages = await Promise.all(group.map((p) => loadMiniMap(maps, p.id)));
   // Grille 2×2 : une photo avec carte prend une ligne entière (cf. `wideSlots`,
   // mêmes cases que le PDF).
+  // Grille 2×2 seulement : en carré, les moyennes côte à côte gardent leur case.
   const slots =
-    !pro && cols === 2 ? wideSlots(group, new Set(maps.keys())) : null;
+    !pro && cols === 2 && rows === 2 ? wideSlots(group, new Set(maps.keys())) : null;
 
   // Photos centrées sur la page (comme le PDF, `.sheet.photos`) : les rangées
   // occupées se centrent en hauteur, et une rangée incomplète (petite photo
@@ -776,8 +783,12 @@ async function renderPhotoPage(
     // Carte du lieu à droite de la photo (MAP_SHARE de la largeur, comme le PDF).
     const hasMap = maps.has(photo.id);
     const gap = MAP_GAP * (W / COVER_W);
-    const mapW = hasMap ? (imgW - gap) * MAP_SHARE : 0;
-    const photoW = hasMap ? imgW - gap - mapW : imgW;
+    // Carte sous la photo en carré côte à côte (colonne étroite), à droite sinon.
+    const mapBelow = hasMap && square && perPage === 2 && cols === 2;
+    const mapW = hasMap && !mapBelow ? (imgW - gap) * MAP_SHARE : 0;
+    const photoW = hasMap && !mapBelow ? imgW - gap - mapW : imgW;
+    const mapH = mapBelow ? (imgH - gap) * MAP_SHARE : 0;
+    const photoH = mapBelow ? imgH - gap - mapH : imgH;
     // Coins arrondis de la photo et de sa carte : ceux de l'encadrement, ou
     // le coin presque droit du liseré (`PHOTO_RADIUS`, `LISERET`, comme le PDF).
     const radius = (options.liseret ? LISERET.radius : PHOTO_RADIUS[options.frame]) * k;
@@ -798,12 +809,14 @@ async function renderPhotoPage(
       canvas.drawRRect(rrect(rect.x - 6, rect.y - 6, rect.w + 12, rect.h + 12, 4), edge);
     };
     if (hasMap) {
-      const mapRect = { x: imgX + photoW + gap, y: imgY, w: mapW, h: imgH };
+      const mapRect = mapBelow
+        ? { x: imgX, y: imgY + photoH + gap, w: imgW, h: mapH }
+        : { x: imgX + photoW + gap, y: imgY, w: mapW, h: imgH };
       drawMiniMap(canvas, photo, mapImages[i], mapRect.x, mapRect.y, mapRect.w, mapRect.h, radius);
       if (options.liseret) drawLiseret(mapRect);
     }
     // « contain » : photo entière, non rognée (comme le PDF).
-    const drawn = drawContainImage(canvas, images[i], imgX, imgY, photoW, imgH, radius);
+    const drawn = drawContainImage(canvas, images[i], imgX, imgY, photoW, photoH, radius);
     if (options.liseret && drawn) drawLiseret(drawn);
 
     // Légende (commentaire tronqué + date · lieu) sous la photo.

@@ -324,6 +324,11 @@ d'entrée** (ils pilotent aussi les libellés) :
   `expo-print`) — 16 × 21 cm = 453,5 × 595,3 pt ; 780 et non 781, sinon une fraction de point déborde
   en page blanche. Images Skia : 1240 px de large, `imageH` de haut. Contrôlé sous Chrome (taille et
   nombre de pages) ; ⚠️ le `zoom` à l'impression iOS reste à confirmer sur appareil.
+  **16 × 16 (carré, `square`)** : hauteur 594, gabarits **propres** et non un simple retranchement —
+  `SQUARE_PH` (pdf.ts), moyennes **côte à côte** (`.fmt-square` sur `body` ; Skia `gridFor(..., square)`
+  = 2 colonnes × 1 rangée), carte d'une moyenne **sous** la photo (`mapBelow`, sauf photo seule
+  agrandie), couverture classique resserrée, pêle-mêle moins réduit en largeur (`sx`), écart grille →
+  titre réduit, légende de la page « Nos lieux » sur 3 colonnes (`cols` d'`albumMap.ts`).
 - **Photos centrées sur la page** (familial) : `.sheet.photos` a la hauteur exacte de la page et
   centre le bloc en flex (seule exception au « pas de flex vertical », sûre parce que la feuille est
   de hauteur fixe et que les tailles de `sizeCss` tiennent dans la page) ; numéro en pied hors flux ;

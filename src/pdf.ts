@@ -59,6 +59,7 @@ import {
 import {
   effectiveFormat,
   heightCut,
+  isSquare,
   PAGE_FORMATS,
   pageHeight,
 } from './pageFormat';
@@ -178,7 +179,7 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     cover: oneOf(o.cover, ['classic', 'scatter', 'filmstrip'] as const, d.cover),
     showMap: typeof o.showMap === 'boolean' ? o.showMap : d.showMap,
     photoMaps: typeof o.photoMaps === 'boolean' ? o.photoMaps : d.photoMaps,
-    format: oneOf(o.format, ['a4', '16x21'] as const, d.format),
+    format: oneOf(o.format, ['a4', '16x21', '16x16'] as const, d.format),
   };
 }
 
@@ -397,6 +398,18 @@ const CAPTION_BASES: Record<ExportOptions['photoSize'], number> = {
   full: 0,
 };
 
+/**
+ * Hauteurs de la zone image en page carrée (16 × 16) : la page n'a que 594
+ * unités de haut, les moyennes s'y posent côte à côte (une seule rangée).
+ */
+const SQUARE_PH: Record<PhotoSize | 'solo', number> = {
+  small: 160,
+  medium: 300,
+  large: 380,
+  full: 380, // non utilisé (la pleine page a son propre gabarit)
+  solo: 280,
+};
+
 const PH_HEIGHTS: Record<ExportOptions['photoSize'], string> = {
   small: '170px',
   medium: '250px',
@@ -455,14 +468,20 @@ function sizeCss(size: PhotoSize, options: ExportOptions): string {
   // agrandie (commentaire long : il lui faut sa marge), à moitié pour la grande
   // (sa page gardait déjà du blanc en A4). Les légendes gardent leur place : la
   // pagination ne change pas.
-  const cut = heightCut(effectiveFormat(options));
+  const format = effectiveFormat(options);
+  const cut = heightCut(format);
   const rowCut = size === 'large' ? cut : Math.round(cut / 2);
+  // Page carrée : hauteurs propres (moyennes côte à côte, cf. `.fmt-square`).
+  const square = isSquare(format);
+  const ph = square ? SQUARE_PH[size] : parseInt(PH_HEIGHTS[size], 10) - rowCut;
+  const solo = square ? SQUARE_PH.solo : 380 - cut;
+  const large = square ? SQUARE_PH.large : 480 - Math.round(cut / 2);
   const z = `.sz-${size}`;
   return `
   ${z} .card { margin-bottom: ${size === 'small' ? 12 : 16}px; }
-  ${z} .ph { height: ${parseInt(PH_HEIGHTS[size], 10) - shrink - rowCut}px; }
-  ${z} .card.solo .ph { height: ${380 - shrink - cut}px; }
-  ${z} .card.large .ph { height: ${480 - shrink - Math.round(cut / 2)}px; }
+  ${z} .ph { height: ${ph - shrink}px; }
+  ${z} .card.solo .ph { height: ${solo - shrink}px; }
+  ${z} .card.large .ph { height: ${large - shrink}px; }
   ${z} .caption { font-size: ${captionSize}px; }
   ${
     band
@@ -629,6 +648,23 @@ function buildStyles(options: ExportOptions): string {
   .card.solo, .card.large { margin-left: auto; margin-right: auto; width: 100%; }
   /* Grille des petites : une rangée incomplète se centre aussi. */
   .grid4 { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+
+  /* --- Page carrée (16 × 16) : photos moyennes côte à côte, la carte sous la
+     photo (une colonne n'a pas la largeur de les mettre côte à côte), couverture
+     classique resserrée. Mêmes cases que Skia (gridFor, carte dessous). --- */
+  .fmt-square .sheet.photos.sz-medium {
+    flex-direction: row; align-items: center; justify-content: center; gap: 16px;
+  }
+  .fmt-square .sheet.photos.sz-medium > .card {
+    flex: 0 1 calc(50% - 8px); margin-bottom: 0;
+  }
+  .fmt-square .sheet.photos.sz-medium > .card.solo { flex-basis: 100%; }
+  .fmt-square .sz-medium .card:not(.solo) .ph.split { flex-direction: column; }
+  .fmt-square .sz-medium .card:not(.solo) .ph.split .ph-photo { flex: ${1 - MAP_SHARE} 1 0; width: 100%; }
+  .fmt-square .sz-medium .card:not(.solo) .ph.split .ph-map { flex: ${MAP_SHARE} 1 0; width: 100%; }
+  .fmt-square .cover { padding-top: 40px; }
+  .fmt-square .cover-hero { margin-top: 24px; height: ${470 - cut + 54}px; }
+  .fmt-square .cover-foot { margin-top: 22px; }
   .grid4 .card { width: calc(50% - 6px); margin-bottom: 4px; }
   ${frameCss}
   /* Case photo sans fond : une photo qui n'a pas les proportions de sa case
@@ -958,7 +994,7 @@ export async function buildAlbumHtml(
         <meta name="viewport" content="width=${interactive ? PAGE_WIDTH + 2 * DESK_GAP : PAGE_WIDTH}, initial-scale=1" />
         <style>${buildStyles(options)}${interactive ? deskCss(pageH) : printScale(format)}</style>
       </head>
-      <body${interactive ? ' class="desk"' : ''}>
+      <body class="${[interactive ? 'desk' : '', isSquare(format) ? 'fmt-square' : ''].filter(Boolean).join(' ')}">
         ${coverHtml}
         ${mapHtml}
         ${pages}

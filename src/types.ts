@@ -60,7 +60,7 @@ export type CommentSize = 'normal' | 'large' | 'xlarge';
 
 /** Options de personnalisation du mini album exporté. */
 /** Format de page de l'album (cf. `pageFormat.ts`). */
-export type PageFormat = 'a4' | '16x21';
+export type PageFormat = 'a4' | '16x21' | '16x16';
 
 export interface ExportOptions {
   /** Rendu global (familial personnalisable ou professionnel sobre). */
