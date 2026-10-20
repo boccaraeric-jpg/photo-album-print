@@ -127,6 +127,13 @@ export const PHOTO_RADIUS: Record<FrameStyle, number> = {
   none: 14,
 };
 
+/**
+ * Mention de l'app en bas de la page de fin, dans le corps et la police des
+ * dates sous les photos (`META_SIZE`, famille `meta`) : discrète, mais présente
+ * dans chaque album envoyé. Marque, donc non traduite.
+ */
+export const ALBUM_CREDIT = 'Powered by ComClic';
+
 /** Liseré blanc posé sur la photo et sur sa carte (points A4). */
 export const LISERET = { width: 6, radius: 2 };
 

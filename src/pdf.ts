@@ -34,6 +34,7 @@ import { mapImagesFor } from './mapSnapshot';
 import {
   CAPTION_INK,
   COMMENT_BASE,
+  ALBUM_CREDIT,
   COMMENT_SCALE,
   commentShrink,
   coverPicks,
@@ -192,7 +193,7 @@ function escapeHtml(input: string): string {
 }
 
 /** Période couverte par l'album (ex. « mai – juin 2026 »), pour la couverture. */
-function formatRange(photos: Photo[], lang: Lang): string {
+export function formatRange(photos: Photo[], lang: Lang): string {
   const times = photos.map(photoDate);
   const first = new Date(Math.min(...times));
   const last = new Date(Math.max(...times));
@@ -693,13 +694,22 @@ function buildStyles(options: ExportOptions): string {
   }
 
   /* --- Page de fin --- */
-  .end { text-align: center; padding-top: ${330 - Math.round(cut / 2)}px; }
+  .end {
+    position: relative; height: ${pageH}px;
+    text-align: center; padding-top: ${330 - Math.round(cut / 2)}px;
+  }
   .end .orn { font-size: 22px; color: var(--accent); margin: 0; }
   .end h2 {
     font-family: ${fam(spec.title)}; font-weight: ${bold(spec.title)};
     font-size: 26px; margin: 12px 0 6px; color: var(--ink);
   }
   .end p { color: var(--muted); font-size: 13px; margin: 0; }
+  /* « Powered by ComClic » : corps et police des dates sous les photos. */
+  .end .credit {
+    position: absolute; left: 0; right: 0; bottom: 30px;
+    font-family: ${fam(spec.meta)}; font-weight: ${regular(spec.meta)};
+    font-size: ${META_SIZE}px; letter-spacing: 0.6px; color: var(--meta-ink);
+  }
 
   /* --- Carte à côté d'une photo (MAP_SHARE / MAP_GAP / FULL_MAP d'albumMap.ts) --- */
   .grid4 .card.wide { width: 100%; }
@@ -955,6 +965,7 @@ export async function buildAlbumHtml(
         <section class="sheet end">
           <p class="orn">✦</p>
           <p>${escapeHtml(subtitle)}</p>
+          <p class="credit">${escapeHtml(ALBUM_CREDIT)}</p>
         </section>
       </body>
     </html>`;

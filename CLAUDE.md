@@ -335,6 +335,10 @@ d'entrée** (ils pilotent aussi les libellés) :
   **Carte = photo** : mêmes coins arrondis (`PHOTO_RADIUS` par encadrement, `albumStyle.ts`) et même
   liseré (`LISERET`) que la photo voisine, dans les deux moteurs — Skia arrondit aussi les photos
   (`drawContainImage(..., radius)`, `drawMiniMap(..., radius)`), ce qu'il ne faisait pas.
+- **Page de fin** (familial) : ornement, période, et **`ALBUM_CREDIT`** (« Powered by ComClic »,
+  `albumStyle.ts`, non traduit) en pied, corps et police des dates (`META_SIZE`, famille `meta`).
+  Les images de l'album l'ont aussi depuis l'ajout de cette mention (`renderEndPage`, fichier
+  `…pzz-fin.jpg`, ✦ dessiné en tracé : la police embarquée n'a pas le glyphe). Le pro n'en a pas.
 - Contraintes de mise en page PDF **à ne pas casser** : dimensionner en **px = points** (A4
   595×842), **jamais de `vh`**, **hauteurs fixes** en familial, et
   `print-color-adjust: exact` (sinon iOS supprime fonds/ombres).

@@ -13,7 +13,7 @@ import type { ExportOptions, Photo } from './types';
 import { formatPhotoDate, photoDate } from './dateFormat';
 import { dict, localeTag, type Lang } from './i18n';
 import { pageBackground, paginateEntries, PER_PAGE, wideSlots } from './paginate';
-import { albumFileBase } from './pdf';
+import { albumFileBase, formatRange } from './pdf';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
 import { parseRich, type RichRun } from './richText';
@@ -35,6 +35,7 @@ import {
 } from './albumMap';
 import { mapImagesFor } from './mapSnapshot';
 import {
+  ALBUM_CREDIT,
   CAPTION_INK,
   COMMENT_BASE,
   COMMENT_SCALE,
@@ -1277,6 +1278,73 @@ function renderMapPage(
   return encodeSurface(surface, title, 0, '00b-carte');
 }
 
+/**
+ * Page de fin (Skia), pendant de `.end` du PDF : ornement, période de l'album
+ * et, en pied, la mention `ALBUM_CREDIT` dans le corps des dates.
+ */
+function renderEndPage(
+  photos: Photo[],
+  options: ExportOptions,
+  title: string,
+  lang: Lang,
+): PagePayload | null {
+  const H = imageHeight(options);
+  const surface = Skia.Surface.Make(W, H);
+  if (!surface) return null;
+  const canvas = surface.getCanvas();
+  const dark = isDark(options.background);
+  const k = W / COVER_W;
+  const spec = TYPE_SPECS[options.typeface];
+
+  const bg = Skia.Paint();
+  bg.setColor(Skia.Color(options.background));
+  canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
+
+  // Ornement ✦ dessiné (la police embarquée n'a pas le glyphe) : étoile à
+  // quatre branches, à la place du symbole du PDF.
+  const cut = PAGE_FORMATS.a4.h - layoutHeight(options);
+  const top = (330 - Math.round(cut / 2)) * k;
+  const cx = W / 2;
+  const cy = top + 14 * k;
+  const ro = 8 * k;
+  const ri = 2.4 * k;
+  const star = Skia.Path.Make();
+  for (let i = 0; i < 8; i++) {
+    const r = i % 2 === 0 ? ro : ri;
+    const a = (Math.PI / 4) * i - Math.PI / 2;
+    const x = cx + r * Math.cos(a);
+    const y = cy + r * Math.sin(a);
+    if (i === 0) star.moveTo(x, y);
+    else star.lineTo(x, y);
+  }
+  star.close();
+  const accent = Skia.Paint();
+  accent.setAntiAlias(true);
+  accent.setColor(Skia.Color(dark ? '#e3a455' : '#b45309'));
+  canvas.drawPath(star, accent);
+
+  const range = photos.length ? formatRange(photos, lang) : '';
+  if (range) {
+    drawText(canvas, range, PAD, cy + 18 * k, W - 2 * PAD, {
+      color: mutedInk(options.background),
+      size: 13 * k,
+      align: TextAlign.Center,
+      maxLines: 1,
+    });
+  }
+
+  const metaSize = META_SIZE * k;
+  drawText(canvas, ALBUM_CREDIT, PAD, H - 30 * k - lineHeightFor(metaSize), W - 2 * PAD, {
+    color: dark ? META_INK_DARK : META_INK,
+    size: metaSize,
+    align: TextAlign.Center,
+    maxLines: 1,
+    letterSpacing: 1,
+    fam: spec.meta,
+  });
+  return encodeSurface(surface, title, 0, 'zz-fin');
+}
+
 function encodeSurface(
   surface: ReturnType<typeof Skia.Surface.Make>,
   title: string,
@@ -1400,6 +1468,9 @@ export async function buildAlbumImages(
     );
     numbered += page.items.length;
   }
+
+  // Page de fin, comme le PDF (le rapport pro n'en a pas).
+  if (!pro) await push(renderEndPage(photoEntries, eff, title, lang));
 
   return uris;
 }
