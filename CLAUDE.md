@@ -387,6 +387,13 @@ fichier et de clé de tri).
 > `isLongComment()` de `paginate.ts` — passer par **`stripMarks()`**, sinon les balises comptent
 > dans la longueur et basculent une photo sur une page entière pour rien.
 
+**Clavier dans l'éditeur de commentaire** (`CommentModal`) : le clavier recouvrait le champ (retour
+testeur, on tapait à l'aveugle). À son ouverture (`keyboardWillShow` iOS / `keyboardDidShow`
+Android) : photo réduite à 84 pt, poignée masquée, marges du bas resserrées (plus besoin de la marge
+de barre d'accueil), puis `keyboardDidShow` fait défiler jusqu'au **champ touché** (commentaire ou
+lieu, positions relevées par `onLayout`). Ne pas retirer le `KeyboardAvoidingView` : il remonte la
+feuille, ce code remonte le champ dans la feuille.
+
 **Lieu et date de prise de vue** (`src/exif.ts`, `src/photoLocation.ts`, `src/geocode.ts`) :
 PHPicker (iOS) **caviarde les métadonnées** de l'asset remis à l'app, donc l'EXIF est souvent vide.
 Deux résolutions bâties sur le même schéma — EXIF, puis `expo-media-library` via l'`assetId` :

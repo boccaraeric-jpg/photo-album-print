@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
+  LayoutAnimation,
   Modal,
   Platform,
   Pressable,
@@ -72,6 +74,38 @@ export function CommentModal({ photo, mapAuto = false, onSave, onClose }: Props)
   // **rendu** (et non avec ses balises) : une seule zone de texte à l'écran,
   // jamais le champ et un aperçu côte à côte.
   const [editing, setEditing] = useState(false);
+  // Clavier ouvert : la photo se réduit, les marges du bas se resserrent et le
+  // champ touché remonte à l'écran — sans quoi le clavier recouvrait la zone de
+  // saisie et l'on tapait à l'aveugle (retour testeur).
+  const [keyboard, setKeyboard] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  // Position (dans la zone défilante) du bloc commentaire et du champ lieu.
+  const fieldY = useRef({ comment: 0, place: 0 });
+  const focused = useRef<'comment' | 'place' | null>(null);
+  const revealField = () => {
+    const which = focused.current;
+    if (!which) return;
+    scrollRef.current?.scrollTo({ y: Math.max(0, fieldY.current[which] - 8), animated: true });
+  };
+  useEffect(() => {
+    // iOS annonce le clavier avant son apparition (« will ») : la mise en page
+    // suit son animation. Android n'a que l'événement « did ».
+    const ios = Platform.OS === 'ios';
+    const show = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', () => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setKeyboard(true);
+    });
+    const shown = Keyboard.addListener('keyboardDidShow', revealField);
+    const hide = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setKeyboard(false);
+    });
+    return () => {
+      show.remove();
+      shown.remove();
+      hide.remove();
+    };
+  }, []);
   const [sel, setSel] = useState<Selection>({ start: 0, end: 0 });
   const [forceSel, setForceSel] = useState<Selection | undefined>();
   // ⚠️ iOS ANNULE la sélection avant que le bouton de mise en forme ne réagisse :
@@ -166,9 +200,10 @@ export function CommentModal({ photo, mapAuto = false, onSave, onClose }: Props)
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.backdrop}
       >
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+        <View style={[styles.sheet, keyboard && styles.sheetKeyboard]}>
+          {!keyboard && <View style={styles.handle} />}
           <ScrollView
+            ref={scrollRef}
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
@@ -177,11 +212,16 @@ export function CommentModal({ photo, mapAuto = false, onSave, onClose }: Props)
             {photo && !isText && (
               <Image
                 source={{ uri: photo.uri }}
-                style={styles.preview}
+                style={[styles.preview, keyboard && styles.previewKeyboard]}
                 resizeMode="contain"
               />
             )}
-            <Text style={styles.label}>
+            <Text
+              style={[styles.label, keyboard && styles.labelKeyboard]}
+              onLayout={(e) => {
+                fieldY.current.comment = e.nativeEvent.layout.y;
+              }}
+            >
               {isText ? L.comment.textLabel : L.comment.commentLabel}
             </Text>
             {/* Mise en forme : réservée au commentaire d'une photo (les pages de
@@ -234,7 +274,13 @@ export function CommentModal({ photo, mapAuto = false, onSave, onClose }: Props)
             <TextInput
               style={[styles.input, isText && styles.inputText]}
               autoFocus={editing}
-              onFocus={() => setEditing(true)}
+              onFocus={() => {
+                focused.current = 'comment';
+                setEditing(true);
+                // Clavier déjà ouvert (passage du lieu au commentaire) : pas de
+                // nouvel événement clavier, on remonte le champ tout de suite.
+                if (keyboard) revealField();
+              }}
               // Fin de saisie → retour au texte rendu (cf. `showRendered`).
               onBlur={() => setEditing(false)}
               value={text}
@@ -295,9 +341,20 @@ export function CommentModal({ photo, mapAuto = false, onSave, onClose }: Props)
             )}
             {!isText && (
               <>
-                <Text style={styles.label}>{L.comment.placeLabel}</Text>
+                <Text
+                  style={styles.label}
+                  onLayout={(e) => {
+                    fieldY.current.place = e.nativeEvent.layout.y;
+                  }}
+                >
+                  {L.comment.placeLabel}
+                </Text>
                 <TextInput
                   style={styles.inputLine}
+                  onFocus={() => {
+                    focused.current = 'place';
+                    if (keyboard) revealField();
+                  }}
                   value={place}
                   onChangeText={setPlace}
                   placeholder={L.comment.placePlaceholder}
@@ -343,7 +400,7 @@ export function CommentModal({ photo, mapAuto = false, onSave, onClose }: Props)
               </>
             )}
           </ScrollView>
-          <View style={styles.actions}>
+          <View style={[styles.actions, keyboard && styles.actionsKeyboard]}>
             <Pressable style={[styles.btn, styles.btnGhost]} onPress={onClose}>
               <Text style={styles.btnGhostText}>{L.common.cancel}</Text>
             </Pressable>
@@ -385,6 +442,9 @@ const styles = StyleSheet.create({
     // et la zone de saisie défile pour ne jamais couper la photo.
     maxHeight: '90%',
   },
+  // Clavier ouvert : plus de marge pour la barre d'accueil (le clavier la
+  // recouvre), boutons au ras du clavier.
+  sheetKeyboard: { paddingTop: 12, paddingBottom: 10 },
   scroll: { flexShrink: 1 },
   scrollContent: { paddingBottom: 4 },
   handle: {
@@ -402,6 +462,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     backgroundColor: '#f3f4f6',
   },
+  // Pendant la saisie, la photo reste visible en repère mais cède la place.
+  previewKeyboard: { height: 84 },
   label: {
     fontFamily: F.monoBold,
     fontSize: 13,
@@ -411,6 +473,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  labelKeyboard: { marginTop: 10 },
   input: {
     minHeight: 90,
     borderWidth: 1,
@@ -479,6 +542,7 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 20,
   },
+  actionsKeyboard: { marginTop: 8 },
   btn: {
     flex: 1,
     height: 50,
