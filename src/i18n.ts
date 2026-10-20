@@ -302,6 +302,8 @@ Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un
     duplicating: 'Duplication du dossier…',
   },
   albumScreen: {
+    importing: 'Veuillez patienter pendant l’importation de vos photos',
+    importProgress: (done: number, total: number) => `${done} / ${total}`,
     back: 'Dossiers',
     newPhoto: '＋  Nouvelle photo',
     gallery: '🖼  Galerie photos',
@@ -661,6 +663,8 @@ Folders will be ADDED to the ones already there: nothing is replaced. A name alr
     duplicating: 'Duplicating folder…',
   },
   albumScreen: {
+    importing: 'Please wait while your photos are being imported',
+    importProgress: (done: number, total: number) => `${done} / ${total}`,
     back: 'Folders',
     newPhoto: '＋  New photo',
     gallery: '🖼  Photo gallery',

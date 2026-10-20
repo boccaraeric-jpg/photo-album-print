@@ -1130,6 +1130,9 @@ onBack,
   const [editing, setEditing] = useState<Photo | null>(null);
   const [adjusting, setAdjusting] = useState<Photo | null>(null);
   const [cropping, setCropping] = useState<Photo | null>(null);
+  // Import depuis la photothèque : voile d'attente (`total` = 0 tant que la
+  // photothèque prépare encore les fichiers, puis progression photo par photo).
+  const [importing, setImporting] = useState<{ done: number; total: number } | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [viewing, setViewing] = useState<Photo | null>(null);
   const [, requestCameraPermission] = useCameraPermissions();
@@ -1316,24 +1319,36 @@ onBack,
       Alert.alert(L.alert.permTitle, L.alert.permLibraryBody);
       return;
     }
-    const res = await ImagePicker.launchImageLibraryAsync({
-      quality: 0.8,
-      allowsMultipleSelection: true,
-      exif: true,
-    });
-    if (!res.canceled) {
-      // Une seule photo → ouvre l'éditeur de commentaire ; plusieurs → ajout direct.
-      const openEditor = res.assets.length === 1;
-      for (const asset of res.assets) {
-        // Date **et** lieu passent par la photothèque quand l'EXIF de l'asset
-        // est vide : PHPicker caviarde les métadonnées de la copie qu'il remet.
-        await addAsset(
-          asset.uri,
-          openEditor,
-          await resolveTakenAt(asset),
-          await resolveCoords(asset),
-        );
+    // Le voile est posé AVANT d'ouvrir la photothèque : l'attente la plus longue
+    // a lieu après « Ajouter », quand iOS prépare les fichiers choisis, et elle
+    // se passe dans l'appel ci-dessous. Pendant le choix, le voile reste caché
+    // derrière la feuille de la photothèque.
+    setImporting({ done: 0, total: 0 });
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({
+        quality: 0.8,
+        allowsMultipleSelection: true,
+        exif: true,
+      });
+      if (!res.canceled) {
+        // Une seule photo → ouvre l'éditeur de commentaire ; plusieurs → ajout direct.
+        const openEditor = res.assets.length === 1;
+        const total = res.assets.length;
+        setImporting({ done: 0, total });
+        for (const [i, asset] of res.assets.entries()) {
+          // Date **et** lieu passent par la photothèque quand l'EXIF de l'asset
+          // est vide : PHPicker caviarde les métadonnées de la copie qu'il remet.
+          await addAsset(
+            asset.uri,
+            openEditor,
+            await resolveTakenAt(asset),
+            await resolveCoords(asset),
+          );
+          setImporting({ done: i + 1, total });
+        }
       }
+    } finally {
+      setImporting(null);
     }
   }, [addAsset]);
 
@@ -1879,6 +1894,22 @@ onBack,
         focusId={previewFocus}
         refreshing={previewRefreshing}
       />
+
+      {/* Import en cours : voile bloquant, sans quoi l'écran semblait figé
+          pendant que la photothèque prépare les fichiers. */}
+      {importing && (
+        <View style={styles.busyOverlay}>
+          <View style={styles.busyCard}>
+            <ActivityIndicator size="large" color={C.sienna} />
+            <Text style={styles.busyCardText}>{L.albumScreen.importing}</Text>
+            {importing.total > 1 && (
+              <Text style={styles.busyCardCount}>
+                {L.albumScreen.importProgress(importing.done, importing.total)}
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1900,6 +1931,24 @@ const styles = StyleSheet.create({
     color: C.card,
     letterSpacing: 1,
   },
+  // Message d'attente de l'import : carte lisible au centre du voile.
+  busyCard: {
+    marginHorizontal: 40,
+    paddingVertical: 24,
+    paddingHorizontal: 28,
+    borderRadius: 18,
+    backgroundColor: C.card,
+    alignItems: 'center',
+    gap: 14,
+  },
+  busyCardText: {
+    fontFamily: F.monoBold,
+    fontSize: 15,
+    lineHeight: 21,
+    color: C.ink,
+    textAlign: 'center',
+  },
+  busyCardCount: { fontFamily: F.mono, fontSize: 13, color: C.muted },
   reorderHint: {
     fontFamily: F.mono,
     fontSize: 11,

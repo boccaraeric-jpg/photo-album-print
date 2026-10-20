@@ -515,7 +515,10 @@ l'ajout au dossier. L'éditeur de commentaire s'ouvre donc tout de suite ; le **
 (`getCurrentCoords()`, plusieurs secondes en intérieur) arrive **en arrière-plan** et corrige les
 coordonnées, puis résout le lieu si la position immédiate manquait. C'est aussi lui qui demande la
 permission de localisation au besoin. Attendre ces deux tâches figeait l'écran plusieurs secondes
-après chaque déclenchement. `expo-image-picker` reste utilisé pour l'**import galerie**.
+après chaque déclenchement. `expo-image-picker` reste utilisé pour l'**import galerie** : `pickFromLibrary` pose un voile
+d'attente (`importing`, « Veuillez patienter… » + compteur) **avant** d'ouvrir la photothèque — la
+longue attente (iOS qui prépare les fichiers choisis) a lieu **dans** `launchImageLibraryAsync`, après
+« Ajouter » ; pendant le choix, le voile est caché derrière la feuille. Levé dans un `finally`.
 `extractTakenAt()` (`src/exif.ts`) accepte donc les deux formes (`Pick<ImagePickerAsset, 'exif'>`).
 `expo-camera` est **bundlé dans Expo Go** : testable sans build ; le plugin d'`app.json` ne sert
 qu'aux builds natifs.
