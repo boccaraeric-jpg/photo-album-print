@@ -212,7 +212,9 @@ d'entrée** (ils pilotent aussi les libellés) :
 - `ExportOptions` (`src/types.ts`) : **taille** (`small`/`medium`/`large`/**`full`** = pleine page,
   légende ≤ 15 mots), fond, encadré, **liseré** (posé sur la photo, pas le support), **dateFormat**
   (`short`/`shortTime`/`long`/`full`/`none`), **dateAlign** et **textAlign** (gauche/centre/droite ;
-  `textAlign` = alignement des **pages de texte**, honoré en pro **et** familial). Le **`style`**
+  `textAlign` = alignement des **pages de texte**, honoré en pro **et** familial ; en familial il
+  aligne **aussi le commentaire** sous chaque photo — `.caption` / `align` de `renderPhotoPage` —,
+  la date gardant `dateAlign`. Le polaroïd ne force plus le centrage). Le **`style`**
   (`family`/`pro`) vient des boutons du bas. La date sous chaque photo est rendue en **minuscules**,
   taille réduite.
 - **`commentVAlign`** (`top`/`middle`/`bottom`) place le commentaire dans la bande qui lui est

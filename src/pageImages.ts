@@ -795,8 +795,13 @@ async function renderPhotoPage(
     const captionColor = whiteFrame || !dark ? CAPTION_INK : ink;
     // Date/lieu nettement lisibles (le tan clair passait inaperçu sur fond crème).
     const metaColor = !whiteFrame && dark ? META_INK_DARK : META_INK;
+    // Commentaire aligné selon « Alignement des textes » (comme `.caption`).
     const align =
-      options.frame === 'polaroid' ? TextAlign.Center : TextAlign.Left;
+      options.textAlign === 'center'
+        ? TextAlign.Center
+        : options.textAlign === 'right'
+          ? TextAlign.Right
+          : TextAlign.Left;
     // Alignement de la date/lieu selon l'option (Gauche/Centre/Droite).
     const dateAlign =
       options.dateAlign === 'center'

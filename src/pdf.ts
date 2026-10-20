@@ -518,8 +518,7 @@ function buildStyles(options: ExportOptions): string {
         .card:not(.large):not(.solo):nth-of-type(odd) { transform: rotate(-1.4deg); }
         .card:not(.large):not(.solo):nth-of-type(even) { transform: rotate(1.1deg); }
         .card.large, .card.solo { transform: none; margin-left: auto; margin-right: auto; }
-        .ph { border-radius: 0; }
-        .caption { text-align: center; }`;
+        .ph { border-radius: 0; }`;
       break;
     case 'none':
       frameCss = `
@@ -646,8 +645,11 @@ function buildStyles(options: ExportOptions): string {
   .card.solo .ph img { object-fit: contain; }
   .card.large .ph img { object-fit: contain; }
   .missing { color: var(--muted); font-style: italic; font-size: 13px; }
+  /* Commentaire aligné selon « Alignement des textes » (la date/lieu garde
+     son propre réglage, cf. .caption .date). */
   .caption {
     margin: 8px 4px 2px; line-height: ${spec.lineHeight};
+    text-align: ${options.textAlign};
     font-family: ${fam(spec.caption)}; font-weight: ${captionWeight};
     color: var(--cap-ink);
   }

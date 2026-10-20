@@ -588,6 +588,20 @@ export function ExportModal({
                   ))}
                 </View>
 
+                {/* Alignement des textes : commentaires sous les photos ET pages
+                    de texte. Juste sous la taille, là où on le cherche. */}
+                <Text style={styles.label}>{L.export.textAlignLabel}</Text>
+                <View style={styles.chips}>
+                  {ALIGN_KEYS.map((value) => (
+                    <Chip
+                      key={value}
+                      selected={options.textAlign === value}
+                      label={L.export.aligns[value]}
+                      onPress={() => setOptions((o) => ({ ...o, textAlign: value }))}
+                    />
+                  ))}
+                </View>
+
                 <Text style={styles.label}>{L.export.commentPosLabel}</Text>
                 <View style={styles.chips}>
                   {COMMENT_POS_KEYS.map((value) => (
@@ -638,17 +652,23 @@ export function ExportModal({
               </>
             )}
 
-            <Text style={styles.label}>{L.export.textAlignLabel}</Text>
-            <View style={styles.chips}>
-              {ALIGN_KEYS.map((value) => (
-                <Chip
-                  key={value}
-                  selected={options.textAlign === value}
-                  label={L.export.aligns[value]}
-                  onPress={() => setOptions((o) => ({ ...o, textAlign: value }))}
-                />
-              ))}
-            </View>
+            {/* Pro : la fiche descriptive reste à gauche, l'alignement ne vaut
+                que pour les pages de texte. */}
+            {isPro && (
+              <>
+                <Text style={styles.label}>{L.export.textAlignProLabel}</Text>
+                <View style={styles.chips}>
+                  {ALIGN_KEYS.map((value) => (
+                    <Chip
+                      key={value}
+                      selected={options.textAlign === value}
+                      label={L.export.aligns[value]}
+                      onPress={() => setOptions((o) => ({ ...o, textAlign: value }))}
+                    />
+                  ))}
+                </View>
+              </>
+            )}
           </Section>
 
           {/* Cartes : à côté des photos et page « Nos lieux » — familial
