@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type ComponentProps } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,6 +16,7 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -840,6 +841,36 @@ function Root() {
   );
 }
 
+/**
+ * Bouton « teinté » à la manière d'iOS (UIButton.Configuration.tinted) : fond
+ * légèrement coloré de l'accent, sans bordure, icône vectorielle au-dessus d'un
+ * libellé en gras sur deux lignes au plus, assombri à l'appui. Pour les actions
+ * secondaires posées côte à côte, sous le bouton principal.
+ */
+function TintedButton({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.tinted, pressed && styles.tintedPressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Ionicons name={icon} size={22} color={C.sienna} />
+      <Text style={styles.tintedText} numberOfLines={2}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 interface HomeProps {
   albums: Album[];
   photos: Photo[];
@@ -1055,18 +1086,16 @@ function HomeScreen({
         {/* Deux actions de fichier côte à côte : entrante (album reçu ou
             sauvegarde à restaurer) et sortante (sauvegarde de tout). */}
         <View style={styles.row}>
-          <Pressable
-            style={[styles.btn, styles.rowBtn, styles.btnGhost]}
+          <TintedButton
+            icon="download-outline"
+            label={L.home.importAlbum}
             onPress={onImportBundle}
-          >
-            <Text style={styles.btnGhostText}>{L.home.importAlbum}</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.btn, styles.rowBtn, styles.btnGhost]}
+          />
+          <TintedButton
+            icon="archive-outline"
+            label={L.home.backupAll}
             onPress={onBackup}
-          >
-            <Text style={styles.btnGhostText}>{L.home.backupAll}</Text>
-          </Pressable>
+          />
         </View>
         {/* Le bouton d'import restaure aussi une sauvegarde complète, ce que son
             nom ne dit pas : la marche à suivre est à un toucher. */}
@@ -2095,6 +2124,25 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   rowBtn: { flex: 1 },
+  tinted: {
+    flex: 1,
+    minHeight: 68,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(166,75,36,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  tintedPressed: { backgroundColor: 'rgba(166,75,36,0.20)' },
+  tintedText: {
+    fontFamily: F.monoBold,
+    fontSize: 13,
+    lineHeight: 17,
+    color: C.sienna,
+    textAlign: 'center',
+  },
   howTo: {
     fontFamily: F.mono,
     fontSize: 13,
