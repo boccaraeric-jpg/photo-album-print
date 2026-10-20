@@ -36,6 +36,8 @@ import {
 import { mapImagesFor } from './mapSnapshot';
 import {
   ALBUM_CREDIT,
+  LOGO_MARK_SCALE,
+  LOGO_MARK_SVG,
   CAPTION_INK,
   COMMENT_BASE,
   COMMENT_SCALE,
@@ -1302,13 +1304,42 @@ function renderMapPage(
  * pas de page de fin), au-dessus du numéro, dans le corps des valeurs.
  */
 function drawProCredit(canvas: SkCanvas, H: number): void {
-  drawText(canvas, ALBUM_CREDIT, PAD, H - PAD - 24 - 40, W - 2 * PAD, {
-    color: '#6b7280',
-    size: 20,
-    align: TextAlign.Center,
+  drawCredit(canvas, H - PAD - 24 - 40, 20, '#6b7280', 'sans');
+}
+
+/** Monogramme décodé une fois (vectoriel : redessiné net à chaque taille). */
+let logoMark: ReturnType<typeof Skia.SVG.MakeFromString> | undefined;
+
+/**
+ * « Powered by ComClic » suivi du monogramme « CC », centrés ensemble sur la
+ * page (pendant de `creditHtml` du PDF). `top` = haut de la ligne de texte.
+ */
+function drawCredit(canvas: SkCanvas, top: number, size: number, color: string, fam: FontFam) {
+  if (logoMark === undefined) {
+    try {
+      logoMark = Skia.SVG.MakeFromString(LOGO_MARK_SVG);
+    } catch {
+      logoMark = null;
+    }
+  }
+  const textW = fontFor(false, size, fam).getTextWidth(ALBUM_CREDIT);
+  const logo = logoMark ? size * LOGO_MARK_SCALE : 0;
+  const gap = logoMark ? size * 0.35 : 0;
+  const x = (W - (textW + gap + logo)) / 2;
+  drawText(canvas, ALBUM_CREDIT, x, top, textW + 4, {
+    color,
+    size,
+    align: TextAlign.Left,
     maxLines: 1,
-    letterSpacing: 1,
+    fam,
   });
+  if (!logoMark) return;
+  // Centré sur la ligne de texte, comme `align-items: center` du PDF.
+  const lineH = lineHeightFor(size);
+  canvas.save();
+  canvas.translate(x + textW + gap, top + (lineH - logo) / 2);
+  canvas.drawSvg(logoMark, logo, logo);
+  canvas.restore();
 }
 
 /**
@@ -1367,14 +1398,13 @@ function renderEndPage(
   }
 
   const metaSize = META_SIZE * k;
-  drawText(canvas, ALBUM_CREDIT, PAD, H - 30 * k - lineHeightFor(metaSize), W - 2 * PAD, {
-    color: dark ? META_INK_DARK : META_INK,
-    size: metaSize,
-    align: TextAlign.Center,
-    maxLines: 1,
-    letterSpacing: 1,
-    fam: spec.meta,
-  });
+  drawCredit(
+    canvas,
+    H - 30 * k - lineHeightFor(metaSize),
+    metaSize,
+    dark ? META_INK_DARK : META_INK,
+    spec.meta,
+  );
   return encodeSurface(surface, title, 0, 'zz-fin');
 }
 
@@ -1465,10 +1495,16 @@ export async function buildAlbumImages(
   // Les pages de texte s'intercalent dans les deux rendus (familial et pro).
   // Pro : 2 photos par page, sans taille ni fond par photo. Familial : taille
   // et fond propres à une photo (aperçu interactif) honorés page par page.
-  const pages = paginateEntries(pageSource, pro ? 'medium' : eff.photoSize, {
+  // Rapport pro : chaque photo prend sa taille de rapport (`proSize`) —
+  // petite = grille 2×2, moyenne = deux par page, grande = une par page, comme
+  // les fiches du PDF. `size` (Loisir) n'y joue aucun rôle.
+  const source = pro
+    ? pageSource.map((p) => ({ ...p, size: p.proSize ?? ('medium' as const) }))
+    : pageSource;
+  const pages = paginateEntries(source, pro ? 'medium' : eff.photoSize, {
     wide: mapIds,
     commentScale: pro ? 1 : COMMENT_SCALE[eff.commentSize],
-    perPhotoSize: !pro,
+    perPhotoSize: true,
   });
   let numbered = 0;
   for (let i = 0; i < pages.length; i++) {

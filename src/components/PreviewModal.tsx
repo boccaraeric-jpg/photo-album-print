@@ -15,15 +15,19 @@ import { ALBUM_BACKGROUND_GROUPS, BACKGROUND_GROUP_KEYS, C, F } from '../theme';
 import { useLang } from '../i18n';
 import { stripMarks } from '../richText';
 import { pageBackground } from '../paginate';
-import type { Photo, PhotoSize } from '../types';
+import type { Photo, PhotoSize, ProPhotoSize } from '../types';
 
 /** Réglages d'une entrée depuis l'aperçu ; `null` = revenir à celui de l'album. */
 export interface EntryPatch {
   size?: PhotoSize | null;
+  /** Taille dans le rapport professionnel (`Photo.proSize`). */
+  proSize?: ProPhotoSize | null;
   pageBg?: string | null;
 }
 
 const SIZE_KEYS: PhotoSize[] = ['small', 'medium', 'large', 'full'];
+// Rapport pro : pas de pleine page ni de fond (fiches sur blanc).
+const PRO_SIZE_KEYS: ProPhotoSize[] = ['small', 'medium', 'large'];
 const EDIT_SCHEME = 'comclic-edit://e/';
 
 interface Props {
@@ -47,6 +51,8 @@ interface Props {
    * réglage d'une entrée touchée. Absent → aperçu en lecture seule (pro).
    */
   entries?: Photo[];
+  /** Rapport professionnel : seule la taille se règle (`proSize`), pas le fond. */
+  pro?: boolean;
   albumSize?: PhotoSize;
   /** Fond de l'album : la pastille en cours quand la page n'a pas le sien. */
   albumBg?: string;
@@ -74,6 +80,7 @@ export function PreviewModal({
   onEditLayout,
   onSend,
   entries,
+  pro = false,
   albumSize = 'medium',
   albumBg,
   onEditEntry,
@@ -123,7 +130,13 @@ export function PreviewModal({
   }, [hidden, html]);
 
   // Valeurs réellement en vigueur pour l'entrée touchée (affichées en couleur).
-  const currentSize: PhotoSize = selected?.size ?? albumSize;
+  const currentSize: PhotoSize = pro
+    ? (selected?.proSize ?? 'medium')
+    : (selected?.size ?? albumSize);
+  const sizeKeys: PhotoSize[] = pro ? PRO_SIZE_KEYS : SIZE_KEYS;
+  const sizeChosen = pro ? !!selected?.proSize : !!selected?.size;
+  const setSize = (size: PhotoSize | null) =>
+    edit(pro ? { proSize: size as ProPhotoSize | null } : { size });
   const currentBg = pageBg ?? albumBg;
 
   return (
@@ -135,7 +148,11 @@ export function PreviewModal({
           </Pressable>
           <Text style={styles.title}>{L.preview.title}</Text>
           <Text style={styles.subtitle}>
-            {editable ? L.preview.subtitleEditable : L.preview.subtitle}
+            {editable
+              ? pro
+                ? L.preview.subtitleEditablePro
+                : L.preview.subtitleEditable
+              : L.preview.subtitle}
           </Text>
         </View>
 
@@ -207,26 +224,32 @@ export function PreviewModal({
                 <>
                   <Text style={styles.panelLabel}>{L.preview.entrySize}</Text>
                   <View style={styles.chips}>
-                    {SIZE_KEYS.map((size) => (
+                    {sizeKeys.map((size) => (
                       <Chip
                         key={size}
                         label={L.export.sizes[size]}
                         selected={currentSize === size}
-                        onPress={() => size !== currentSize && edit({ size })}
+                        onPress={() => size !== currentSize && setSize(size)}
                       />
                     ))}
                   </View>
-                  {selected.size ? (
-                    <Pressable onPress={() => edit({ size: null })} hitSlop={8}>
+                  {sizeChosen ? (
+                    <Pressable onPress={() => setSize(null)} hitSlop={8}>
                       <Text style={styles.reset}>
-                        {L.preview.resetSize(L.export.sizes[albumSize])}
+                        {pro
+                          ? L.preview.resetSizePro
+                          : L.preview.resetSize(L.export.sizes[albumSize])}
                       </Text>
                     </Pressable>
                   ) : (
-                    <Text style={styles.hint}>{L.preview.sizeIsAlbum}</Text>
+                    <Text style={styles.hint}>
+                      {pro ? L.preview.sizeIsDefaultPro : L.preview.sizeIsAlbum}
+                    </Text>
                   )}
                 </>
               )}
+              {!pro && (
+                <>
               <Text style={styles.panelLabel}>{L.preview.entryBg}</Text>
               {BACKGROUND_GROUP_KEYS.map((group) => (
                 <View key={group} style={styles.bgGroup}>
@@ -261,6 +284,8 @@ export function PreviewModal({
                 </Pressable>
               ) : (
                 <Text style={styles.hint}>{L.preview.bgIsAlbum}</Text>
+              )}
+                </>
               )}
             </ScrollView>
           </View>

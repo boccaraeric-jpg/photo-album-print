@@ -1500,9 +1500,9 @@ onBack,
           defaultCoverId,
           lang,
           scatterIds,
-          // Aperçu familial interactif : toucher une photo règle sa taille et
-          // le fond de sa page. Jamais dans le PDF envoyé.
-          options.style === 'family',
+          // Aperçu interactif : toucher une photo règle sa taille (et, en
+          // Loisir, le fond de sa page). Jamais dans le PDF envoyé.
+          true,
         );
         previewSeq.current++;
         setPreviewFocus(null);
@@ -1525,6 +1525,9 @@ onBack,
       const apply = (p: Photo): Photo => {
         let next = p;
         if (p.id === id && 'size' in patch) next = { ...next, size: patch.size ?? undefined };
+        if (p.id === id && 'proSize' in patch) {
+          next = { ...next, proSize: patch.proSize ?? undefined };
+        }
         if ('pageBg' in patch) {
           // Le fond est commun à la page : la photo touchée le porte, ses
           // voisines de page perdent le leur (sinon il l'emporterait).
@@ -1887,10 +1890,11 @@ onBack,
           setExportVisible(true);
         }}
         onSend={chooseFormat}
-        entries={exportOptions.style === 'family' ? orderedPhotos : undefined}
+        entries={orderedPhotos}
+        pro={exportOptions.style === 'pro'}
         albumSize={exportOptions.photoSize}
         albumBg={exportOptions.background}
-        onEditEntry={exportOptions.style === 'family' ? editPreviewEntry : undefined}
+        onEditEntry={editPreviewEntry}
         focusId={previewFocus}
         refreshing={previewRefreshing}
       />

@@ -481,6 +481,8 @@ export function ExportModal({
               )}
 
               <Text style={styles.label}>{L.export.bgLabel}</Text>
+              {/* Réglage d'ALBUM : chaque page se recolore ensuite dans l'aperçu. */}
+              <Text style={[styles.note, styles.bgHint]}>{L.export.bgHint}</Text>
               {BACKGROUND_GROUP_KEYS.map((group) => (
                 <View key={group} style={styles.bgGroup}>
                   <Text style={styles.bgGroupLabel}>{L.export.bgGroups[group]}</Text>
@@ -1149,6 +1151,7 @@ const styles = StyleSheet.create({
     borderColor: C.sienna,
   },
   bgGroup: { marginBottom: 12 },
+  bgHint: { marginTop: -4, marginBottom: 12 },
   bgGroupLabel: { fontFamily: F.mono, fontSize: 12, color: C.muted, marginBottom: 6 },
   actions: {
     flexDirection: 'row',

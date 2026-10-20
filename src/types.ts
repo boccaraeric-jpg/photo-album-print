@@ -17,6 +17,13 @@ export interface Adjustments {
  */
 export type PhotoSize = 'small' | 'medium' | 'large' | 'full';
 
+/**
+ * Taille d'une photo dans le rapport professionnel : petite (deux fiches côte à
+ * côte), moyenne (défaut) ou grande (une fiche par page). Distincte de
+ * `Photo.size` : régler le rapport ne doit pas dérégler l'album Loisir.
+ */
+export type ProPhotoSize = 'small' | 'medium' | 'large';
+
 /** Support de la photo (mutuellement exclusif). */
 export type FrameStyle = 'card' | 'border' | 'polaroid' | 'none';
 
@@ -151,6 +158,8 @@ export interface Photo {
    * — familial seulement. Une page ne mélange pas deux tailles.
    */
   size?: PhotoSize;
+  /** Taille dans le rapport professionnel (absent = moyenne), réglée dans l'aperçu. */
+  proSize?: ProPhotoSize;
   /**
    * Fond de la page qui porte cette photo (hex 6 chiffres), choisi dans
    * l'aperçu ; sinon le fond de l'album. Rattaché à la photo et non à un numéro

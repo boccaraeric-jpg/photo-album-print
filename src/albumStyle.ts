@@ -134,6 +134,28 @@ export const PHOTO_RADIUS: Record<FrameStyle, number> = {
  */
 export const ALBUM_CREDIT = 'Powered by ComClic';
 
+/**
+ * Monogramme « CC » de ComClic posé après `ALBUM_CREDIT` : même dessin que
+ * `design/logo-mark.svg` (cercles de visée + deux C en dégradé), sans fond.
+ * Vectoriel, donc net à toute taille : SVG en ligne dans le PDF, `drawSvg`
+ * côté Skia. Le dégradé porte un identifiant unique au document.
+ */
+export const LOGO_MARK_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">' +
+  '<defs><linearGradient id="ccmark" x1="0" y1="0" x2="0" y2="1">' +
+  '<stop offset="0" stop-color="#C4602C"/><stop offset="1" stop-color="#8E3F1B"/>' +
+  '</linearGradient></defs>' +
+  '<g transform="translate(512,512) scale(1.12) translate(-512,-512)">' +
+  '<g stroke="#B9764F" fill="none" opacity="0.75">' +
+  '<circle cx="512" cy="512" r="392" stroke-width="20"/>' +
+  '<circle cx="512" cy="512" r="300" stroke-width="14"/></g>' +
+  '<g fill="none" stroke="url(#ccmark)" stroke-width="84" stroke-linecap="round">' +
+  '<path d="M445 385 A 166 166 0 1 0 445 639"/>' +
+  '<path d="M793 385 A 166 166 0 1 0 793 639"/></g></g></svg>';
+
+/** Taille du monogramme rapportée au corps de la mention. */
+export const LOGO_MARK_SCALE = 1.9;
+
 /** Liseré blanc posé sur la photo et sur sa carte (points A4). */
 export const LISERET = { width: 6, radius: 2 };
 

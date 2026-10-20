@@ -6,6 +6,7 @@ import type {
   PageFormat,
   Photo,
   PhotoSize,
+  ProPhotoSize,
 } from './types';
 import { readPrintBase64 } from './photoFiles';
 import { fileDateStamp, formatPhotoDate, photoDate } from './dateFormat';
@@ -35,6 +36,8 @@ import {
   CAPTION_INK,
   COMMENT_BASE,
   ALBUM_CREDIT,
+  LOGO_MARK_SCALE,
+  LOGO_MARK_SVG,
   COMMENT_SCALE,
   commentShrink,
   coverPicks,
@@ -746,6 +749,7 @@ function buildStyles(options: ExportOptions): string {
     font-family: ${fam(spec.meta)}; font-weight: ${regular(spec.meta)};
     font-size: ${META_SIZE}px; letter-spacing: 0.6px; color: var(--meta-ink);
   }
+  ${CREDIT_LOGO_CSS}
 
   /* --- Carte à côté d'une photo (MAP_SHARE / MAP_GAP / FULL_MAP d'albumMap.ts) --- */
   .grid4 .card.wide { width: 100%; }
@@ -840,7 +844,7 @@ export async function buildAlbumHtml(
   // description). Réglages honorés en pro : encadrement, format et position de
   // la date, alignement des pages de texte. Le reste reste imposé.
   if (options.style === 'pro') {
-    return buildProDocument(items, title, options, lang);
+    return buildProDocument(items, title, options, lang, interactive);
   }
 
   // Cartes à côté des photos : images Apple Plans (créées une fois, gardées
@@ -1001,7 +1005,7 @@ export async function buildAlbumHtml(
         <section class="sheet end">
           <p class="orn">✦</p>
           <p>${escapeHtml(subtitle)}</p>
-          <p class="credit">${escapeHtml(ALBUM_CREDIT)}</p>
+          <p class="credit">${creditHtml()}</p>
         </section>
       </body>
     </html>`;
@@ -1019,6 +1023,19 @@ function printScale(format: PageFormat): string {
   @page { size: ${print.width.toFixed(2)}pt ${print.height.toFixed(2)}pt; margin: 0; }
   html { zoom: ${zoom.toFixed(5)}; }`;
 }
+
+/**
+ * Mention de l'app suivie du monogramme « CC » (SVG en ligne, à la hauteur de
+ * `LOGO_MARK_SCALE` fois le corps du texte, centré sur sa ligne).
+ */
+function creditHtml(): string {
+  const logo = LOGO_MARK_SVG.replace('<svg ', '<svg class="credit-logo" aria-hidden="true" ');
+  return `${escapeHtml(ALBUM_CREDIT)}${logo}`;
+}
+
+const CREDIT_LOGO_CSS = `
+  .credit { display: flex; align-items: center; justify-content: center; gap: 0.35em; }
+  .credit-logo { width: ${LOGO_MARK_SCALE}em; height: ${LOGO_MARK_SCALE}em; flex: 0 0 auto; }`;
 
 /** Compteur des découpes SVG : plusieurs cartes cohabitent dans le même document. */
 let svgClipSeq = 0;
@@ -1107,12 +1124,20 @@ function proMeta(label: string, value: string, cls = '', rich = false): string {
   return `<div class="row ${cls}"><dt>${label}</dt><dd>${body}</dd></div>`;
 }
 
+/**
+ * Hauteur de la vignette d'une fiche pro selon sa taille. Grande : la fiche
+ * remplit seule sa page (vignette + fiche descriptive). Petite : deux fiches
+ * côte à côte sur une ligne.
+ */
+const PRO_FRAME_H: Record<ProPhotoSize, number> = { small: 190, medium: 300, large: 470 };
+
 function proEntryHtml(
   item: Item,
   number: number,
   dateFormat: ExportOptions['dateFormat'],
   showPlace: boolean,
   lang: Lang,
+  interactive = false,
 ): string {
   const { photo, src } = item;
   const D = dict(lang).doc;
@@ -1127,15 +1152,17 @@ function proEntryHtml(
   const img = src
     ? `<img src="${src}" />`
     : `<span class="missing">${D.imageUnavailable}</span>`;
-  return `
-    <article class="entry">
+  const body = `
       <div class="num">${D.photoNo(number)}</div>
       <div class="frame">${img}</div>
       <dl class="meta">
         ${place ? proMeta(D.place, place) : ''}
         ${date ? proMeta(D.date, date, 'date') : ''}
         ${proMeta(D.description, desc, '', true)}
-      </dl>
+      </dl>`;
+  return `
+    <article class="entry sz-${photo.proSize ?? 'medium'}" id="e-${escapeHtml(photo.id)}">
+      ${interactive ? `<a class="edit" href="${editHref(photo.id)}">${body}</a>` : body}
     </article>`;
 }
 
@@ -1155,6 +1182,8 @@ function buildProDocument(
   title: string,
   options: ExportOptions,
   lang: Lang,
+  /** Aperçu : fiches cliquables pour régler la taille de la photo. */
+  interactive = false,
 ): string {
   const { textAlign, dateAlign, dateFormat, showPlace } = options;
   // Les photos sont numérotées ; les pages de texte s'intercalent en pleine page.
@@ -1163,7 +1192,7 @@ function buildProDocument(
     .map((it) =>
       it.photo.kind === 'text'
         ? proTextPageHtml(it.photo)
-        : proEntryHtml(it, ++photoNo, dateFormat, showPlace, lang),
+        : proEntryHtml(it, ++photoNo, dateFormat, showPlace, lang, interactive),
     )
     .join('');
   const today = new Date().toLocaleDateString(localeTag(lang), {
@@ -1194,13 +1223,22 @@ function buildProDocument(
     .cover .row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid #eef0f3; }
     .cover dt { width: 150px; color: #6b7280; margin: 0; }
     .cover dd { margin: 0; font-weight: 600; }
-    .pages { padding: 40px 56px; }
-    .entry { page-break-inside: avoid; margin-bottom: 28px; }
+    /* Fiches en flux. Les petites se posent deux par ligne (inline-block, que
+       le moteur d'impression ne coupe jamais) : la gouttière vient de la marge
+       droite de chaque fiche, compensée par le retrait droit du conteneur. */
+    .pages { padding: 40px 36px 40px 56px; font-size: 0; }
+    .entry { page-break-inside: avoid; margin: 0 20px 28px 0; font-size: 12px; }
+    .entry.sz-small { display: inline-block; vertical-align: top; width: calc(50% - 20.5px); }
+    .pro-textpage { margin-right: 20px; }
+    a.edit { display: block; color: inherit; text-decoration: none; }
     .num { font-size: 13px; font-weight: 700; color: #111827; margin-bottom: 8px;
       letter-spacing: 0.5px; }
-    .frame { height: 300px; overflow: hidden;
+    .frame { height: ${PRO_FRAME_H.medium}px; overflow: hidden;
       display: flex; align-items: center; justify-content: center; ${frameCss} }
     .frame img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+    .sz-small .frame { height: ${PRO_FRAME_H.small}px; }
+    .sz-small .meta dt { width: 70px; }
+    .sz-large .frame { height: ${PRO_FRAME_H.large}px; }
     .missing { color: #9ca3af; font-style: italic; }
     .meta { margin: 12px 0 0; }
     .meta .row { display: flex; gap: 12px; padding: 5px 0; border-bottom: 1px solid #f1f2f4; }
@@ -1218,7 +1256,8 @@ function buildProDocument(
        sur une page blanche. */
     .pages > .pro-textpage:last-child { page-break-after: auto; }
     .credit { margin: 36px 0 0; text-align: center; font-size: 12px;
-      letter-spacing: 0.6px; color: #6b7280; page-break-inside: avoid; }`;
+      letter-spacing: 0.6px; color: #6b7280; page-break-inside: avoid; }
+    ${CREDIT_LOGO_CSS}`;
 
   const D = dict(lang).doc;
   return `<!DOCTYPE html>
@@ -1239,7 +1278,7 @@ function buildProDocument(
           </dl>
         </section>
         <main class="pages">${entries}</main>
-        <p class="credit">${escapeHtml(ALBUM_CREDIT)}</p>
+        <p class="credit">${creditHtml()}</p>
       </body>
     </html>`;
 }

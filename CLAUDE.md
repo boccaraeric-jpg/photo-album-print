@@ -347,6 +347,15 @@ d'entrée** (ils pilotent aussi les libellés) :
   page de fin : la mention suit sa dernière fiche (`.credit` de `buildProDocument`, 12 px, gris des
   intitulés ; une page de texte finale perd son saut de page pour ne pas la laisser seule) et, en
   images, s'inscrit au-dessus du numéro de la dernière page (`drawProCredit`, paramètre `credit`).
+- **Logo après la mention** : `LOGO_MARK_SVG` (`albumStyle.ts`, copie de `design/logo-mark.svg` à garder
+  synchrone) — SVG en ligne dans le PDF (`creditHtml`, `.credit` en flex), `Skia.SVG.MakeFromString` +
+  `drawSvg` dans les images (`drawCredit`). Hauteur = `LOGO_MARK_SCALE` × corps du texte.
+- **Taille des photos du rapport pro** (`Photo.proSize`, **distinct** de `size` du Loisir) : réglée
+  dans l'aperçu (aperçu désormais interactif dans les deux styles ; en pro, taille seule — prop `pro`
+  de `PreviewModal`, pas de fond). PDF : vignette `PRO_FRAME_H` (190/300/470), les **petites** en
+  `inline-block` deux par ligne (jamais de flex : la fragmentation d'impression le coupe mal).
+  Skia : `proSize` mappé sur `size` avant `paginateEntries` (petite = grille 2×2, grande = 1/page).
+  Pas porté par la sauvegarde ni le `.comclic`.
 - Contraintes de mise en page PDF **à ne pas casser** : dimensionner en **px = points** (A4
   595×842), **jamais de `vh`**, **hauteurs fixes** en familial, et
   `print-color-adjust: exact` (sinon iOS supprime fonds/ombres).
