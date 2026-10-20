@@ -50,7 +50,9 @@ import {
   SCATTER_TITLE,
   seedOf,
   TYPE_SPECS,
+  LISERET,
   mutedInk,
+  PHOTO_RADIUS,
   type FontFam,
 } from './albumStyle';
 import {
@@ -501,12 +503,12 @@ function buildStyles(options: ExportOptions): string {
       frameCss = `
         .card { background: #fff; border-radius: 16px; padding: 10px;
           box-shadow: 0 8px 22px var(--shadow); }
-        .ph { border-radius: 10px; }`;
+        .ph { border-radius: ${PHOTO_RADIUS.card}px; }`;
       break;
     case 'border':
       frameCss = `
         .card { border: 2px solid var(--border); border-radius: 16px; padding: 10px; }
-        .ph { border-radius: 8px; }`;
+        .ph { border-radius: ${PHOTO_RADIUS.border}px; }`;
       break;
     case 'polaroid':
       // Cadre blanc épais, façon scrapbook. Les photos empilées (2 ou 4/page)
@@ -518,12 +520,12 @@ function buildStyles(options: ExportOptions): string {
         .card:not(.large):not(.solo):nth-of-type(odd) { transform: rotate(-1.4deg); }
         .card:not(.large):not(.solo):nth-of-type(even) { transform: rotate(1.1deg); }
         .card.large, .card.solo { transform: none; margin-left: auto; margin-right: auto; }
-        .ph { border-radius: 0; }`;
+        .ph { border-radius: ${PHOTO_RADIUS.polaroid}px; }`;
       break;
     case 'none':
       frameCss = `
         .card { padding: 0; }
-        .ph { border-radius: 14px; }`;
+        .ph { border-radius: ${PHOTO_RADIUS.none}px; }`;
       break;
   }
 
@@ -707,7 +709,11 @@ function buildStyles(options: ExportOptions): string {
     display: flex; align-items: center; justify-content: center;
     border-radius: inherit;
   }
-  .ph-map { flex: ${MAP_SHARE} 1 0; min-width: 0; position: relative; overflow: hidden; height: 100%; }
+  /* La carte prend les coins arrondis de la photo (hérités de .ph). */
+  .ph-map {
+    flex: ${MAP_SHARE} 1 0; min-width: 0; position: relative; overflow: hidden; height: 100%;
+    border-radius: inherit;
+  }
   /* Sélecteurs plus précis que .card.large .ph img et le liseré (.ph img) :
      la carte se cadre toujours « cover », sans bordure. */
   .card .ph .ph-map img.mapimg, .ph-map svg.mm, .full-img .full-map img.mapimg, .full-map svg.mm {
@@ -731,10 +737,14 @@ function buildStyles(options: ExportOptions): string {
             sa taille réelle et porte une bordure blanche + une légère ombre pour
             rester visible sur tout fond. overflow:visible pour ne pas rogner
             l'ombre. Se combine avec n'importe quel support. */
-         .ph { background: transparent; overflow: visible; }
+         .ph, .ph-photo { background: transparent; overflow: visible; }
          .ph img { width: auto; height: auto; max-width: 100%; max-height: 100%;
-           box-sizing: border-box; border-radius: 2px;
-           border: 6px solid #ffffff;
+           box-sizing: border-box; border-radius: ${LISERET.radius}px;
+           border: ${LISERET.width}px solid #ffffff;
+           box-shadow: 0 2px 8px var(--shadow); }
+         /* La carte d'une photo porte le même liseré que la photo. */
+         .ph-map { box-sizing: border-box; border-radius: ${LISERET.radius}px;
+           border: ${LISERET.width}px solid #ffffff;
            box-shadow: 0 2px 8px var(--shadow); }`
       : ''
   }

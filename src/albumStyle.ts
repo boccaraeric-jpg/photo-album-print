@@ -1,4 +1,4 @@
-import type { CommentSize, CoverStyle, Photo, Typeface } from './types';
+import type { CommentSize, CoverStyle, FrameStyle, Photo, Typeface } from './types';
 
 /*
  * Typographie et couvertures du rendu familial — source unique partagée par les
@@ -114,6 +114,21 @@ export function commentShrink(baseSize: number, t: Typeface, size: CommentSize):
   const spec = TYPE_SPECS[t];
   return Math.round(2 * baseSize * spec.captionScale * (COMMENT_SCALE[size] - 1) * spec.lineHeight);
 }
+
+/**
+ * Arrondi des coins d'une photo et de sa carte selon l'encadrement (points A4),
+ * commun aux deux moteurs. Avec le liseré, photo et carte prennent le coin
+ * presque droit du tirage (`LISERET`).
+ */
+export const PHOTO_RADIUS: Record<FrameStyle, number> = {
+  card: 10,
+  border: 8,
+  polaroid: 0,
+  none: 14,
+};
+
+/** Liseré blanc posé sur la photo et sur sa carte (points A4). */
+export const LISERET = { width: 6, radius: 2 };
 
 /** Familles réellement employées (le PDF n'embarque que celles-là). */
 export function famsUsed(t: Typeface): FontFam[] {

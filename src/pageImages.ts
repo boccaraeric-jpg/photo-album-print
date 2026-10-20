@@ -52,7 +52,9 @@ import {
   SCATTER_TITLE,
   seedOf,
   TYPE_SPECS,
+  LISERET,
   mutedInk,
+  PHOTO_RADIUS,
   type FontFam,
 } from './albumStyle';
 import { effectiveFormat, PAGE_FORMATS, pageHeight } from './pageFormat';
@@ -436,6 +438,8 @@ function drawContainImage(
   y: number,
   w: number,
   h: number,
+  /** Arrondi des coins de la photo (px), comme `.ph img` du PDF. */
+  radius = 0,
 ): Rect | null {
   if (!encoded) return null;
   const iw = encoded.width();
@@ -447,12 +451,17 @@ function drawContainImage(
   const dy = y + (h - dh) / 2;
   const paint = Skia.Paint();
   paint.setAntiAlias(true);
+  if (radius > 0) {
+    canvas.save();
+    canvas.clipRRect(rrect(dx, dy, dw, dh, radius), ClipOp.Intersect, true);
+  }
   canvas.drawImageRect(
     encoded,
     Skia.XYWHRect(0, 0, iw, ih),
     Skia.XYWHRect(dx, dy, dw, dh),
     paint,
   );
+  if (radius > 0) canvas.restore();
   return { x: dx, y: dy, w: dw, h: dh };
 }
 
@@ -766,30 +775,33 @@ async function renderPhotoPage(
     const gap = MAP_GAP * (W / COVER_W);
     const mapW = hasMap ? (imgW - gap) * MAP_SHARE : 0;
     const photoW = hasMap ? imgW - gap - mapW : imgW;
-    if (hasMap) {
-      drawMiniMap(canvas, photo, mapImages[i], imgX + photoW + gap, imgY, mapW, imgH);
-    }
-    // « contain » : photo entière, non rognée (comme le PDF).
-    const drawn = drawContainImage(canvas, images[i], imgX, imgY, photoW, imgH);
-
-    // Liseré BLANC autour de la photo (+ fin contour extérieur pour la définition).
-    if (options.liseret && drawn) {
+    // Coins arrondis de la photo et de sa carte : ceux de l'encadrement, ou
+    // le coin presque droit du liseré (`PHOTO_RADIUS`, `LISERET`, comme le PDF).
+    const radius = (options.liseret ? LISERET.radius : PHOTO_RADIUS[options.frame]) * k;
+    // Liseré BLANC autour d'un rectangle (+ fin contour extérieur pour la
+    // définition) : la photo, et sa carte qui le porte aussi.
+    const drawLiseret = (rect: Rect) => {
       const white = Skia.Paint();
       white.setAntiAlias(true);
       white.setStyle(PaintStyle.Stroke);
       white.setStrokeWidth(12);
       white.setColor(Skia.Color('#ffffff'));
-      canvas.drawRRect(rrect(drawn.x, drawn.y, drawn.w, drawn.h, 3), white);
+      canvas.drawRRect(rrect(rect.x, rect.y, rect.w, rect.h, 3), white);
       const edge = Skia.Paint();
       edge.setAntiAlias(true);
       edge.setStyle(PaintStyle.Stroke);
       edge.setStrokeWidth(1.5);
       edge.setColor(Skia.Color(dark ? '#5a5348' : '#b9ac93'));
-      canvas.drawRRect(
-        rrect(drawn.x - 6, drawn.y - 6, drawn.w + 12, drawn.h + 12, 4),
-        edge,
-      );
+      canvas.drawRRect(rrect(rect.x - 6, rect.y - 6, rect.w + 12, rect.h + 12, 4), edge);
+    };
+    if (hasMap) {
+      const mapRect = { x: imgX + photoW + gap, y: imgY, w: mapW, h: imgH };
+      drawMiniMap(canvas, photo, mapImages[i], mapRect.x, mapRect.y, mapRect.w, mapRect.h, radius);
+      if (options.liseret) drawLiseret(mapRect);
     }
+    // « contain » : photo entière, non rognée (comme le PDF).
+    const drawn = drawContainImage(canvas, images[i], imgX, imgY, photoW, imgH, radius);
+    if (options.liseret && drawn) drawLiseret(drawn);
 
     // Légende (commentaire tronqué + date · lieu) sous la photo.
     const captionColor = whiteFrame || !dark ? CAPTION_INK : ink;
@@ -1220,11 +1232,14 @@ function drawMiniMap(
   y: number,
   w: number,
   h: number,
+  /** Arrondi des coins (px) : celui de la photo voisine. */
+  radius = 0,
 ): void {
   const c = photoCoords(photo);
   if (!c) return;
   canvas.save();
-  canvas.clipRect(Skia.XYWHRect(x, y, w, h), ClipOp.Intersect, true);
+  if (radius > 0) canvas.clipRRect(rrect(x, y, w, h, radius), ClipOp.Intersect, true);
+  else canvas.clipRect(Skia.XYWHRect(x, y, w, h), ClipOp.Intersect, true);
   if (image) {
     drawCoverImage(canvas, image, x, y, w, h, 0);
   } else {

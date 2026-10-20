@@ -332,6 +332,9 @@ d'entrée** (ils pilotent aussi les libellés) :
   **Aucun fond dans la case photo** (`.ph`, `.ph-photo`) : un portrait dans une case horizontale se pose
   sur le cadre ou la page ; l'ancien aplat gris (`--ph-bg`) « salissait » le rendu (retour testeur).
   Skia n'en a jamais eu.
+  **Carte = photo** : mêmes coins arrondis (`PHOTO_RADIUS` par encadrement, `albumStyle.ts`) et même
+  liseré (`LISERET`) que la photo voisine, dans les deux moteurs — Skia arrondit aussi les photos
+  (`drawContainImage(..., radius)`, `drawMiniMap(..., radius)`), ce qu'il ne faisait pas.
 - Contraintes de mise en page PDF **à ne pas casser** : dimensionner en **px = points** (A4
   595×842), **jamais de `vh`**, **hauteurs fixes** en familial, et
   `print-color-adjust: exact` (sinon iOS supprime fonds/ombres).
