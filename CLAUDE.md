@@ -327,6 +327,9 @@ d'entrée** (ils pilotent aussi les libellés) :
   de hauteur fixe et que les tailles de `sizeCss` tiennent dans la page) ; numéro en pied hors flux ;
   rangée incomplète de la grille centrée. Pendant Skia : `offsetY` / `offsetX` de `renderPhotoPage`.
   Le pro coule en haut de page, dans les deux moteurs.
+  **Aucun fond dans la case photo** (`.ph`, `.ph-photo`) : un portrait dans une case horizontale se pose
+  sur le cadre ou la page ; l'ancien aplat gris (`--ph-bg`) « salissait » le rendu (retour testeur).
+  Skia n'en a jamais eu.
 - Contraintes de mise en page PDF **à ne pas casser** : dimensionner en **px = points** (A4
   595×842), **jamais de `vh`**, **hauteurs fixes** en familial, et
   `print-color-adjust: exact` (sinon iOS supprime fonds/ombres).

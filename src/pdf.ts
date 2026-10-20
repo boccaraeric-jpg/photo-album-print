@@ -420,7 +420,6 @@ function themeVars(bg: string, frame: ExportOptions['frame']): string {
     '--cap-ink': whiteFrame ? CAPTION_INK : dark ? ink : CAPTION_INK,
     '--meta-ink': !whiteFrame && dark ? META_INK_DARK : META_INK,
     '--full-ink': dark ? ink : CAPTION_INK,
-    '--ph-bg': dark ? 'rgba(255,255,255,0.06)' : 'rgba(31,29,26,0.05)',
     '--border': dark ? 'rgba(243,239,231,0.55)' : 'rgba(31,29,26,0.4)',
     '--shadow': dark ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.24)',
   };
@@ -630,12 +629,19 @@ function buildStyles(options: ExportOptions): string {
   .grid4 { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
   .grid4 .card { width: calc(50% - 6px); margin-bottom: 4px; }
   ${frameCss}
+  /* Case photo sans fond : une photo qui n'a pas les proportions de sa case
+     (portrait dans une case horizontale…) se pose au centre, sur le fond de
+     la carte ou de la page. Un aplat gris comblait le vide et salissait la
+     mise en page. L'image prend sa taille réelle (bornée par la case) : les
+     coins arrondis tombent sur la photo elle-même. */
   .ph {
     overflow: hidden;
     display: flex; align-items: center; justify-content: center;
-    background: var(--ph-bg);
   }
-  .ph img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .ph img {
+    width: auto; height: auto; max-width: 100%; max-height: 100%;
+    display: block; border-radius: inherit;
+  }
   .card.solo { max-width: 460px; }
   .card.solo .ph img { object-fit: contain; }
   .card.large .ph img { object-fit: contain; }
@@ -698,7 +704,6 @@ function buildStyles(options: ExportOptions): string {
     flex: ${1 - MAP_SHARE} 1 0; min-width: 0; height: 100%; overflow: hidden;
     display: flex; align-items: center; justify-content: center;
     border-radius: inherit;
-    background: var(--ph-bg);
   }
   .ph-map { flex: ${MAP_SHARE} 1 0; min-width: 0; position: relative; overflow: hidden; height: 100%; }
   /* Sélecteurs plus précis que .card.large .ph img et le liseré (.ph img) :
