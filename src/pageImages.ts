@@ -585,13 +585,29 @@ async function renderPhotoPage(
   const slots =
     !pro && cols === 2 ? wideSlots(group, new Set(maps.keys())) : null;
 
+  // Photos centrées sur la page (comme le PDF, `.sheet.photos`) : les rangées
+  // occupées se centrent en hauteur, et une rangée incomplète (petite photo
+  // seule, 3ᵉ photo d'une grille) se centre en largeur.
+  const slotOf = (i: number): [number, number] => (slots ? slots[i] : [i, 1]);
+  const rowSpan = new Map<number, number>();
+  for (let i = 0; i < group.length; i++) {
+    const [slot, span] = slotOf(i);
+    const r = Math.floor(slot / cols);
+    rowSpan.set(r, (rowSpan.get(r) ?? 0) + span);
+  }
+  const usedRows = Math.max(1, ...[...rowSpan.keys()].map((r) => r + 1));
+  // Le rapport pro coule en haut de page, comme son PDF.
+  const offsetY = pro ? 0 : ((rows - usedRows) * (cellH + gapY)) / 2;
+  const offsetX = (r: number) =>
+    pro ? 0 : ((cols - (rowSpan.get(r) ?? cols)) * (cellW + gapX)) / 2;
+
   for (let i = 0; i < group.length; i++) {
     const photo = group[i];
-    const slot = slots ? slots[i][0] : i;
+    const slot = slotOf(i)[0];
     const c = slot % cols;
     const r = Math.floor(slot / cols);
-    const cellX = PAD + c * (cellW + gapX);
-    const cellY = PAD + r * (cellH + gapY);
+    const cellX = PAD + offsetX(r) + c * (cellW + gapX);
+    const cellY = PAD + offsetY + r * (cellH + gapY);
     // Largeur de la case : deux colonnes pour une photo avec carte en grille.
     const cw = slots && slots[i][1] === 2 ? contentW : cellW;
 

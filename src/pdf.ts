@@ -306,7 +306,7 @@ function pageHtml(
   const body = perPage === 4 && !solo ? `<div class="grid4">${figures}</div>` : figures;
   const paint = paintAttrs(pageBackground(group.map((it) => it.photo)), ctx.frame);
   return `
-    <section class="sheet sz-${size}${paint.cls}"${paint.style}>
+    <section class="sheet photos sz-${size}${paint.cls}"${paint.style}>
       ${body}
       <p class="footer"><span>${pageNo}</span></p>
     </section>`;
@@ -614,7 +614,20 @@ function buildStyles(options: ExportOptions): string {
   }
 
   /* --- Pages photo : hauteurs fixes (par taille, cf. sizeCss) --- */
-  .grid4 { display: flex; flex-wrap: wrap; gap: 12px; }
+  /* Photos centrées sur la page, quelle que soit leur taille : la feuille a la
+     hauteur exacte de la page, le bloc de photos s'y centre entre le haut et
+     le numéro (posé en pied, hors du flux). La hauteur fixe garantit qu'aucun
+     contenu ne glisse sur la page suivante (cf. tailles de sizeCss). */
+  .sheet.photos {
+    height: ${pageH}px; overflow: hidden; position: relative;
+    padding: 24px 28px 48px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .sheet.photos > .card:last-of-type { margin-bottom: 0; }
+  .sheet.photos .footer { position: absolute; left: 0; right: 0; bottom: 22px; margin: 0; }
+  .card.solo, .card.large { margin-left: auto; margin-right: auto; width: 100%; }
+  /* Grille des petites : une rangée incomplète se centre aussi. */
+  .grid4 { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
   .grid4 .card { width: calc(50% - 6px); margin-bottom: 4px; }
   ${frameCss}
   .ph {

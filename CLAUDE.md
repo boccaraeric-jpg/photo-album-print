@@ -322,8 +322,13 @@ d'entrée** (ils pilotent aussi les libellés) :
   `expo-print`) — 16 × 21 cm = 453,5 × 595,3 pt ; 780 et non 781, sinon une fraction de point déborde
   en page blanche. Images Skia : 1240 px de large, `imageH` de haut. Contrôlé sous Chrome (taille et
   nombre de pages) ; ⚠️ le `zoom` à l'impression iOS reste à confirmer sur appareil.
+- **Photos centrées sur la page** (familial) : `.sheet.photos` a la hauteur exacte de la page et
+  centre le bloc en flex (seule exception au « pas de flex vertical », sûre parce que la feuille est
+  de hauteur fixe et que les tailles de `sizeCss` tiennent dans la page) ; numéro en pied hors flux ;
+  rangée incomplète de la grille centrée. Pendant Skia : `offsetY` / `offsetX` de `renderPhotoPage`.
+  Le pro coule en haut de page, dans les deux moteurs.
 - Contraintes de mise en page PDF **à ne pas casser** : dimensionner en **px = points** (A4
-  595×842), **jamais de `vh`**, **hauteurs fixes** en familial (pas de flex vertical), et
+  595×842), **jamais de `vh`**, **hauteurs fixes** en familial, et
   `print-color-adjust: exact` (sinon iOS supprime fonds/ombres).
 
 **Mise en forme du commentaire** (`src/richText.ts`, `src/components/RichText.tsx`) : le gras et le
