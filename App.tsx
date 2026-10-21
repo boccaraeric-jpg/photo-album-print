@@ -238,6 +238,17 @@ function Root() {
   }, []);
 
   // Sélection du pêle-mêle : `[]` revient à la sélection automatique.
+  // Titre de couverture d'un dossier : vide ou identique au nom = le nom.
+  const setAlbumCoverTitle = useCallback((id: string, coverTitle: string) => {
+    setAlbums((prev) =>
+      prev.map((a) => {
+        if (a.id !== id) return a;
+        const t = coverTitle.trim();
+        return { ...a, coverTitle: t && t !== a.name.trim() ? t : undefined };
+      }),
+    );
+  }, []);
+
   const setAlbumScatter = useCallback((id: string, ids: string[]) => {
     setAlbums((prev) =>
       prev.map((a) =>
@@ -804,6 +815,7 @@ function Root() {
         onRename={(name) => renameAlbum(openAlbum.id, name)}
         onSetCover={(photoId) => setAlbumCover(openAlbum.id, photoId)}
         onSetScatter={(ids) => setAlbumScatter(openAlbum.id, ids)}
+        onSetCoverTitle={(t) => setAlbumCoverTitle(openAlbum.id, t)}
         onBack={() => setOpenAlbumId(null)}
         initialEditPhotoId={editOnOpen}
         onEditConsumed={() => setEditOnOpen(null)}
@@ -1145,6 +1157,8 @@ interface AlbumProps {
   onSetCover: (photoId: string) => void;
   /** Enregistre les photos choisies pour la couverture pêle-mêle (`[]` = automatique). */
   onSetScatter: (ids: string[]) => void;
+  /** Enregistre le titre de couverture du dossier (vide = nom du dossier). */
+  onSetCoverTitle: (title: string) => void;
   onBack: () => void;
   /** Photo à ouvrir en édition à l'arrivée (import d'une photo partagée). */
   initialEditPhotoId?: string | null;
@@ -1159,6 +1173,7 @@ function AlbumScreen({
   onRename,
   onSetCover,
   onSetScatter,
+  onSetCoverTitle,
 onBack,
   initialEditPhotoId,
   onEditConsumed,
@@ -1558,19 +1573,23 @@ onBack,
   );
 
   const albumTitle = album.name.trim() || L.albumScreen.defaultTitle;
+  // Titre affiché sur la couverture : le sien s'il en a un (retours à la ligne
+  // possibles), sinon le nom du dossier. `albumTitle` nomme les fichiers.
+  const coverTitle = album.coverTitle?.trim() || albumTitle;
 
   // Étape 1 : prépare l'aperçu (même HTML que le PDF) à partir des options.
   const openPreview = useCallback(
-    async (options: ExportOptions, scatterIds: string[]) => {
+    async (options: ExportOptions, scatterIds: string[], titleDraft: string) => {
       if (photos.length === 0) return;
       setExportOptions(options);
       saveExportOptions(options);
       onSetScatter(scatterIds);
+      onSetCoverTitle(titleDraft);
       setPreparing(true);
       try {
         const html = await buildAlbumHtml(
           orderedPhotos,
-          albumTitle,
+          titleDraft.trim() || albumTitle,
           options,
           defaultCoverId,
           lang,
@@ -1590,7 +1609,7 @@ onBack,
         setPreparing(false);
       }
     },
-    [photos.length, orderedPhotos, albumTitle, defaultCoverId, onSetScatter],
+    [photos.length, orderedPhotos, albumTitle, defaultCoverId, onSetScatter, onSetCoverTitle],
   );
 
   // Réglage d'une entrée depuis l'aperçu (taille de la photo, fond de sa page) :
@@ -1620,7 +1639,7 @@ onBack,
       try {
         const html = await buildAlbumHtml(
           orderedPhotos.map(apply),
-          albumTitle,
+          coverTitle,
           exportOptions,
           defaultCoverId,
           lang,
@@ -1636,7 +1655,7 @@ onBack,
         if (seq === previewSeq.current) setPreviewRefreshing(false);
       }
     },
-    [setPhotos, orderedPhotos, albumTitle, exportOptions, defaultCoverId, lang, album.scatterPhotoIds, L],
+    [setPhotos, orderedPhotos, coverTitle, exportOptions, defaultCoverId, lang, album.scatterPhotoIds, L],
   );
 
   // Étape 2a : PDF prêt à imprimer, nommé, puis feuille de partage. Reconstruit
@@ -1647,7 +1666,7 @@ onBack,
     try {
       const html = await buildAlbumHtml(
         orderedPhotos,
-        albumTitle,
+        coverTitle,
         exportOptions,
         defaultCoverId,
         lang,
@@ -1661,7 +1680,7 @@ onBack,
     } finally {
       setSending(false);
     }
-  }, [orderedPhotos, albumTitle, exportOptions, defaultCoverId, album.scatterPhotoIds]);
+  }, [orderedPhotos, albumTitle, coverTitle, exportOptions, defaultCoverId, album.scatterPhotoIds]);
 
   // Étape 2b : une image JPEG par page, partagée via la feuille d'envoi. Une
   // seule page → l'image directement ; plusieurs → un ZIP unique (expo-sharing
@@ -1676,6 +1695,7 @@ onBack,
         defaultCoverId,
         lang,
         album.scatterPhotoIds,
+        coverTitle,
       );
       if (uris.length === 0) throw new Error('aucune page générée');
       if (uris.length === 1) {
@@ -1690,7 +1710,7 @@ onBack,
     } finally {
       setSending(false);
     }
-  }, [orderedPhotos, albumTitle, exportOptions, defaultCoverId, album.scatterPhotoIds]);
+  }, [orderedPhotos, albumTitle, coverTitle, exportOptions, defaultCoverId, album.scatterPhotoIds]);
 
   // Étape 2c : les photos AFFICHÉES (fichiers d'origine réutilisables) + un
   // fichier de contexte, dans un ZIP — pour que le destinataire retravaille les
@@ -1984,6 +2004,8 @@ onBack,
         initial={exportOptions}
         photos={orderedPhotos}
         scatterIds={album.scatterPhotoIds}
+        coverTitle={album.coverTitle ?? ''}
+        folderName={albumTitle}
         preparing={preparing}
         onPreview={openPreview}
         onSetMapModes={(modes) =>

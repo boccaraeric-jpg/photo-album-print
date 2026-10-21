@@ -375,6 +375,17 @@ contient déjà — `coverYearText`, les deux moteurs) + **la seule photo de
 - ⚠️ **`-webkit-text-size-adjust: 100%`** sur `html` dans les **deux** gabarits : sans lui, iOS agrandit
   d'office les petits textes d'une page réduite à l'écran (« text autosizing ») et l'aperçu ne montre
   plus les vraies tailles — vécu avec la taille du texte pro, sans effet visible sur l'iPhone.
+- **Titre de couverture** (`Album.coverTitle`, champ en tête de la rubrique Style, prérempli du nom
+  du dossier) : peut être coupé à la main (`
+`, 3 lignes au plus) ; le **nom du dossier** reste sur
+  une ligne et nomme toujours les fichiers (`albumTitle` ≠ `coverTitle` dans `AlbumScreen`,
+  `buildAlbumImages(..., coverTitle)`). Mise en page : `coverTitleLayout` (`albumStyle.ts`) estime
+  lignes et hauteur (`CHAR_EM`, désormais partagé avec `albumMap.ts`), réduit le titre au-delà de
+  2 lignes ; le pêle-mêle se range **sous** le titre (`scatterSlots(..., zoneTop)` — A4 à titre court :
+  gabarit d'origine inchangé), la grille cède de la hauteur (`gridLayout(..., titleBlock)`), la
+  classique laisse la photo céder en CSS (`.cover` en colonne, `flex-basis`). Skia : `wrapLines`
+  respecte désormais les `
+`. Pas porté par la sauvegarde ni le `.comclic`.
 - Contraintes de mise en page PDF **à ne pas casser** : dimensionner en **px = points** (A4
   595×842), **jamais de `vh`**, **hauteurs fixes** en familial, et
   `print-color-adjust: exact` (sinon iOS supprime fonds/ombres).

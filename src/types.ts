@@ -138,6 +138,12 @@ export interface Album {
    * 1ʳᵉ au centre). Absent ou invalide → sélection automatique.
    */
   scatterPhotoIds?: string[];
+  /**
+   * Titre de la couverture, s'il diffère du nom du dossier : peut être coupé
+   * sur plusieurs lignes (`\n`). Le nom du dossier, lui, reste sur une ligne
+   * (noms de fichiers, liste des dossiers).
+   */
+  coverTitle?: string;
 }
 
 export interface Photo {

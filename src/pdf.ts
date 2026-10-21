@@ -47,6 +47,8 @@ import {
   LOGO_MARK_SCALE,
   LOGO_MARK_SVG,
   COMMENT_SCALE,
+  coverTitleLayout,
+  COVER_W,
   coverYearText,
   PRO_TEXT_SCALE,
   commentShrink,
@@ -601,7 +603,14 @@ function buildStyles(options: ExportOptions): string {
   a.edit { display: block; color: inherit; text-decoration: none; }
 
   /* --- 1ère de couverture (titre + année + montage, façon carnet) --- */
-  .cover { position: relative; padding: 62px 46px 0; text-align: center; }
+  /* Couverture classique : feuille de la hauteur de la page, en colonne. La
+     photo garde sa hauteur d'origine (flex-basis) mais cède ce qu'il faut à un
+     titre long ou coupé sur plusieurs lignes — mesuré, pas estimé : la page ne
+     déborde jamais. */
+  .cover {
+    position: relative; height: ${pageH}px; padding: 62px 46px 60px; text-align: center;
+    display: flex; flex-direction: column;
+  }
   .crop { position: absolute; width: 22px; height: 22px; border: 0 solid var(--ink); }
   .crop.tl { top: 26px; left: 26px; border-top-width: 1.5px; border-left-width: 1.5px; }
   .crop.tr { top: 26px; right: 26px; border-top-width: 1.5px; border-right-width: 1.5px; }
@@ -640,7 +649,7 @@ function buildStyles(options: ExportOptions): string {
   .pola img, .cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .cell { position: absolute; overflow: hidden; background: rgba(31,29,26,0.08); }
   .cover-hero {
-    height: ${470 - cut}px; margin: 40px 0 0; overflow: hidden;
+    flex: 0 1 ${470 - cut}px; min-height: 120px; margin: 40px 0 0; overflow: hidden;
     border: 6px solid #fff; box-shadow: 0 8px 22px rgba(0, 0, 0, ${dark ? '0.55' : '0.22'});
   }
   .cover-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -683,7 +692,7 @@ function buildStyles(options: ExportOptions): string {
   .fmt-square .sz-medium .card:not(.solo) .ph.split .ph-photo { flex: ${1 - MAP_SHARE} 1 0; width: 100%; }
   .fmt-square .sz-medium .card:not(.solo) .ph.split .ph-map { flex: ${MAP_SHARE} 1 0; width: 100%; }
   .fmt-square .cover { padding-top: 40px; }
-  .fmt-square .cover-hero { margin-top: 24px; height: ${470 - cut + 54}px; }
+  .fmt-square .cover-hero { margin-top: 24px; flex-basis: ${470 - cut + 54}px; }
   .fmt-square .cover-foot { margin-top: 22px; }
   .grid4 .card { width: calc(50% - 6px); margin-bottom: 4px; }
   ${frameCss}
@@ -923,10 +932,26 @@ export async function buildAlbumHtml(
   // Nombres seuls dans les attributs `style` (calculés, jamais saisis).
   const px = (n: number) => `${Math.round(n * 10) / 10}px`;
 
+  // Titre de couverture : corps et hauteur estimés (`coverTitleLayout`, commun
+  // aux deux moteurs) — les photos se rangent sous le titre, quelle que soit
+  // sa longueur et ses retours à la ligne.
+  const withYear = !!coverYear;
   let coverHtml: string;
   if (coverStyle === 'scatter') {
     const picks = coverPicks(photoEntries, 'scatter', coverPhotoId, scatterIds);
-    const slots = scatterSlots(picks.length, seedOf(picks.map((p) => p.id)), pageH);
+    const head = coverTitleLayout(
+      title,
+      options.typeface,
+      SCATTER_TITLE.size,
+      COVER_W - 2 * SCATTER_TITLE.side,
+      withYear,
+    );
+    const slots = scatterSlots(
+      picks.length,
+      seedOf(picks.map((p) => p.id)),
+      pageH,
+      SCATTER_TITLE.top + head.height + 14,
+    );
     const polas = picks
       .map((p, i) => {
         const s = slots[i];
@@ -937,14 +962,21 @@ export async function buildAlbumHtml(
     coverHtml = `
         <section class="sheet cover-abs">
           <div class="cv-head">
-            <h1 class="cover-title">${coverTitle}</h1>
+            <h1 class="cover-title" style="font-size:${px(head.size)}">${coverTitle}</h1>
             ${yearHtml}
           </div>
           ${polas}
         </section>`;
   } else if (coverStyle === 'filmstrip') {
     const picks = coverPicks(photoEntries, 'filmstrip', coverPhotoId);
-    const layout = gridLayout(picks.length, pageH);
+    const head = coverTitleLayout(
+      title,
+      options.typeface,
+      GRID.titleSize,
+      COVER_W - 2 * SCATTER_TITLE.side,
+      withYear,
+    );
+    const layout = gridLayout(picks.length, pageH, head.height + 12);
     const cells = picks
       .map((p, i) => {
         const c = layout.cells[i];
@@ -955,16 +987,19 @@ export async function buildAlbumHtml(
         <section class="sheet cover-abs">
           ${cells}
           <div class="cv-head grid-head" style="top:${px(layout.titleY)}">
-            <h1 class="cover-title">${coverTitle}</h1>
+            <h1 class="cover-title" style="font-size:${px(head.size)}">${coverTitle}</h1>
             ${yearHtml}
           </div>
         </section>`;
   } else {
+    // Couverture classique : titre réduit au-delà de deux lignes ; la photo
+    // cède le reste de la place en CSS (cf. `.cover`).
+    const head = coverTitleLayout(title, options.typeface, 58, COVER_W - 92, false);
     coverHtml = `
         <section class="sheet cover">
           <span class="crop tl"></span><span class="crop tr"></span>
           <span class="crop bl"></span><span class="crop br"></span>
-          <h1 class="cover-title">${coverTitle}</h1>
+          <h1 class="cover-title" style="font-size:${px(head.size)}">${coverTitle}</h1>
           ${yearHtml}
           <div class="cover-hero">${imgTag(coverSrc)}</div>
           <div class="cover-foot">

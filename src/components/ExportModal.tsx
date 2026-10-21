@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,7 +43,11 @@ interface Props {
   /** Vrai pendant la préparation de l'aperçu (lecture des images). */
   preparing: boolean;
   /** Ouvre l'aperçu avant envoi avec les options et la sélection du pêle-mêle (`[]` = automatique). */
-  onPreview: (options: ExportOptions, scatterIds: string[]) => void;
+  onPreview: (options: ExportOptions, scatterIds: string[], coverTitle: string) => void;
+  /** Titre de couverture enregistré pour ce dossier (vide = nom du dossier). */
+  coverTitle?: string;
+  /** Nom du dossier : titre par défaut de la couverture. */
+  folderName: string;
   /** Enregistre la carte de chaque photo (`undefined` = d'office, cf. `Photo.mapMode`). */
   onSetMapModes?: (modes: Record<string, Photo['mapMode']>) => void;
   onClose: () => void;
@@ -286,6 +291,8 @@ export function ExportModal({
   initial,
   photos,
   scatterIds,
+  coverTitle = '',
+  folderName,
   preparing,
   onSetMapModes,
   onPreview,
@@ -335,6 +342,10 @@ export function ExportModal({
     onSetMapModes?.(modes);
     setMapDraft(null);
   };
+  // Titre de la couverture : brouillon prérempli du nom du dossier, avec ses
+  // retours à la ligne. Enregistré à « Aperçu ».
+  const [titleDraft, setTitleDraft] = useState('');
+
   // Rubrique dépliée (aucune à l'ouverture : l'écran se lit d'un coup d'œil).
   const [openSection, setOpenSection] = useState<SectionKey | null>(null);
   const toggleSection = (key: SectionKey) => {
@@ -357,6 +368,7 @@ export function ExportModal({
     setDraft(null);
     setMapDraft(null);
     setOpenSection(null);
+    setTitleDraft(coverTitle || folderName);
     // `photos` change à chaque édition du dossier : la sélection n'est relue
     // qu'à l'ouverture, pas pendant le réglage.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -408,7 +420,26 @@ export function ExportModal({
               open={openSection === 'style'}
               onToggle={() => toggleSection('style')}
             >
-              <Text style={[styles.label, styles.labelFirst]}>{L.export.formatLabel}</Text>
+              {/* Titre de la couverture : le nom du dossier par défaut ; aller à
+                  la ligne coupe le titre là où on le veut (3 lignes au plus). */}
+              <Text style={[styles.label, styles.labelFirst]}>{L.export.coverTitleLabel}</Text>
+              <TextInput
+                style={styles.titleInput}
+                value={titleDraft}
+                onChangeText={(t) => setTitleDraft(t.split('\n').slice(0, 3).join('\n'))}
+                placeholder={folderName}
+                placeholderTextColor={C.faint}
+                multiline
+                maxLength={90}
+                autoCorrect
+                spellCheck
+                autoCapitalize="sentences"
+                textAlign="center"
+                accessibilityLabel={L.export.coverTitleLabel}
+              />
+              <Text style={styles.note}>{L.export.coverTitleHint}</Text>
+
+              <Text style={styles.label}>{L.export.formatLabel}</Text>
               <View style={styles.tiles}>
                 {PAGE_FORMAT_KEYS.map((value) => (
                   <Tile
@@ -771,7 +802,7 @@ export function ExportModal({
           <Pressable
             style={[styles.btn, styles.btnPrimary, preparing && styles.disabled]}
             disabled={preparing}
-            onPress={() => onPreview(options, picked)}
+            onPress={() => onPreview(options, picked, titleDraft)}
           >
             {preparing ? (
               <ActivityIndicator color={C.paper} />
@@ -1176,6 +1207,20 @@ const styles = StyleSheet.create({
     borderColor: C.sienna,
   },
   bgGroup: { marginBottom: 12 },
+  titleInput: {
+    minHeight: 64,
+    maxHeight: 110,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.line,
+    backgroundColor: '#ffffff',
+    fontFamily: F.monoBold,
+    fontSize: 17,
+    lineHeight: 23,
+    color: C.ink,
+  },
   bgHint: { marginTop: -4, marginBottom: 12 },
   bgGroupLabel: { fontFamily: F.mono, fontSize: 12, color: C.muted, marginBottom: 6 },
   actions: {

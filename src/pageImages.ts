@@ -50,6 +50,7 @@ import {
   CAPTION_INK,
   COMMENT_BASE,
   COMMENT_SCALE,
+  coverTitleLayout,
   coverYearText,
   PRO_TEXT_SCALE,
   COVER_W,
@@ -152,6 +153,16 @@ function wrapLines(
   width: number,
   maxLines: number,
 ): string[] {
+  // Retours à la ligne voulus (titre coupé à la main, pages de texte) : chaque
+  // paragraphe est coupé à part, comme les <br/> du PDF.
+  if (text.includes('\n')) {
+    const out: string[] = [];
+    for (const para of text.split('\n')) {
+      if (out.length >= maxLines) break;
+      out.push(...wrapLines(font, para || ' ', width, maxLines - out.length));
+    }
+    return out;
+  }
   const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let line = '';
@@ -801,7 +812,12 @@ async function renderCover(
   lang: Lang,
   coverPhotoId?: string,
   scatterIds?: string[],
+  /** Titre affiché (titre de couverture, peut contenir des retours à la ligne). */
+  displayTitle?: string,
 ): Promise<PagePayload | null> {
+  // `title` nomme le fichier image ; la couverture affiche `displayTitle`.
+  const fileTitle = title;
+  title = displayTitle?.trim() || title;
   const H = imageHeight(options);
   const surface = Skia.Surface.Make(W, H);
   if (!surface) return null;
@@ -842,7 +858,7 @@ async function renderCover(
       size: 24,
       maxLines: 1,
     });
-    return encodeSurface(surface, title, 0);
+    return encodeSurface(surface, fileTitle, 0);
   }
 
   const dark = isDark(options.background);
@@ -874,15 +890,18 @@ async function renderCover(
     // Vignettes réduites : jusqu'à 9 photos décodées en pleine résolution
     // (~48 Mo chacune) feraient tuer l'app par iOS.
     const thumbs = await Promise.all(picks.map((p) => loadThumb(p.uri)));
+    // Titre : corps estimé comme dans le PDF (`coverTitleLayout`) — réduit
+    // au-delà de deux lignes ; les photos se rangent sous lui.
+    const titleText = spec.uppercaseTitle ? title.toUpperCase() : title;
     const head = (top: number, size: number) => {
       const ty =
         top * k +
-        drawText(canvas, title, SCATTER_TITLE.side * k, top * k, (COVER_W - 2 * SCATTER_TITLE.side) * k, {
+        drawText(canvas, titleText, SCATTER_TITLE.side * k, top * k, (COVER_W - 2 * SCATTER_TITLE.side) * k, {
           color: ink,
-          size: size * spec.titleScale * k,
+          size: size * k,
           align: TextAlign.Center,
           bold: true,
-          maxLines: 2,
+          maxLines: 4,
           fam: spec.title,
         });
       if (yearLabel) {
@@ -898,11 +917,19 @@ async function renderCover(
     };
 
     if (style === 'scatter') {
-      head(SCATTER_TITLE.top, SCATTER_TITLE.size);
+      const layoutTitle = coverTitleLayout(
+        title,
+        options.typeface,
+        SCATTER_TITLE.size,
+        COVER_W - 2 * SCATTER_TITLE.side,
+        !!yearLabel,
+      );
+      head(SCATTER_TITLE.top, layoutTitle.size);
       const slots = scatterSlots(
         picks.length,
         seedOf(picks.map((p) => p.id)),
         layoutHeight(options),
+        SCATTER_TITLE.top + layoutTitle.height + 14,
       );
       // Ordre d'empilement : la photo étoilée en dernier, donc au-dessus.
       const order = slots.map((_, i) => i).sort((a, b) => slots[a].z - slots[b].z);
@@ -910,7 +937,14 @@ async function renderCover(
         drawPolaroid(canvas, thumbs[i], slots[i], k, dark);
       }
     } else {
-      const layout = gridLayout(picks.length, layoutHeight(options));
+      const layoutTitle = coverTitleLayout(
+        title,
+        options.typeface,
+        GRID.titleSize,
+        COVER_W - 2 * SCATTER_TITLE.side,
+        !!yearLabel,
+      );
+      const layout = gridLayout(picks.length, layoutHeight(options), layoutTitle.height + 12);
       picks.forEach((_, i) => {
         const c = layout.cells[i];
         const x = c.x * k;
@@ -922,13 +956,20 @@ async function renderCover(
         canvas.drawRect(Skia.XYWHRect(x, y, w, h), empty);
         drawCoverImage(canvas, thumbs[i], x, y, w, h, 0);
       });
-      head(layout.titleY, GRID.titleSize);
+      head(layout.titleY, layoutTitle.size);
     }
-    return encodeSurface(surface, title, 0);
+    return encodeSurface(surface, fileTitle, 0);
   }
 
   // Format moins haut que l'A4 : la photo de couverture cède la hauteur perdue.
-  const heroH = 1040 - (imageHeight({ ...options, format: 'a4' }) - H);
+  // Titre (sous la photo) : chaque ligne en plus est prise sur la photo.
+  const kc = W / COVER_W;
+  const classicTitle = coverTitleLayout(title, options.typeface, 76 / kc, (W - 2 * PAD) / kc, false);
+  const titlePx = classicTitle.size * kc;
+  const heroH = Math.max(
+    360,
+    1040 - (imageHeight({ ...options, format: 'a4' }) - H) - (classicTitle.lines - 1) * titlePx * 1.32,
+  );
   const cover = photos.find((p) => p.id === coverPhotoId) ?? photos[0];
   if (cover) {
     const img = await loadImage(cover.uri);
@@ -945,12 +986,12 @@ async function renderCover(
     maxLines: 1,
   });
   ty += 18;
-  ty += drawText(canvas, title, PAD, ty, W - 2 * PAD, {
+  ty += drawText(canvas, spec.uppercaseTitle ? title.toUpperCase() : title, PAD, ty, W - 2 * PAD, {
     color: ink,
-    size: 76 * spec.titleScale,
+    size: titlePx,
     align: TextAlign.Center,
     bold: true,
-    maxLines: 2,
+    maxLines: 4,
     fam: spec.title,
   });
   if (yearLabel) {
@@ -967,7 +1008,7 @@ async function renderCover(
   }
   // Familial : pas de nombre total de photos affiché sur la couverture.
 
-  return encodeSurface(surface, title, 0);
+  return encodeSurface(surface, fileTitle, 0);
 }
 
 /** Page de texte seule (Skia) : texte centré sur le fond de l'album. */
@@ -1509,6 +1550,8 @@ export async function buildAlbumImages(
   coverPhotoId?: string,
   lang: Lang = 'fr',
   scatterIds?: string[],
+  /** Titre de couverture (sinon `title`, qui nomme aussi les fichiers). */
+  coverTitle?: string,
 ): Promise<string[]> {
   const uris: string[] = [];
 
@@ -1531,7 +1574,7 @@ export async function buildAlbumImages(
 
   const photoEntries = photos.filter((p) => p.kind !== 'text');
   await push(
-    await renderCover(photoEntries, eff, title, pro, lang, coverPhotoId, scatterIds),
+    await renderCover(photoEntries, eff, title, pro, lang, coverPhotoId, scatterIds, coverTitle),
   );
 
   // Cartes à côté des photos (familial) : images Apple Plans gardées sur le

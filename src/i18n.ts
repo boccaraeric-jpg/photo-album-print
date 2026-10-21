@@ -187,6 +187,9 @@ const fr = {
     bgLabel: 'Couleur de fond de l’album',
     bgHint: 'Chaque couleur de page peut être modifiée ultérieurement dans l’aperçu.',
     formatLabel: 'Format de l’album',
+    coverTitleLabel: 'Titre de la couverture',
+    coverTitleHint:
+      'Le nom du dossier par défaut. Allez à la ligne pour couper le titre où vous le souhaitez (3 lignes au plus).',
     formats: { a4: 'A4', '16x21': '16 × 21 cm', '16x16': '16 × 16 cm' },
     formatHints: { a4: '21 × 29,7 cm', '16x21': 'livre photo', '16x16': 'carré' },
     bgGroups: { light: 'Clairs', natural: 'Naturels', deep: 'Profonds' },
@@ -574,6 +577,9 @@ const en: Dict = {
     bgLabel: 'Album background color',
     bgHint: 'The color of each page can be changed later in the preview.',
     formatLabel: 'Album format',
+    coverTitleLabel: 'Cover title',
+    coverTitleHint:
+      'The folder name by default. Start a new line to break the title where you want (3 lines at most).',
     formats: { a4: 'A4', '16x21': '16 × 21 cm', '16x16': '16 × 16 cm' },
     formatHints: { a4: '21 × 29.7 cm', '16x21': 'photo book', '16x16': 'square' },
     bgGroups: { light: 'Light', natural: 'Natural', deep: 'Deep' },

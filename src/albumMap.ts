@@ -1,7 +1,14 @@
 import { dict, localeTag, type Lang } from './i18n';
 import type { Photo, Typeface } from './types';
 import { photoDate } from './dateFormat';
-import { COVER_H, COVER_W, mutedInk, TYPE_SPECS, type FontFam } from './albumStyle';
+import {
+  COVER_H,
+  COVER_W,
+  estimateTextWidth,
+  mutedInk,
+  TYPE_SPECS,
+  type FontFam,
+} from './albumStyle';
 import { landRings, ringContains } from './worldMap';
 
 /*
@@ -207,17 +214,8 @@ const MAP_INK = '#1f1d1a';
 const PIN = '#b45309';
 const LABEL_BG = '#f6f1e9';
 
-/** Largeur moyenne d'un caractère (en em) : sert au fond des étiquettes et aux coupes. */
-const CHAR_EM: Record<FontFam, [number, number]> = {
-  sans: [0.58, 0.64],
-  serif: [0.52, 0.56],
-  script: [0.42, 0.44],
-};
-
 /** Estimation de largeur, identique pour les deux moteurs (pas de mesure réelle). */
-function textWidth(text: string, size: number, bold: boolean, fam: FontFam): number {
-  return text.length * size * CHAR_EM[fam][bold ? 1 : 0];
-}
+const textWidth = estimateTextWidth;
 
 /** Coupe un texte avec « … » pour qu'il tienne dans `max` points (estimation). */
 function fit(text: string, size: number, bold: boolean, fam: FontFam, max: number): string {

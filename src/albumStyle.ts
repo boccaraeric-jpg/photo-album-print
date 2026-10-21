@@ -188,6 +188,79 @@ export function famsUsed(t: Typeface): FontFam[] {
 }
 
 /* --------------------------------------------------------------------------
+ * Largeur des textes (estimation commune aux deux moteurs)
+ * ------------------------------------------------------------------------ */
+
+/** Largeur moyenne d'un caractère (en em), normale et grasse, par famille. */
+export const CHAR_EM: Record<FontFam, [number, number]> = {
+  sans: [0.58, 0.64],
+  serif: [0.52, 0.56],
+  script: [0.42, 0.44],
+};
+
+/** Largeur estimée d'un texte (points) : identique pour le PDF et Skia. */
+export function estimateTextWidth(text: string, size: number, bold: boolean, fam: FontFam): number {
+  return text.length * size * CHAR_EM[fam][bold ? 1 : 0];
+}
+
+/**
+ * Nombre de lignes estimé d'un texte : retours à la ligne voulus (`\n`), puis
+ * coupures automatiques dans `width` (marge de 8 % pour les coupures de mots).
+ */
+export function estimateLines(
+  text: string,
+  size: number,
+  fam: FontFam,
+  bold: boolean,
+  width: number,
+): number {
+  return text
+    .split('\n')
+    .reduce(
+      (n, para) =>
+        n + Math.max(1, Math.ceil((estimateTextWidth(para.trim(), size, bold, fam) * 1.08) / width)),
+      0,
+    );
+}
+
+/** Interligne le plus haut des deux moteurs (Skia 1,32 ; PDF 1,04) : estimation sûre. */
+const TITLE_LINE = 1.32;
+
+export interface CoverTitleLayout {
+  /** Corps du titre (points), réduit s'il faudrait plus de deux lignes. */
+  size: number;
+  lines: number;
+  /** Hauteur du bloc titre + année (points). */
+  height: number;
+}
+
+/**
+ * Titre d'une couverture : corps et hauteur du bloc. Un titre de plus de deux
+ * lignes (retours voulus ou coupures) perd jusqu'à 28 % de corps avant de
+ * prendre une ligne de plus — les photos gardent ainsi leur place. Sert aux
+ * deux moteurs : la mise en page des photos part du bas de ce bloc.
+ */
+export function coverTitleLayout(
+  title: string,
+  typeface: Typeface,
+  baseSize: number,
+  width: number,
+  withYear: boolean,
+): CoverTitleLayout {
+  const spec = TYPE_SPECS[typeface];
+  const text = spec.uppercaseTitle ? title.toUpperCase() : title;
+  const full = baseSize * spec.titleScale;
+  let size = full;
+  let lines = estimateLines(text, size, spec.title, true, width);
+  while (lines > 2 && size > full * 0.72) {
+    size = Math.round(size * 0.92 * 10) / 10;
+    lines = estimateLines(text, size, spec.title, true, width);
+  }
+  const yearH = withYear ? 8 + 24 * spec.titleScale * TITLE_LINE : 0;
+  return { size, lines, height: lines * size * TITLE_LINE + yearH };
+}
+
+/* --------------------------------------------------------------------------
  * Couvertures
  * ------------------------------------------------------------------------ */
 
@@ -323,24 +396,50 @@ export function scatterSlots(
   count: number,
   seed: number,
   pageH: number = COVER_H,
+  /** Bas du bloc titre (points) : les photos se rangent en dessous. */
+  zoneTop = 0,
 ): PolaroidSlot[] {
   const rand = rng(seed);
   const jitter = (n: number) => (rand() * 2 - 1) * n;
   const n = Math.min(SCATTER_MAX, Math.max(SCATTER_MIN, count));
-  // Page moins haute que l'A4 (16 × 21) : le gabarit entier est réduit dans la
-  // même proportion, centré en largeur — l'équilibre du montage est conservé.
-  const s = Math.min(1, pageH / COVER_H);
-  // En largeur, on réduit moins (page carrée : la largeur ne manque pas) ;
-  // les photos s'écartent un peu plus que dans le gabarit A4.
-  const sx = Math.min(1, s * 1.2);
-  const mid = COVER_W / 2;
   // Recalage commun des gabarits : remontés vers le titre et légèrement
   // agrandis — une bande vide de ~100 pt séparait le titre des photos.
-  const [hero, ...others] = SCATTER_LAYOUTS[n].map(
+  const raw = SCATTER_LAYOUTS[n].map(
+    ([cx, cy, size]): [number, number, number] => [cx, cy - 18, size * 1.06],
+  );
+  // Emprise du montage : cadres polaroïd compris, marge d'inclinaison (×1,08).
+  const extent = (f: (r: [number, number, number]) => number, pick: (...v: number[]) => number) =>
+    pick(...raw.map(f));
+  const box = {
+    top: extent(([, cy, z]) => cy - (z / 2 + POLAROID.pad) * 1.08, Math.min),
+    bottom: extent(([, cy, z]) => cy + (z / 2 + POLAROID.bottom) * 1.08, Math.max),
+    left: extent(([cx, , z]) => cx - (z / 2 + POLAROID.pad) * 1.08, Math.min),
+    right: extent(([cx, , z]) => cx + (z / 2 + POLAROID.pad) * 1.08, Math.max),
+  };
+  // Zone libre : sous le titre, jusqu'au bas de la page.
+  const zone = { top: Math.max(zoneTop, 0), bottom: pageH - 6, left: 12, right: COVER_W - 12 };
+  const mid = COVER_W / 2;
+  // A4 avec un titre qui laisse la place : le gabarit d'origine, inchangé.
+  // Sinon (titre long, page plus courte) : le montage se réduit juste ce qu'il
+  // faut pour tenir sous le titre, et se centre dans la place libre. En largeur
+  // on réduit moins (la page ne manque pas de largeur) : les photos s'écartent.
+  const fits = pageH >= COVER_H && box.top >= zone.top && box.bottom <= zone.bottom;
+  let s = 1;
+  let sx = 1;
+  let dy = 0;
+  if (!fits) {
+    const boxH = box.bottom - box.top;
+    const zoneH = zone.bottom - zone.top;
+    s = Math.min(1, zoneH / boxH);
+    sx = Math.min(1, s * 1.2, (zone.right - zone.left) / (box.right - box.left));
+    const top = zone.top + (zoneH - boxH * s) / 2;
+    dy = top - box.top * s;
+  }
+  const [hero, ...others] = raw.map(
     ([cx, cy, size]): [number, number, number] => [
       mid + (cx - mid) * sx,
-      (cy - 18) * s,
-      Math.round(size * 1.06 * s),
+      cy * s + dy,
+      Math.round(size * s),
     ],
   );
   const slots = others.map(([cx, cy, size], i): PolaroidSlot => {
@@ -395,21 +494,29 @@ const GRID_TITLE_BLOCK = 110;
  * grille + titre est centré verticalement : une grille de 2 rangées calée en
  * haut laissait un tiers de page vide sous le titre.
  */
-export function gridLayout(count: number, pageH: number = COVER_H): GridLayout {
+export function gridLayout(
+  count: number,
+  pageH: number = COVER_H,
+  /** Hauteur du bloc titre + année (`coverTitleLayout`) : jamais moins que d'origine. */
+  titleBlock: number = GRID_TITLE_BLOCK,
+): GridLayout {
   const shape = gridShape(count);
   const { cols, rows } = shape;
+  const block = Math.max(GRID_TITLE_BLOCK, titleBlock);
   // Page moins haute (16 × 21) : la grille perd en hauteur dans la même
   // proportion que la page, les cellules restent proches du même format.
   const s = Math.min(1, pageH / COVER_H);
-  const height = Math.round(shape.height * s);
   // L'écart grille → titre se resserre dans la même proportion (page carrée).
   const titleGap = Math.round(GRID_TITLE_GAP * s);
+  // Titre long : la grille cède la hauteur qui manquerait sous elle.
+  const room = pageH - 2 * GRID.margin - titleGap - block;
+  const height = Math.max(160, Math.min(Math.round(shape.height * s), room));
   const width = COVER_W - 2 * GRID.margin;
   const w = (width - (cols - 1) * GRID.gap) / cols;
   const h = (height - (rows - 1) * GRID.gap) / rows;
   const top = Math.max(
     GRID.margin,
-    (pageH - (height + titleGap + GRID_TITLE_BLOCK)) / 2,
+    (pageH - (height + titleGap + block)) / 2,
   );
   const cells = [];
   for (let r = 0; r < rows; r++) {
