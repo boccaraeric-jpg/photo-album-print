@@ -184,7 +184,7 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     showPlace: typeof o.showPlace === 'boolean' ? o.showPlace : d.showPlace,
     dateFormat: oneOf(
       o.dateFormat,
-      ['short', 'shortTime', 'long', 'full', 'none'] as const,
+      ['dayMonth', 'short', 'shortTime', 'long', 'full', 'none'] as const,
       d.dateFormat,
     ),
     dateAlign: oneOf(o.dateAlign, align, d.dateAlign),
@@ -709,11 +709,13 @@ function buildStyles(options: ExportOptions): string {
   ${SIZES.map((size) => sizeCss(size, options)).join('')}
   .caption strong, .full-cap strong { font-weight: ${bold(spec.caption)}; }
   .caption u, .meta u, .full-cap u { text-decoration: underline; }
+  /* Lieu · date : dans la typographie du texte choisie (spec.date). */
   .caption .date {
-    display: block; margin-top: 4px; font-size: ${META_SIZE}px; line-height: 1.3;
-    text-align: ${options.dateAlign ?? 'left'};
-    font-family: ${fam(spec.meta)};
-    letter-spacing: 0.6px; text-transform: lowercase; font-weight: ${regular(spec.meta)};
+    display: block; margin-top: 4px; font-size: ${Math.round(META_SIZE * spec.dateScale * 10) / 10}px;
+    line-height: 1.3; text-align: ${options.dateAlign ?? 'left'};
+    font-family: ${fam(spec.date)};
+    letter-spacing: ${spec.date === 'script' ? 0.2 : 0.6}px; text-transform: lowercase;
+    font-weight: ${spec.captionBold ? bold(spec.date) : regular(spec.date)};
     color: var(--meta-ink);
   }
 
@@ -756,7 +758,8 @@ function buildStyles(options: ExportOptions): string {
     font-family: ${fam(spec.title)}; font-weight: ${bold(spec.title)};
     font-size: 26px; margin: 12px 0 6px; color: var(--ink);
   }
-  .end p { color: var(--muted); font-size: 13px; margin: 0; }
+  .end p { color: var(--muted); font-size: ${Math.round(13 * spec.dateScale * 10) / 10}px; margin: 0;
+    font-family: ${fam(spec.date)}; }
   /* « Powered by ComClic » : corps et police des dates sous les photos. */
   .end .credit {
     position: absolute; left: 0; right: 0; bottom: 30px;

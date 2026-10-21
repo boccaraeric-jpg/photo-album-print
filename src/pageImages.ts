@@ -688,7 +688,8 @@ async function renderPhotoPage(
       spec.captionScale *
       COMMENT_SCALE[options.commentSize] *
       k;
-    const metaSize = META_SIZE * k;
+    // Lieu · date dans la typographie du texte (`spec.date`, comme le PDF).
+    const metaSize = META_SIZE * spec.dateScale * k;
     const commentOpts = {
       size: commentSize,
       maxLines: 4,
@@ -786,7 +787,8 @@ async function renderPhotoPage(
         maxLines: 1,
         align: dateAlign,
         letterSpacing: 1,
-        fam: spec.meta,
+        fam: spec.date,
+        bold: spec.captionBold,
       });
     }
   }
@@ -1468,9 +1470,10 @@ function renderEndPage(
   if (range) {
     drawText(canvas, range, PAD, cy + 18 * k, W - 2 * PAD, {
       color: mutedInk(options.background),
-      size: 13 * k,
+      size: 13 * spec.dateScale * k,
       align: TextAlign.Center,
       maxLines: 1,
+      fam: spec.date,
     });
   }
 

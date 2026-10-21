@@ -65,7 +65,7 @@ const ALIGN_KEYS: ('left' | 'center' | 'right')[] = ['left', 'center', 'right'];
 // bande de commentaire où placer quoi que ce soit.
 const COMMENT_POS_KEYS: ('top' | 'middle' | 'bottom')[] = ['top', 'middle', 'bottom'];
 const COMMENT_SIZE_KEYS: CommentSize[] = ['normal', 'large', 'xlarge'];
-const DATE_FORMAT_KEYS: DateFormat[] = ['short', 'shortTime', 'long', 'full', 'none'];
+const DATE_FORMAT_KEYS: DateFormat[] = ['dayMonth', 'short', 'shortTime', 'long', 'full', 'none'];
 const TYPEFACE_KEYS: Typeface[] = ['sans', 'serif', 'script'];
 const COVER_KEYS: CoverStyle[] = ['classic', 'scatter', 'filmstrip'];
 // Chaque choix de typographie s'écrit dans sa propre police : un nom de police

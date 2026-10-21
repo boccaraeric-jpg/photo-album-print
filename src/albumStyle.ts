@@ -19,8 +19,15 @@ export interface TypeSpec {
   caption: FontFam;
   /** Pages de texte : texte long, jamais en manuscrite. */
   text: FontFam;
-  /** Ligne lieu · date sous la photo. */
+  /** Petits textes (mention de l'app, page des lieux). */
   meta: FontFam;
+  /**
+   * Dates de l'album (lieu · date sous les photos, période de la page de fin) :
+   * dans la typographie choisie, manuscrite comprise.
+   */
+  date: FontFam;
+  /** Corps relatif des dates : la manuscrite, à petit œil, est agrandie. */
+  dateScale: number;
   /**
    * Corps relatif de la légende. Caveat a un œil bien plus petit que
    * Montserrat : à corps égal, une légende manuscrite paraissait minuscule.
@@ -41,6 +48,8 @@ export const TYPE_SPECS: Record<Typeface, TypeSpec> = {
     caption: 'sans',
     text: 'sans',
     meta: 'sans',
+    date: 'sans',
+    dateScale: 1,
     captionScale: 1,
     titleScale: 1,
     lineHeight: 1.45,
@@ -52,6 +61,8 @@ export const TYPE_SPECS: Record<Typeface, TypeSpec> = {
     caption: 'serif',
     text: 'serif',
     meta: 'serif',
+    date: 'serif',
+    dateScale: 1,
     captionScale: 1,
     titleScale: 1,
     lineHeight: 1.55,
@@ -63,6 +74,10 @@ export const TYPE_SPECS: Record<Typeface, TypeSpec> = {
     caption: 'script',
     text: 'serif',
     meta: 'serif',
+    // Dates en manuscrite comme le texte (retour testeur), agrandies et en
+    // gras (`captionBold`) : Caveat fin et petit se lirait mal à 8,5 pt.
+    date: 'script',
+    dateScale: 1.45,
     captionScale: 1.3,
     titleScale: 1.25,
     lineHeight: 1.4,
@@ -174,7 +189,7 @@ export const LISERET = { width: 6, radius: 2 };
 /** Familles réellement employées (le PDF n'embarque que celles-là). */
 export function famsUsed(t: Typeface): FontFam[] {
   const s = TYPE_SPECS[t];
-  return [...new Set<FontFam>([s.title, s.caption, s.text, s.meta])];
+  return [...new Set<FontFam>([s.title, s.caption, s.text, s.meta, s.date])];
 }
 
 /* --------------------------------------------------------------------------

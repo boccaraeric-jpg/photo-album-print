@@ -45,7 +45,7 @@ export type RenderStyle = 'family' | 'pro';
  * - `full`  : « mercredi 8 juillet 2026 à 19h37 »
  * - `none`  : date masquée
  */
-export type DateFormat = 'short' | 'shortTime' | 'long' | 'full' | 'none';
+export type DateFormat = 'dayMonth' | 'short' | 'shortTime' | 'long' | 'full' | 'none';
 
 /**
  * Typographie du rendu familial :

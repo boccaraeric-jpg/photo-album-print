@@ -249,7 +249,10 @@ d'entrée** (ils pilotent aussi les libellés) :
   (`captionBold`). La photo cède la place (`commentShrink`), le seuil de page seule baisse
   (`isLongComment(photo, scale)`). Skia n'a plus de coupure à 2 lignes : la bande se mesure.
   Les montages **gardent** la photo ★ dans les pages (la règle d'exclusion ne vaut qu'en `classic`).
-  En `script`, les textes longs (pages de texte, date) restent en Lora : Caveat illisible au long cours.
+  En `script`, les pages de texte restent en Lora (Caveat illisible au long cours) ; les **dates**
+  (lieu · date, période de la page de fin) suivent la typographie choisie (`spec.date`, Caveat
+  agrandi ×1,45 et en gras en manuscrite — retour testeur). Format de date « Jour et mois »
+  (`dayMonth`, « 8 juillet », sans l'année) en tête des choix.
   Contrôle visuel possible **sur PC** : `buildAlbumHtml` tourne sous node (sucrase + bouchons des
   modules Expo) et Chrome headless fait la capture — le rendu Skia, lui, ne se voit que sur l'iPhone.
 - **Carte des lieux** (`showMap`, familial, défaut non) : page « Nos lieux de visite » après la

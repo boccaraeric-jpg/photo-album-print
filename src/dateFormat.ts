@@ -13,6 +13,7 @@ function cap(s: string): string {
 
 /**
  * Formate un timestamp selon le format choisi :
+ * - `dayMonth` → « 8 juillet » (sans l'année)
  * - `short` → « 08/07/2026 »
  * - `long`  → « Mercredi 8 juillet 2026 »
  * - `full`  → « Mercredi 8 juillet 2026 à 19h37 »
@@ -38,6 +39,9 @@ export function formatPhotoDate(
   switch (format) {
     case 'none':
       return '';
+    case 'dayMonth':
+      // « 8 juillet » / « July 8 » : la date la plus légère, sans l'année.
+      return d.toLocaleDateString(tag, { day: 'numeric', month: 'long' });
     case 'short':
       return d.toLocaleDateString(tag, {
         day: '2-digit',

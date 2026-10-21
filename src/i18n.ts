@@ -250,6 +250,7 @@ const fr = {
     coverFallback: (n: number) =>
       `Ce dossier n’a que ${n} photo${n > 1 ? 's' : ''} : la couverture classique sera utilisée.`,
     dateFormats: {
+      dayMonth: 'Jour et mois',
       short: 'Simple',
       shortTime: 'Simple + heure',
       long: 'Détaillée',
@@ -257,6 +258,7 @@ const fr = {
       none: 'Aucune',
     },
     dateHints: {
+      dayMonth: '8 juillet',
       short: '08/07/2026',
       shortTime: '08/07/2026 à 19h37',
       long: 'mercredi 8 juillet 2026',
@@ -639,6 +641,7 @@ const en: Dict = {
     coverFallback: (n: number) =>
       `This folder has only ${n} photo${n > 1 ? 's' : ''}: the classic cover will be used.`,
     dateFormats: {
+      dayMonth: 'Day and month',
       short: 'Simple',
       shortTime: 'Simple + time',
       long: 'Detailed',
@@ -646,6 +649,7 @@ const en: Dict = {
       none: 'None',
     },
     dateHints: {
+      dayMonth: 'July 8',
       short: '7/8/2026',
       shortTime: '7/8/2026 at 7:37 PM',
       long: 'Wednesday, July 8, 2026',
