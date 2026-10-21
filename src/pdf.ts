@@ -182,9 +182,11 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     frame: oneOf(o.frame, ['card', 'border', 'polaroid', 'none'] as const, d.frame),
     liseret: typeof o.liseret === 'boolean' ? o.liseret : d.liseret,
     showPlace: typeof o.showPlace === 'boolean' ? o.showPlace : d.showPlace,
+    // « Simple + heure » et « Complète » ne sont plus proposés : un réglage
+    // enregistré avec l'un d'eux retombe sur sa version sans l'heure.
     dateFormat: oneOf(
-      o.dateFormat,
-      ['dayMonth', 'short', 'shortTime', 'long', 'full', 'none'] as const,
+      o.dateFormat === 'shortTime' ? 'short' : o.dateFormat === 'full' ? 'long' : o.dateFormat,
+      ['dayMonth', 'short', 'long', 'none'] as const,
       d.dateFormat,
     ),
     dateAlign: oneOf(o.dateAlign, align, d.dateAlign),
