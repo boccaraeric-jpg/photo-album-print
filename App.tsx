@@ -875,7 +875,7 @@ function TintedButton({
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Ionicons name={icon} size={22} color={C.sienna} />
+      <Ionicons name={icon} size={18} color={C.sienna} />
       <Text style={styles.tintedText} numberOfLines={2}>
         {label}
       </Text>
@@ -989,8 +989,18 @@ function HomeScreen({
     <View style={styles.screen}>
       <StatusBar style="dark" />
 
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.langRow}>
+      <View style={[styles.header, styles.homeHeader, { paddingTop: insets.top + 4 }]}>
+        {/* Une seule ligne : la marque « ALBUM PHOTO COMCLIC » + monogramme à
+            gauche, FR / EN à droite. Le titre « Mes dossiers » remonte, et la
+            place gagnée revient à la liste des dossiers. */}
+        <View style={styles.homeTopRow}>
+          <View style={styles.homeBrand}>
+            <Text style={styles.kicker} numberOfLines={1}>
+              {L.home.brand}
+            </Text>
+            <Image source={require('./assets/logo-mark.png')} style={styles.homeLogo} />
+          </View>
+          <View style={styles.homeLangRow}>
           {SUPPORTED.map((code) => (
             <Pressable
               key={code}
@@ -1005,10 +1015,7 @@ function HomeScreen({
               </Text>
             </Pressable>
           ))}
-        </View>
-        <View style={styles.brandRow}>
-          <Image source={require('./assets/logo-mark.png')} style={styles.brandLogo} />
-          <Text style={styles.kicker}>{L.home.kicker}</Text>
+          </View>
         </View>
         <Text style={styles.homeTitle}>{L.home.title}</Text>
         <Text style={styles.count}>
@@ -1088,9 +1095,9 @@ function HomeScreen({
         }
       />
 
-      <View style={[styles.toolbar, { paddingBottom: insets.bottom + 12 }]}>
+      <View style={[styles.toolbar, styles.homeToolbar, { paddingBottom: insets.bottom + 6 }]}>
         <Pressable
-          style={[styles.btn, styles.btnPrimary]}
+          style={[styles.btn, styles.homeBtn, styles.btnPrimary]}
           onPress={() => setCreating(true)}
         >
           <Text style={styles.btnPrimaryText}>{L.home.newFolder}</Text>
@@ -2211,13 +2218,25 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   backChevron: { fontFamily: F.monoBold, fontSize: 28 },
+  // « Mes dossiers » : 32 pt (−20 % sur 40), collé à la ligne de marque.
   homeTitle: {
     fontFamily: F.display,
-    fontSize: 40,
+    fontSize: 32,
     color: C.ink,
-    paddingVertical: 2,
     marginTop: 2,
   },
+  homeHeader: { paddingBottom: 8 },
+  homeTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  homeBrand: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
+  homeLogo: { width: 26, height: 26, resizeMode: 'contain' },
+  homeLangRow: { flexDirection: 'row', gap: 6 },
+  homeToolbar: { paddingTop: 10, paddingHorizontal: 14, gap: 8 },
+  homeBtn: { height: 44, borderRadius: 12 },
   titleInput: {
     fontFamily: F.display,
     fontSize: 34,
@@ -2270,28 +2289,32 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   rowBtn: { flex: 1 },
+  // Icône à gauche du libellé (comme un bouton teinté iOS) : 48 pt de haut au
+  // lieu de 68, le libellé passe sur deux lignes si besoin.
   tinted: {
     flex: 1,
-    minHeight: 68,
-    paddingVertical: 10,
+    flexDirection: 'row',
+    minHeight: 48,
+    paddingVertical: 6,
     paddingHorizontal: 10,
-    borderRadius: 14,
+    borderRadius: 12,
     backgroundColor: 'rgba(166,75,36,0.10)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 6,
   },
   tintedPressed: { backgroundColor: 'rgba(166,75,36,0.20)' },
   tintedText: {
+    flexShrink: 1,
     fontFamily: F.monoBold,
-    fontSize: 13,
-    lineHeight: 17,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: C.sienna,
     textAlign: 'center',
   },
   howTo: {
     fontFamily: F.mono,
-    fontSize: 13,
+    fontSize: 12,
     color: C.sienna,
     textAlign: 'center',
     textDecorationLine: 'underline',

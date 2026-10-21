@@ -302,6 +302,7 @@ Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un
   },
   home: {
     kicker: 'ALBUM PHOTO',
+    brand: 'ALBUM PHOTO COMCLIC',
     title: 'Mes dossiers',
     folderCount: (n: number) => `${n} dossier${n > 1 ? 's' : ''}`,
     emptyTitle: 'Aucun dossier',
@@ -690,6 +691,7 @@ Folders will be ADDED to the ones already there: nothing is replaced. A name alr
   },
   home: {
     kicker: 'PHOTO ALBUM',
+    brand: 'COMCLIC PHOTO ALBUM',
     title: 'My folders',
     folderCount: (n: number) => `${n} folder${n > 1 ? 's' : ''}`,
     emptyTitle: 'No folder',
