@@ -359,7 +359,8 @@ d'entrée** (ils pilotent aussi les libellés) :
   `min-height` A4 : une estimation fausse allonge la feuille au lieu de tronquer une description) et les
   images (`renderProPage`, mêmes mesures, description entière) suivent **les mêmes pages**. Aperçu pro
   en feuilles sur plan de travail, numéros de page, mention de l'app en pied de la dernière.
-  **Taille du texte pro** : `ExportOptions.proTextSize` (normal par défaut, `COMMENT_SCALE`), vignettes
+  **Taille du texte pro** : `ExportOptions.proTextSize` (normal par défaut, `PRO_TEXT_SCALE` 1 / 1,25 / 1,5,
+  paliers plus francs que le Loisir), **`proTextBold`** (valeurs et pages de texte en 800), vignettes
   réduites d'autant (`proFrameH`), intitulés grandissant moitié moins.
 - **Position d'une page de texte** (`Photo.textVAlign` haut/milieu/bas, réglée dans l'aperçu, les deux
   styles) : défaut milieu en Loisir, haut en pro. `.tv-*` des deux gabarits, `startY` de `renderTextPage`.
@@ -370,6 +371,9 @@ d'entrée** (ils pilotent aussi les libellés) :
   centrées pour qu'une petite **seule** ne reste pas calée à gauche (Skia : `offsetX` vaut aussi en pro).
   Skia : `proSize` mappé sur `size` avant `paginateEntries` (petite = grille 2×2, grande = 1/page).
   Pas porté par la sauvegarde ni le `.comclic`.
+- ⚠️ **`-webkit-text-size-adjust: 100%`** sur `html` dans les **deux** gabarits : sans lui, iOS agrandit
+  d'office les petits textes d'une page réduite à l'écran (« text autosizing ») et l'aperçu ne montre
+  plus les vraies tailles — vécu avec la taille du texte pro, sans effet visible sur l'iPhone.
 - Contraintes de mise en page PDF **à ne pas casser** : dimensionner en **px = points** (A4
   595×842), **jamais de `vh`**, **hauteurs fixes** en familial, et
   `print-color-adjust: exact` (sinon iOS supprime fonds/ombres).

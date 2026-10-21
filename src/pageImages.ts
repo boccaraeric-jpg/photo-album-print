@@ -50,6 +50,7 @@ import {
   CAPTION_INK,
   COMMENT_BASE,
   COMMENT_SCALE,
+  PRO_TEXT_SCALE,
   COVER_W,
   coverPicks,
   effectiveCover,
@@ -990,10 +991,10 @@ function renderTextPage(
   const bodyText = item.comment.trim();
   const isPro = options.style === 'pro';
   // Pro : même corps que le PDF (20 pt × échelle du texte du rapport).
-  const bodySize = isPro ? 20 * (W / COVER_W) * COMMENT_SCALE[options.proTextSize ?? 'normal'] : 46;
+  const bodySize = isPro ? 20 * (W / COVER_W) * PRO_TEXT_SCALE[options.proTextSize ?? 'normal'] : 46;
   // Pro : Montserrat imposée (cf. `buildAlbumImages`, typeface forcée à `sans`).
   const bodyFam = TYPE_SPECS[options.typeface].text;
-  const bodyFont = fontFor(false, bodySize, bodyFam);
+  const bodyFont = fontFor(isPro && !!options.proTextBold, bodySize, bodyFam);
   const bodyLines = wrapLines(bodyFont, bodyText, W - 2 * PAD, 12);
   const blockH = bodyLines.length * bodySize * 1.32;
   // Position choisie dans l'aperçu (`textVAlign`) ; par défaut en haut dans le
@@ -1020,6 +1021,7 @@ function renderTextPage(
     align: bodyAlign,
     maxLines: 12,
     fam: bodyFam,
+    bold: isPro && !!options.proTextBold,
   });
   if (isPro) {
     if (credit) drawProCredit(canvas, H);
@@ -1263,7 +1265,8 @@ async function renderProPage(
   const canvas = surface.getCanvas();
   const k = W / COVER_W;
   const L = PRO_LAYOUT;
-  const scale = COMMENT_SCALE[options.proTextSize ?? 'normal'];
+  const scale = PRO_TEXT_SCALE[options.proTextSize ?? 'normal'];
+  const bold = !!options.proTextBold;
   const labelScale = 1 + (scale - 1) / 2;
 
   const bg = Skia.Paint();
@@ -1336,7 +1339,7 @@ async function renderProPage(
       });
       const vx = x + dtW + 12 * k;
       const vw = colW - dtW - 12 * k;
-      const opts = { color: ink, size: valueSize, maxLines: 60 };
+      const opts = { color: ink, size: valueSize, maxLines: 60, bold };
       const h = rich
         ? drawRichText(canvas, value, vx, ty + pad, vw, opts)
         : drawText(canvas, value, vx, ty + pad, vw, { ...opts, align });
@@ -1566,7 +1569,7 @@ export async function buildAlbumImages(
   const pages = pro
     ? paginateProEntries(
         pageSource,
-        COMMENT_SCALE[eff.proTextSize ?? 'normal'],
+        PRO_TEXT_SCALE[eff.proTextSize ?? 'normal'],
         (eff.showPlace ? 1 : 0) + (eff.dateFormat === 'none' ? 0 : 1),
       )
     : paginateEntries(pageSource, eff.photoSize, {

@@ -78,6 +78,17 @@ export const TYPE_SPECS: Record<Typeface, TypeSpec> = {
  * `COMMENT_SCALE` (réglage) ; Skia multiplie encore par `W / COVER_W`.
  */
 export const COMMENT_BASE = { small: 16, other: 18 };
+/**
+ * Corps du texte du rapport professionnel (`proTextSize`). Paliers plus francs
+ * que `COMMENT_SCALE` : le texte de base y est petit (12 pt), +20 % ne se
+ * voyait guère.
+ */
+export const PRO_TEXT_SCALE: Record<CommentSize, number> = {
+  normal: 1,
+  large: 1.25,
+  xlarge: 1.5,
+};
+
 export const COMMENT_SCALE: Record<CommentSize, number> = {
   normal: 1,
   large: 1.2,

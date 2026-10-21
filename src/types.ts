@@ -116,6 +116,8 @@ export interface ExportOptions {
    * texte) — pendant de `commentSize` du Loisir, défaut « normal ».
    */
   proTextSize: CommentSize;
+  /** Rapport professionnel : valeurs des fiches et pages de texte en gras. */
+  proTextBold: boolean;
 }
 
 /** Critère de tri de la liste des dossiers (écran d'accueil). */

@@ -47,6 +47,7 @@ import {
   LOGO_MARK_SCALE,
   LOGO_MARK_SVG,
   COMMENT_SCALE,
+  PRO_TEXT_SCALE,
   commentShrink,
   coverPicks,
   effectiveCover,
@@ -144,6 +145,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   photoMaps: false,
   format: 'a4',
   proTextSize: 'normal',
+  proTextBold: false,
 };
 
 /** Garde la valeur si elle fait partie des choix connus, sinon le défaut. */
@@ -193,6 +195,7 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     photoMaps: typeof o.photoMaps === 'boolean' ? o.photoMaps : d.photoMaps,
     format: oneOf(o.format, ['a4', '16x21', '16x16'] as const, d.format),
     proTextSize: oneOf(o.proTextSize, ['normal', 'large', 'xlarge'] as const, d.proTextSize),
+    proTextBold: typeof o.proTextBold === 'boolean' ? o.proTextBold : d.proTextBold,
   };
 }
 
@@ -564,6 +567,9 @@ function buildStyles(options: ExportOptions): string {
 
   return `
   ${fontFaces(famsUsed(options.typeface))}
+  /* iOS agrandit d'office les petits textes d'une page réduite à l'écran
+     (« text autosizing ») : l'aperçu ne montrait plus les vraies tailles. */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   * {
     box-sizing: border-box;
     /* Indispensable : sans cela, le moteur d'impression iOS supprime les
@@ -1139,7 +1145,7 @@ function proMeta(label: string, value: string, cls = '', rich = false): string {
 
 /** Corps du texte d'un rapport pro, rapporté au corps normal (`proTextSize`). */
 function proScale(options: ExportOptions): number {
-  return COMMENT_SCALE[options.proTextSize ?? 'normal'];
+  return PRO_TEXT_SCALE[options.proTextSize ?? 'normal'];
 }
 
 /** Lignes fixes d'une fiche pro (lieu, date) selon les réglages. */
@@ -1263,6 +1269,9 @@ function buildProDocument(
 
   const styles = `
     ${MONTSERRAT_FACE}
+    /* Pas d'agrandissement automatique des petits textes par iOS : sans cela,
+       Normale et Grande s'affichaient pareil dans l'aperçu. */
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact; }
     body { margin: 0; background: #ffffff; color: #14181f;
       font-family: 'Montserrat', Georgia, serif; font-size: 12px; }
@@ -1300,7 +1309,8 @@ function buildProDocument(
       text-transform: uppercase; font-size: ${px(10 * labelScale)}; letter-spacing: 1px;
       padding-top: 2px; }
     .sz-small .meta dt { width: ${px(PRO_SMALL_DT * labelScale)}; }
-    .meta dd { margin: 0; color: #14181f; line-height: 1.5; }
+    .meta dd { margin: 0; color: #14181f; line-height: 1.5;
+      font-weight: ${options.proTextBold ? 800 : 500}; }
     /* La valeur de date occupe toute la largeur restante pour que son
        alignement (gauche / centre / droite) soit visible. */
     .meta .row.date dd { flex: 1; text-align: ${dateAlign}; }
@@ -1310,7 +1320,8 @@ function buildProDocument(
     .pro-text.tv-middle { justify-content: center; }
     .pro-text.tv-bottom { justify-content: flex-end; }
     .pro-text-body { text-align: ${textAlign}; white-space: pre-wrap;
-      font-size: ${px(20 * scale)}; line-height: 1.7; color: #14181f; }
+      font-size: ${px(20 * scale)}; line-height: 1.7; color: #14181f;
+      font-weight: ${options.proTextBold ? 800 : 500}; }
     .footer { position: absolute; left: 0; right: 0; bottom: 22px; margin: 0;
       text-align: center; font-size: 10px; letter-spacing: 2px; color: #9ca3af; }
     /* Mention de l'app en pied de la dernière page, au-dessus du numéro. */

@@ -566,7 +566,8 @@ export function ExportModal({
             title={L.export.sections.texts}
             summary={joinSummary(
               isPro
-                ? L.export.sumProText(L.export.commentSizes[options.proTextSize])
+                ? L.export.sumProText(L.export.commentSizes[options.proTextSize]) +
+                  (options.proTextBold ? ` · ${L.export.sumBold}` : '')
                 : L.export.sumComment(L.export.commentSizes[options.commentSize]),
               options.showPlace && L.export.sumPlace,
               options.dateFormat === 'none'
@@ -635,6 +636,11 @@ export function ExportModal({
                     />
                   ))}
                 </View>
+                <SwitchRow
+                  label={L.export.proTextBoldLabel}
+                  value={options.proTextBold}
+                  onChange={(proTextBold) => setOptions((o) => ({ ...o, proTextBold }))}
+                />
               </>
             )}
 
