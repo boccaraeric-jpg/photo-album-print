@@ -378,7 +378,8 @@ d'entrée** (ils pilotent aussi les libellés) :
   réduites d'autant (`proFrameH`), intitulés grandissant moitié moins.
 - **Position d'une page de texte** (`Photo.textVAlign` haut/milieu/bas, réglée dans l'aperçu, les deux
   styles) : défaut milieu en Loisir, haut en pro. `.tv-*` des deux gabarits, `startY` de `renderTextPage`.
-- **Taille des photos du rapport pro** (`Photo.proSize`, **distinct** de `size` du Loisir) : réglée
+- **Taille des photos du rapport pro** : pour tout le rapport, `ExportOptions.proPhotoSize` (Mise en
+  page › Photos, défaut moyenne) ; par photo, `Photo.proSize` (**distinct** de `size` du Loisir), réglée
   dans l'aperçu (aperçu désormais interactif dans les deux styles ; en pro, taille seule — prop `pro`
   de `PreviewModal`, pas de fond). PDF : vignette `PRO_FRAME_H` (190/300/470), les **petites** en
   `inline-block` deux par ligne (jamais de flex : la fragmentation d'impression le coupe mal), lignes

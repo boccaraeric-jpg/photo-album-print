@@ -133,6 +133,11 @@ export interface ExportOptions {
   proTextSize: CommentSize;
   /** Rapport professionnel : valeurs des fiches et pages de texte en gras. */
   proTextBold: boolean;
+  /**
+   * Taille des photos du rapport professionnel (mise en page) ; une photo
+   * réglée dans l'aperçu (`Photo.proSize`) garde la sienne.
+   */
+  proPhotoSize: ProPhotoSize;
 }
 
 /** Critère de tri de la liste des dossiers (écran d'accueil). */

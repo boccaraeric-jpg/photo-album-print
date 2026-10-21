@@ -1585,6 +1585,7 @@ export async function buildAlbumImages(
         pageSource,
         PRO_TEXT_SCALE[eff.proTextSize ?? 'normal'],
         (eff.showPlace ? 1 : 0) + (eff.dateFormat === 'none' ? 0 : 1),
+        eff.proPhotoSize,
       )
     : paginateEntries(pageSource, eff.photoSize, {
         wide: mapIds,

@@ -148,6 +148,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   format: 'a4',
   proTextSize: 'normal',
   proTextBold: false,
+  proPhotoSize: 'medium',
 };
 
 /** Garde la valeur si elle fait partie des choix connus, sinon le défaut. */
@@ -200,6 +201,7 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     format: oneOf(o.format, ['a4', '16x21', '16x16'] as const, d.format),
     proTextSize: oneOf(o.proTextSize, ['normal', 'large', 'xlarge'] as const, d.proTextSize),
     proTextBold: typeof o.proTextBold === 'boolean' ? o.proTextBold : d.proTextBold,
+    proPhotoSize: oneOf(o.proPhotoSize, ['small', 'medium', 'large'] as const, d.proPhotoSize),
   };
 }
 
@@ -1180,6 +1182,8 @@ function proEntryHtml(
   showPlace: boolean,
   lang: Lang,
   interactive = false,
+  /** Taille de la fiche (celle de sa page). */
+  size: ProPhotoSize = 'medium',
 ): string {
   const { photo, src } = item;
   const D = dict(lang).doc;
@@ -1203,7 +1207,7 @@ function proEntryHtml(
         ${proMeta(D.description, desc, '', true)}
       </dl>`;
   return `
-    <article class="entry sz-${photo.proSize ?? 'medium'}" id="e-${escapeHtml(photo.id)}">
+    <article class="entry sz-${size}" id="e-${escapeHtml(photo.id)}">
       ${interactive ? `<a class="edit" href="${editHref(photo.id)}">${body}</a>` : body}
     </article>`;
 }
@@ -1245,6 +1249,7 @@ function buildProDocument(
     items.map((it) => it.photo),
     scale,
     proRows(options),
+    options.proPhotoSize,
   );
   const byId = new Map(items.map((it) => [it.photo.id, it]));
   const credit = `<p class="credit">${creditHtml()}</p>`;
@@ -1257,7 +1262,17 @@ function buildProDocument(
       const last = i === pages.length - 1 ? credit : '';
       if (page.type === 'text') return proTextPageHtml(page.item, no, interactive, last);
       const entries = page.items
-        .map((p) => proEntryHtml(byId.get(p.id)!, ++photoNo, dateFormat, showPlace, lang, interactive))
+        .map((p) =>
+          proEntryHtml(
+            byId.get(p.id)!,
+            ++photoNo,
+            dateFormat,
+            showPlace,
+            lang,
+            interactive,
+            page.size as ProPhotoSize,
+          ),
+        )
         .join('');
       return `
     <section class="sheet pro-page sz-${page.size}">

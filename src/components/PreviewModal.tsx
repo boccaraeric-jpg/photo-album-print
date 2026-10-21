@@ -134,7 +134,7 @@ export function PreviewModal({
 
   // Valeurs réellement en vigueur pour l'entrée touchée (affichées en couleur).
   const currentSize: PhotoSize = pro
-    ? (selected?.proSize ?? 'medium')
+    ? (selected?.proSize ?? albumSize)
     : (selected?.size ?? albumSize);
   const sizeKeys: PhotoSize[] = pro ? PRO_SIZE_KEYS : SIZE_KEYS;
   const sizeChosen = pro ? !!selected?.proSize : !!selected?.size;
@@ -294,7 +294,7 @@ export function PreviewModal({
                     <Pressable onPress={() => setSize(null)} hitSlop={8}>
                       <Text style={styles.reset}>
                         {pro
-                          ? L.preview.resetSizePro
+                          ? L.preview.resetSizePro(L.export.sizes[albumSize])
                           : L.preview.resetSize(L.export.sizes[albumSize])}
                       </Text>
                     </Pressable>

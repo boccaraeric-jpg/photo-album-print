@@ -2103,7 +2103,9 @@ onBack,
         onSend={chooseFormat}
         entries={orderedPhotos}
         pro={exportOptions.style === 'pro'}
-        albumSize={exportOptions.photoSize}
+        albumSize={
+          exportOptions.style === 'pro' ? exportOptions.proPhotoSize : exportOptions.photoSize
+        }
         albumBg={exportOptions.background}
         onEditEntry={editPreviewEntry}
         focusId={previewFocus}

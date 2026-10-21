@@ -29,6 +29,7 @@ import type {
   PageFormat,
   Photo,
   PhotoSize,
+  ProPhotoSize,
   Typeface,
 } from '../types';
 
@@ -55,6 +56,8 @@ interface Props {
 
 // Ordres d'affichage (les libellés viennent du dictionnaire, cf. `L.export.*`).
 const SIZE_KEYS: PhotoSize[] = ['small', 'medium', 'large', 'full'];
+// Rapport pro : pas de pleine page (une fiche garde toujours sa description).
+const PRO_SIZE_KEYS: ProPhotoSize[] = ['small', 'medium', 'large'];
 const FRAME_KEYS: FrameStyle[] = ['card', 'border', 'polaroid', 'none'];
 // Le polaroïd (cadre blanc façon scrapbook) reste réservé au familial : il n'a
 // pas sa place dans un rapport d'expertise.
@@ -547,13 +550,32 @@ export function ExportModal({
           <Section
             title={L.export.sections.photos}
             summary={joinSummary(
-              !isPro && L.export.sizes[options.photoSize],
+              isPro ? L.export.sizes[options.proPhotoSize] : L.export.sizes[options.photoSize],
               L.export.frames[options.frame],
               !isPro && options.liseret && L.export.sumLiseret,
             )}
             open={openSection === 'photos'}
             onToggle={() => toggleSection('photos')}
           >
+            {/* Pro : taille du rapport (petite = deux fiches côte à côte, grande
+                = une par page) ; l'aperçu peut encore régler une photo à part. */}
+            {isPro && (
+              <>
+                <Text style={[styles.label, styles.labelFirst]}>{L.export.sizeLabel}</Text>
+                <View style={styles.chips}>
+                  {PRO_SIZE_KEYS.map((value) => (
+                    <Chip
+                      key={value}
+                      selected={options.proPhotoSize === value}
+                      label={L.export.sizes[value]}
+                      hint={L.export.proSizeHints[value]}
+                      onPress={() => setOptions((o) => ({ ...o, proPhotoSize: value }))}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.note}>{L.export.proSizeNote}</Text>
+              </>
+            )}
             {!isPro && (
               <>
                 <Text style={[styles.label, styles.labelFirst]}>{L.export.sizeLabel}</Text>
@@ -571,7 +593,7 @@ export function ExportModal({
               </>
             )}
 
-            <Text style={[styles.label, isPro && styles.labelFirst]}>
+            <Text style={styles.label}>
               {L.export.frameLabel}
             </Text>
             <View style={styles.chips}>

@@ -206,6 +206,8 @@ export function paginateProEntries(
   entries: Photo[],
   scale: number,
   rows: number,
+  /** Taille du rapport (mise en page), sauf photo réglée dans l'aperçu. */
+  reportSize: ProPhotoSize = 'medium',
 ): AlbumPage[] {
   const L = PRO_LAYOUT;
   const room = L.pageH - L.padTop - L.padBottom;
@@ -230,7 +232,7 @@ export function paginateProEntries(
       pages.push({ type: 'text', item: e });
       continue;
     }
-    const sz = e.proSize ?? 'medium';
+    const sz = e.proSize ?? reportSize;
     if (group.length && (sz !== size || sz === 'large' || height([...group, e], sz) > room)) {
       flush();
     }
