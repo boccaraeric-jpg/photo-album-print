@@ -287,8 +287,7 @@ d'entrée** (ils pilotent aussi les libellés) :
   page générée au rendu et non une entrée du dossier.
 - `src/pdf.ts` `buildAlbumHtml()` (familial) / `buildProDocument()` (pro, photos numérotées,
   Lieu / Date / Description, pages de texte intercalées, flux `page-break-inside: avoid`). La **1ère
-  de couverture** = titre + année (`yearLabel`, calculée sur les photos ; **masquée** si le titre la
-contient déjà — `coverYearText`, les deux moteurs) + **la seule photo de
+  de couverture** = titre **sans année** (retirée : qui la veut l'écrit dans le titre) + **la seule photo de
   couverture** + repères de coupe. La photo de couverture n'est **pas** répétée dans les pages
   **sauf si elle porte un commentaire** (familial ; le pro n'a pas de photo en couverture).
   `htmlToPdfFile()` rend via `expo-print` puis **renomme**
@@ -381,8 +380,7 @@ contient déjà — `coverYearText`, les deux moteurs) + **la seule photo de
   une ligne et nomme toujours les fichiers (`albumTitle` ≠ `coverTitle` dans `AlbumScreen`,
   `buildAlbumImages(..., coverTitle)`). Mise en page : `coverTitleLayout` (`albumStyle.ts`) estime
   lignes et hauteur (`CHAR_EM`, désormais partagé avec `albumMap.ts`), réduit le titre au-delà de
-  2 lignes ; le pêle-mêle se range **sous** le titre (`scatterSlots(..., zoneTop)` — A4 à titre court :
-  gabarit d'origine inchangé), la grille cède de la hauteur (`gridLayout(..., titleBlock)`), la
+  2 lignes ; le pêle-mêle se range **sous** le titre et s'y centre (`scatterSlots(..., zoneTop)`), la grille cède de la hauteur (`gridLayout(..., titleBlock)`), la
   classique laisse la photo céder en CSS (`.cover` en colonne, `flex-basis`). Skia : `wrapLines`
   respecte désormais les `
 `. Pas porté par la sauvegarde ni le `.comclic`.

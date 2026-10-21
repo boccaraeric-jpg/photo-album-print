@@ -170,16 +170,6 @@ export const LOGO_MARK_SCALE = 1.9;
 /** Liseré blanc posé sur la photo et sur sa carte (points A4). */
 export const LISERET = { width: 6, radius: 2 };
 
-/**
- * Année affichée sous le titre de couverture, ou rien quand le titre la donne
- * déjà (« Instructions du 21 10 2026 » suivi de « 2026 » faisait doublon). Une
- * plage (« 2025 – 2026 ») disparaît si le titre contient toutes ses années.
- */
-export function coverYearText(title: string, yearLabel: string): string {
-  const years = yearLabel.match(/\d{4}/g) ?? [];
-  if (!years.length) return yearLabel;
-  return years.every((y) => title.includes(y)) ? '' : yearLabel;
-}
 
 /** Familles réellement employées (le PDF n'embarque que celles-là). */
 export function famsUsed(t: Typeface): FontFam[] {
@@ -230,7 +220,7 @@ export interface CoverTitleLayout {
   /** Corps du titre (points), réduit s'il faudrait plus de deux lignes. */
   size: number;
   lines: number;
-  /** Hauteur du bloc titre + année (points). */
+  /** Hauteur du bloc titre (points). */
   height: number;
 }
 
@@ -245,7 +235,6 @@ export function coverTitleLayout(
   typeface: Typeface,
   baseSize: number,
   width: number,
-  withYear: boolean,
 ): CoverTitleLayout {
   const spec = TYPE_SPECS[typeface];
   const text = spec.uppercaseTitle ? title.toUpperCase() : title;
@@ -256,8 +245,7 @@ export function coverTitleLayout(
     size = Math.round(size * 0.92 * 10) / 10;
     lines = estimateLines(text, size, spec.title, true, width);
   }
-  const yearH = withYear ? 8 + 24 * spec.titleScale * TITLE_LINE : 0;
-  return { size, lines, height: lines * size * TITLE_LINE + yearH };
+  return { size, lines, height: lines * size * TITLE_LINE };
 }
 
 /* --------------------------------------------------------------------------
@@ -417,24 +405,17 @@ export function scatterSlots(
     right: extent(([cx, , z]) => cx + (z / 2 + POLAROID.pad) * 1.08, Math.max),
   };
   // Zone libre : sous le titre, jusqu'au bas de la page.
-  const zone = { top: Math.max(zoneTop, 0), bottom: pageH - 6, left: 12, right: COVER_W - 12 };
+  const zone = { top: Math.max(zoneTop, 0), bottom: pageH - 10, left: 12, right: COVER_W - 12 };
   const mid = COVER_W / 2;
-  // A4 avec un titre qui laisse la place : le gabarit d'origine, inchangé.
-  // Sinon (titre long, page plus courte) : le montage se réduit juste ce qu'il
-  // faut pour tenir sous le titre, et se centre dans la place libre. En largeur
-  // on réduit moins (la page ne manque pas de largeur) : les photos s'écartent.
-  const fits = pageH >= COVER_H && box.top >= zone.top && box.bottom <= zone.bottom;
-  let s = 1;
-  let sx = 1;
-  let dy = 0;
-  if (!fits) {
-    const boxH = box.bottom - box.top;
-    const zoneH = zone.bottom - zone.top;
-    s = Math.min(1, zoneH / boxH);
-    sx = Math.min(1, s * 1.2, (zone.right - zone.left) / (box.right - box.left));
-    const top = zone.top + (zoneH - boxH * s) / 2;
-    dy = top - box.top * s;
-  }
+  // Le montage se centre dans la place libre sous le titre (marges égales en
+  // haut et en bas) ; il ne se réduit que s'il n'y tient pas (titre long, page
+  // plus courte). En largeur on réduit moins (la page ne manque pas de
+  // largeur) : les photos s'écartent un peu.
+  const boxH = box.bottom - box.top;
+  const zoneH = zone.bottom - zone.top;
+  const s = Math.min(1, zoneH / boxH);
+  const sx = Math.min(1, s * 1.2, (zone.right - zone.left) / (box.right - box.left));
+  const dy = zone.top + (zoneH - boxH * s) / 2 - box.top * s;
   const [hero, ...others] = raw.map(
     ([cx, cy, size]): [number, number, number] => [
       mid + (cx - mid) * sx,
@@ -497,7 +478,7 @@ const GRID_TITLE_BLOCK = 110;
 export function gridLayout(
   count: number,
   pageH: number = COVER_H,
-  /** Hauteur du bloc titre + année (`coverTitleLayout`) : jamais moins que d'origine. */
+  /** Hauteur du bloc titre (`coverTitleLayout`) : jamais moins que d'origine. */
   titleBlock: number = GRID_TITLE_BLOCK,
 ): GridLayout {
   const shape = gridShape(count);

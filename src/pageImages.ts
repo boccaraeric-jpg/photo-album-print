@@ -51,7 +51,6 @@ import {
   COMMENT_BASE,
   COMMENT_SCALE,
   coverTitleLayout,
-  coverYearText,
   PRO_TEXT_SCALE,
   COVER_W,
   coverPicks,
@@ -871,17 +870,7 @@ async function renderCover(
   canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
 
   const spec = TYPE_SPECS[options.typeface];
-  // Année (ou plage d'années) en gras sous le titre, comme dans l'aperçu.
-  const years = photos.map((p) => new Date(photoDate(p)).getFullYear());
-  // … sauf si le titre la contient déjà (`coverYearText`, comme le PDF).
-  const yearLabel = coverYearText(
-    title,
-    years.length
-      ? Math.min(...years) === Math.max(...years)
-        ? `${Math.min(...years)}`
-        : `${Math.min(...years)} – ${Math.max(...years)}`
-      : '',
-  );
+  // Pas d'année sous le titre (comme le PDF) : qui la veut l'écrit dans le titre.
 
   const style = effectiveCover(options.cover, photos.length);
   if (style !== 'classic') {
@@ -894,9 +883,7 @@ async function renderCover(
     // au-delà de deux lignes ; les photos se rangent sous lui.
     const titleText = spec.uppercaseTitle ? title.toUpperCase() : title;
     const head = (top: number, size: number) => {
-      const ty =
-        top * k +
-        drawText(canvas, titleText, SCATTER_TITLE.side * k, top * k, (COVER_W - 2 * SCATTER_TITLE.side) * k, {
+      drawText(canvas, titleText, SCATTER_TITLE.side * k, top * k, (COVER_W - 2 * SCATTER_TITLE.side) * k, {
           color: ink,
           size: size * k,
           align: TextAlign.Center,
@@ -904,16 +891,6 @@ async function renderCover(
           maxLines: 4,
           fam: spec.title,
         });
-      if (yearLabel) {
-        drawText(canvas, yearLabel, PAD, ty + 8 * k, W - 2 * PAD, {
-          color: accent,
-          size: 24 * spec.titleScale * k,
-          align: TextAlign.Center,
-          bold: true,
-          maxLines: 1,
-          fam: spec.title,
-        });
-      }
     };
 
     if (style === 'scatter') {
@@ -922,7 +899,6 @@ async function renderCover(
         options.typeface,
         SCATTER_TITLE.size,
         COVER_W - 2 * SCATTER_TITLE.side,
-        !!yearLabel,
       );
       head(SCATTER_TITLE.top, layoutTitle.size);
       const slots = scatterSlots(
@@ -942,7 +918,6 @@ async function renderCover(
         options.typeface,
         GRID.titleSize,
         COVER_W - 2 * SCATTER_TITLE.side,
-        !!yearLabel,
       );
       const layout = gridLayout(picks.length, layoutHeight(options), layoutTitle.height + 12);
       picks.forEach((_, i) => {
@@ -964,7 +939,7 @@ async function renderCover(
   // Format moins haut que l'A4 : la photo de couverture cède la hauteur perdue.
   // Titre (sous la photo) : chaque ligne en plus est prise sur la photo.
   const kc = W / COVER_W;
-  const classicTitle = coverTitleLayout(title, options.typeface, 76 / kc, (W - 2 * PAD) / kc, false);
+  const classicTitle = coverTitleLayout(title, options.typeface, 76 / kc, (W - 2 * PAD) / kc);
   const titlePx = classicTitle.size * kc;
   const heroH = Math.max(
     360,
@@ -994,18 +969,6 @@ async function renderCover(
     maxLines: 4,
     fam: spec.title,
   });
-  if (yearLabel) {
-    ty += 16;
-    drawText(canvas, yearLabel, PAD, ty, W - 2 * PAD, {
-      color: accent,
-      size: 52 * spec.titleScale,
-      align: TextAlign.Center,
-      bold: true,
-      letterSpacing: 4,
-      maxLines: 1,
-      fam: spec.title,
-    });
-  }
   // Familial : pas de nombre total de photos affiché sur la couverture.
 
   return encodeSurface(surface, fileTitle, 0);

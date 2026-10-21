@@ -49,7 +49,6 @@ import {
   COMMENT_SCALE,
   coverTitleLayout,
   COVER_W,
-  coverYearText,
   PRO_TEXT_SCALE,
   commentShrink,
   coverPicks,
@@ -222,14 +221,6 @@ export function formatRange(photos: Photo[], lang: Lang): string {
   return monthYear(first) === monthYear(last)
     ? monthYear(first)
     : `${monthYear(first)} – ${monthYear(last)}`;
-}
-
-/** Année ou plage d'années couverte par l'album (ex. « 2026 » ou « 2024 – 2026 »). */
-function yearLabel(photos: Photo[]): string {
-  const years = photos.map((p) => new Date(photoDate(p)).getFullYear());
-  const min = Math.min(...years);
-  const max = Math.max(...years);
-  return min === max ? `${min}` : `${min} – ${max}`;
 }
 
 /** Vrai si la couleur (hex 6 chiffres) est sombre — pour adapter le texte. */
@@ -625,11 +616,6 @@ function buildStyles(options: ExportOptions): string {
     font-weight: ${bold(spec.title)}; font-size: ${58 * spec.titleScale}px; line-height: 1.04;
     letter-spacing: 0.5px; color: var(--ink);
   }
-  .cover-year {
-    margin: 12px 0 0; font-family: ${fam(spec.title)};
-    font-size: ${38 * spec.titleScale}px; letter-spacing: 3px; color: var(--accent);
-    font-weight: ${bold(spec.title)};
-  }
 
   /* --- Couvertures montées (pêle-mêle, grille) : gabarit calculé dans
      albumStyle.ts, posé en absolu pour coller au rendu Skia --- */
@@ -639,7 +625,6 @@ function buildStyles(options: ExportOptions): string {
     left: ${SCATTER_TITLE.side}px; right: ${SCATTER_TITLE.side}px; text-align: center;
   }
   .cover-abs .cover-title { margin: 0; font-size: ${SCATTER_TITLE.size * spec.titleScale}px; }
-  .cover-abs .cover-year { margin: 8px 0 0; font-size: ${24 * spec.titleScale}px; }
   .grid-head .cover-title { font-size: ${GRID.titleSize * spec.titleScale}px; }
   .pola {
     position: absolute; margin: 0; background: #fff; border-radius: 2px;
@@ -922,11 +907,6 @@ export async function buildAlbumHtml(
   const format = effectiveFormat(options);
   const pageH = pageHeight(format);
   const coverTitle = escapeHtml(spec.uppercaseTitle ? title.toUpperCase() : title);
-  // Année sous le titre, sauf si le titre la contient déjà (`coverYearText`).
-  const coverYear = escapeHtml(
-    photoEntries.length ? coverYearText(title, yearLabel(photoEntries)) : '',
-  );
-  const yearHtml = coverYear ? `<p class="cover-year">${coverYear}</p>` : '';
   const srcOf = (p: Photo) => items.find((it) => it.photo.id === p.id)?.src ?? '';
   const imgTag = (src: string) => (src ? `<img src="${src}" />` : '');
   // Nombres seuls dans les attributs `style` (calculés, jamais saisis).
@@ -934,8 +914,8 @@ export async function buildAlbumHtml(
 
   // Titre de couverture : corps et hauteur estimés (`coverTitleLayout`, commun
   // aux deux moteurs) — les photos se rangent sous le titre, quelle que soit
-  // sa longueur et ses retours à la ligne.
-  const withYear = !!coverYear;
+  // sa longueur et ses retours à la ligne. Pas d'année sous le titre : qui la
+  // veut l'écrit dans le titre (« Madère, octobre 2026 »).
   let coverHtml: string;
   if (coverStyle === 'scatter') {
     const picks = coverPicks(photoEntries, 'scatter', coverPhotoId, scatterIds);
@@ -944,7 +924,6 @@ export async function buildAlbumHtml(
       options.typeface,
       SCATTER_TITLE.size,
       COVER_W - 2 * SCATTER_TITLE.side,
-      withYear,
     );
     const slots = scatterSlots(
       picks.length,
@@ -963,7 +942,6 @@ export async function buildAlbumHtml(
         <section class="sheet cover-abs">
           <div class="cv-head">
             <h1 class="cover-title" style="font-size:${px(head.size)}">${coverTitle}</h1>
-            ${yearHtml}
           </div>
           ${polas}
         </section>`;
@@ -974,7 +952,6 @@ export async function buildAlbumHtml(
       options.typeface,
       GRID.titleSize,
       COVER_W - 2 * SCATTER_TITLE.side,
-      withYear,
     );
     const layout = gridLayout(picks.length, pageH, head.height + 12);
     const cells = picks
@@ -988,19 +965,17 @@ export async function buildAlbumHtml(
           ${cells}
           <div class="cv-head grid-head" style="top:${px(layout.titleY)}">
             <h1 class="cover-title" style="font-size:${px(head.size)}">${coverTitle}</h1>
-            ${yearHtml}
           </div>
         </section>`;
   } else {
     // Couverture classique : titre réduit au-delà de deux lignes ; la photo
     // cède le reste de la place en CSS (cf. `.cover`).
-    const head = coverTitleLayout(title, options.typeface, 58, COVER_W - 92, false);
+    const head = coverTitleLayout(title, options.typeface, 58, COVER_W - 92);
     coverHtml = `
         <section class="sheet cover">
           <span class="crop tl"></span><span class="crop tr"></span>
           <span class="crop bl"></span><span class="crop br"></span>
           <h1 class="cover-title" style="font-size:${px(head.size)}">${coverTitle}</h1>
-          ${yearHtml}
           <div class="cover-hero">${imgTag(coverSrc)}</div>
           <div class="cover-foot">
             <span>${escapeHtml(subtitle)}</span>
