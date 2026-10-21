@@ -27,13 +27,7 @@ import {
 
 import { C, F } from './src/theme';
 
-import type {
-  Adjustments,
-  Album,
-  AlbumSort,
-  ExportOptions,
-  Photo,
-} from './src/types';
+import type { Adjustments, Album, AlbumSort, ExportOptions, Photo, Annotation } from './src/types';
 import { autoMapIds } from './src/albumMap';
 import {
   comparePhotos,
@@ -84,7 +78,7 @@ import {
   peekBackup,
   type ParsedBackup,
 } from './src/backup';
-import { bakeAdjustedImage, isNeutral } from './src/adjustments';
+import { bakePhoto, isNeutral } from './src/adjustments';
 import { shareInstallLink } from './src/links';
 import {
   buildAlbumHtml,
@@ -103,6 +97,7 @@ import { AlbumCard } from './src/components/AlbumCard';
 import { ShareImportModal } from './src/components/ShareImportModal';
 import { CommentModal } from './src/components/CommentModal';
 import { AdjustModal } from './src/components/AdjustModal';
+import { AnnotateModal } from './src/components/AnnotateModal';
 import { NameModal } from './src/components/NameModal';
 import { ExportModal } from './src/components/ExportModal';
 import { PreviewModal, type EntryPatch } from './src/components/PreviewModal';
@@ -1189,6 +1184,7 @@ onBack,
   const insets = useSafeAreaInsets();
   const [editing, setEditing] = useState<Photo | null>(null);
   const [adjusting, setAdjusting] = useState<Photo | null>(null);
+  const [annotating, setAnnotating] = useState<Photo | null>(null);
   const [cropping, setCropping] = useState<Photo | null>(null);
   // Import depuis la photothèque : voile d'attente (`total` = 0 tant que la
   // photothèque prépare encore les fichiers, puis progression photo par photo).
@@ -1505,7 +1501,13 @@ onBack,
             if (p.id !== id) return p;
             if (p.uri && p.uri !== persisted) deleteImage(p.uri);
             if (p.originalUri && p.originalUri !== p.uri) deleteImage(p.originalUri);
-            return { ...p, uri: persisted, originalUri: persisted, adjustments: undefined };
+            return {
+              ...p,
+              uri: persisted,
+              originalUri: persisted,
+              adjustments: undefined,
+              annotations: undefined,
+            };
           }),
         );
       } catch {
@@ -1532,11 +1534,15 @@ onBack,
   const saveAdjustments = useCallback(
     async (photo: Photo, adjustments: Adjustments) => {
       const originalUri = photo.originalUri ?? photo.uri;
+      // Les annotations sont posées dans l'image pivotée : une nouvelle rotation
+      // les décalerait, elles sont alors retirées (et l'utilisateur prévenu).
+      const rotated = (photo.adjustments?.rotation ?? 0) !== adjustments.rotation;
+      const annotations = photo.annotations?.length && !rotated ? photo.annotations : undefined;
       try {
-        const neutral = isNeutral(adjustments);
+        const neutral = isNeutral(adjustments) && !annotations;
         const newUri = neutral
           ? originalUri
-          : await bakeAdjustedImage(originalUri, adjustments, photo.id);
+          : await bakePhoto(originalUri, adjustments, annotations, photo.id);
         // Supprime l'ancienne version ajustée devenue obsolète.
         if (photo.uri !== originalUri) await deleteImage(photo.uri);
         setPhotos((prev) =>
@@ -1546,17 +1552,67 @@ onBack,
                   ...p,
                   uri: newUri,
                   originalUri: neutral ? undefined : originalUri,
-                  adjustments: neutral ? undefined : adjustments,
+                  adjustments: isNeutral(adjustments) ? undefined : adjustments,
+                  annotations,
                 }
               : p,
           ),
         );
         setAdjusting(null);
+        if (photo.annotations?.length && !annotations) {
+          Alert.alert(L.annotate.droppedTitle, L.annotate.droppedRotate);
+        }
       } catch {
         Alert.alert(L.common.error, L.alert.applyAdjustFail);
       }
     },
     [setPhotos],
+  );
+
+  // Annotations au marqueur : gravées par-dessus l'original et ses réglages.
+  const saveAnnotations = useCallback(
+    async (photo: Photo, annotations: Annotation[]) => {
+      const originalUri = photo.originalUri ?? photo.uri;
+      const adj = photo.adjustments;
+      const clean = (!adj || isNeutral(adj)) && !annotations.length;
+      try {
+        const newUri = clean
+          ? originalUri
+          : await bakePhoto(originalUri, adj, annotations, photo.id);
+        if (photo.uri !== originalUri && photo.uri !== newUri) await deleteImage(photo.uri);
+        setPhotos((prev) =>
+          prev.map((p) =>
+            p.id === photo.id
+              ? {
+                  ...p,
+                  uri: newUri,
+                  originalUri: clean ? undefined : originalUri,
+                  annotations: annotations.length ? annotations : undefined,
+                }
+              : p,
+          ),
+        );
+        setAnnotating(null);
+      } catch {
+        Alert.alert(L.common.error, L.annotate.saveFail);
+      }
+    },
+    [setPhotos, L],
+  );
+
+  // Recadrer une photo annotée efface ses annotations : on prévient d'abord.
+  const startCrop = useCallback(
+    (photo: Photo) => {
+      if (!photo.annotations?.length) {
+        setCropping(photo);
+        return;
+      }
+      Alert.alert(L.annotate.cropTitle, L.annotate.cropBody, [
+        { text: L.common.cancel, style: 'cancel' },
+        { text: L.annotate.cropContinue, onPress: () => setCropping(photo) },
+      ]);
+    },
+    [L],
   );
 
   const removePhoto = useCallback(
@@ -1889,7 +1945,8 @@ onBack,
                 onView={setViewing}
                 onSetCover={(photo) => onSetCover(photo.id)}
                 onAdjust={setAdjusting}
-                onCrop={setCropping}
+                onCrop={startCrop}
+                onAnnotate={setAnnotating}
                 onDelete={removePhoto}
                 onMoveUp={() => movePhoto(item.id, 'up')}
                 onMoveDown={() => movePhoto(item.id, 'down')}
@@ -1984,6 +2041,12 @@ onBack,
         mapAuto={!!editing && autoMaps.has(editing.id)}
         onSave={saveComment}
         onClose={() => setEditing(null)}
+      />
+
+      <AnnotateModal
+        photo={annotating}
+        onSave={saveAnnotations}
+        onClose={() => setAnnotating(null)}
       />
 
       <AdjustModal

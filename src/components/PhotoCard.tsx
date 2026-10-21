@@ -15,6 +15,8 @@ interface Props {
   onSetCover: (photo: Photo) => void;
   onAdjust: (photo: Photo) => void;
   onCrop: (photo: Photo) => void;
+  /** Ouvre l'annotation au marqueur (tracé libre, flèche). */
+  onAnnotate: (photo: Photo) => void;
   onDelete: (photo: Photo) => void;
   /** Déplace l'entrée d'un cran vers le haut / le bas dans le dossier. */
   onMoveUp: () => void;
@@ -35,6 +37,7 @@ export function PhotoCard({
   onSetCover,
   onAdjust,
   onCrop,
+  onAnnotate,
   onDelete,
   onMoveUp,
   onMoveDown,
@@ -163,6 +166,19 @@ export function PhotoCard({
               />
             </Pressable>
             <Pressable
+              style={[styles.iconBtn, !!photo.annotations?.length && styles.iconBtnActive]}
+              hitSlop={6}
+              onPress={() => onAnnotate(photo)}
+              accessibilityRole="button"
+              accessibilityLabel={L.annotate.title}
+            >
+              <Ionicons
+                name="brush-outline"
+                size={19}
+                color={photo.annotations?.length ? '#b45309' : '#6b7280'}
+              />
+            </Pressable>
+            <Pressable
               style={styles.iconBtn}
               hitSlop={10}
               onPress={() => onDelete(photo)}
@@ -237,7 +253,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginTop: 7,
   },
-  actions: { gap: 10 },
+  // Cinq boutons en grille de deux colonnes : la carte reste basse.
+  actions: { flexDirection: 'row', flexWrap: 'wrap', width: 80, gap: 8 },
   iconBtn: {
     width: 36,
     height: 36,

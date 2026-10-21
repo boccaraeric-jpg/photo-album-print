@@ -24,6 +24,21 @@ export type PhotoSize = 'small' | 'medium' | 'large' | 'full';
  */
 export type ProPhotoSize = 'small' | 'medium' | 'large';
 
+/** Épaisseur d'un trait d'annotation (cf. `ANNOTATION_WIDTHS`). */
+export type AnnotationWidth = 'thin' | 'medium' | 'thick';
+
+/**
+ * Annotation dessinée au doigt sur une photo : tracé libre ou flèche. Points
+ * normalisés (0 → 1) dans l'image affichée, réglages et rotation compris.
+ */
+export interface Annotation {
+  kind: 'free' | 'arrow';
+  color: string;
+  width: AnnotationWidth;
+  /** Tracé libre : tous les points ; flèche : départ puis pointe. */
+  points: [number, number][];
+}
+
 /** Position verticale d'un texte sur sa page (pages de texte). */
 export type TextVAlign = 'top' | 'middle' | 'bottom';
 
@@ -174,6 +189,11 @@ export interface Photo {
    * — familial seulement. Une page ne mélange pas deux tailles.
    */
   size?: PhotoSize;
+  /**
+   * Annotations (marqueur) incrustées dans `uri` ; l'image sans elles se
+   * recalcule depuis `originalUri` + `adjustments`, ce qui les garde modifiables.
+   */
+  annotations?: Annotation[];
   /** Taille dans le rapport professionnel (absent = moyenne), réglée dans l'aperçu. */
   proSize?: ProPhotoSize;
   /**

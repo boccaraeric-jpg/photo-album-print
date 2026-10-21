@@ -1,6 +1,7 @@
-import { ImageFormat, Skia } from '@shopify/react-native-skia';
-import type { Adjustments } from './types';
+import { ImageFormat, PaintStyle, Skia, StrokeCap, StrokeJoin } from '@shopify/react-native-skia';
+import type { Adjustments, Annotation } from './types';
 import { writeBase64Image } from './photoFiles';
+import { annotationPath, strokePx } from './annotations';
 
 export const DEFAULT_ADJUSTMENTS: Adjustments = {
   exposure: 0,
@@ -119,6 +120,21 @@ export async function bakeAdjustedImage(
   adj: Adjustments,
   photoId: string,
 ): Promise<string> {
+  return bakePhoto(srcUri, adj, undefined, photoId);
+}
+
+/**
+ * Grave l'image finale d'une photo : l'original, ses réglages (couleurs,
+ * rotation) puis ses annotations par-dessus. L'original n'est jamais modifié :
+ * réglages et annotations restent modifiables.
+ */
+export async function bakePhoto(
+  srcUri: string,
+  adjustments: Adjustments | undefined,
+  annotations: Annotation[] | undefined,
+  photoId: string,
+): Promise<string> {
+  const adj = adjustments ?? DEFAULT_ADJUSTMENTS;
   const data = await Skia.Data.fromURI(srcUri);
   const image = Skia.Image.MakeImageFromEncoded(data);
   if (!image) throw new Error(`Image illisible : ${srcUri}`);
@@ -138,6 +154,7 @@ export async function bakeAdjustedImage(
   if (!surface) throw new Error('Impossible de créer la surface de rendu.');
 
   const canvas = surface.getCanvas();
+  canvas.save();
   canvas.rotate(rotation, outW / 2, outH / 2);
   canvas.translate((outW - w) / 2, (outH - h) / 2);
 
@@ -149,6 +166,22 @@ export async function bakeAdjustedImage(
     Skia.XYWHRect(0, 0, w, h),
     paint,
   );
+
+  canvas.restore();
+
+  // Annotations : dans le repère de l'image finale (rotation comprise), comme
+  // à l'écran d'annotation.
+  const rect = { x: 0, y: 0, w: outW, h: outH };
+  for (const a of annotations ?? []) {
+    const stroke = Skia.Paint();
+    stroke.setAntiAlias(true);
+    stroke.setStyle(PaintStyle.Stroke);
+    stroke.setStrokeCap(StrokeCap.Round);
+    stroke.setStrokeJoin(StrokeJoin.Round);
+    stroke.setStrokeWidth(strokePx(a, rect));
+    stroke.setColor(Skia.Color(a.color));
+    canvas.drawPath(annotationPath(a, rect), stroke);
+  }
 
   const snapshot = surface.makeImageSnapshot();
   const base64 = snapshot.encodeToBase64(ImageFormat.JPEG, 90);

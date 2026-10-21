@@ -149,6 +149,16 @@ dossier ; sinon la 1ʳᵉ photo sert de couverture par défaut).
 > de fichier sous `album-photos/` fait foi). Tout nouveau fichier durable doit vivre sous un dossier
 > de `documentDirectory` et être recalculé de la même façon — jamais une URI absolue persistée telle
 > quelle.
+**Annotation au marqueur** (`AnnotateModal`, bouton pinceau de `PhotoCard`, les deux modes) : tracé
+libre ou flèche, 4 couleurs, 3 épaisseurs, annuler / tout effacer. Toucher par **`PanResponder`** (RN
+de base, pas de gesture-handler), trait en cours dans une `ref`. `Photo.annotations` en coordonnées
+**normalisées** dans l'image affichée (réglages et rotation compris) ; `src/annotations.ts`
+(`annotationPath`, lissage par milieux de segments, pointe de flèche) sert à l'écran **et** à la
+gravure : **`bakePhoto(original, adjustments, annotations)`** (`adjustments.ts`) — `uri` = image gravée,
+`originalUri` gardé, donc tout reste modifiable. Une **rotation** changée dans les réglages ou un
+**recadrage** retirent les annotations (recadrage : confirmation préalable, `startCrop`). Actions de
+la carte en grille 2 colonnes (5 boutons). Les annotations voyagent gravées dans l'image (sauvegarde,
+`.comclic`), pas en tant que traits modifiables.
 `AdjustModal` prévisualise en direct via une **matrice couleur 4×5 Skia** ; `bakeAdjustedImage()`
 grave un nouveau JPEG (la photo garde `originalUri` + `uri` gravé + `adjustments`). `CropModal`
 recadre par **format + position** (pas de gestes : fiable en Expo Go) via `expo-image-manipulator` ;
