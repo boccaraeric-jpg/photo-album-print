@@ -50,6 +50,7 @@ import {
   CAPTION_INK,
   COMMENT_BASE,
   COMMENT_SCALE,
+  coverYearText,
   PRO_TEXT_SCALE,
   COVER_W,
   coverPicks,
@@ -856,11 +857,15 @@ async function renderCover(
   const spec = TYPE_SPECS[options.typeface];
   // Année (ou plage d'années) en gras sous le titre, comme dans l'aperçu.
   const years = photos.map((p) => new Date(photoDate(p)).getFullYear());
-  const yearLabel = years.length
-    ? Math.min(...years) === Math.max(...years)
-      ? `${Math.min(...years)}`
-      : `${Math.min(...years)} – ${Math.max(...years)}`
-    : '';
+  // … sauf si le titre la contient déjà (`coverYearText`, comme le PDF).
+  const yearLabel = coverYearText(
+    title,
+    years.length
+      ? Math.min(...years) === Math.max(...years)
+        ? `${Math.min(...years)}`
+        : `${Math.min(...years)} – ${Math.max(...years)}`
+      : '',
+  );
 
   const style = effectiveCover(options.cover, photos.length);
   if (style !== 'classic') {

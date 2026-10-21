@@ -287,7 +287,8 @@ d'entrée** (ils pilotent aussi les libellés) :
   page générée au rendu et non une entrée du dossier.
 - `src/pdf.ts` `buildAlbumHtml()` (familial) / `buildProDocument()` (pro, photos numérotées,
   Lieu / Date / Description, pages de texte intercalées, flux `page-break-inside: avoid`). La **1ère
-  de couverture** = titre + année (`yearLabel`, calculée sur les photos) + **la seule photo de
+  de couverture** = titre + année (`yearLabel`, calculée sur les photos ; **masquée** si le titre la
+contient déjà — `coverYearText`, les deux moteurs) + **la seule photo de
   couverture** + repères de coupe. La photo de couverture n'est **pas** répétée dans les pages
   **sauf si elle porte un commentaire** (familial ; le pro n'a pas de photo en couverture).
   `htmlToPdfFile()` rend via `expo-print` puis **renomme**

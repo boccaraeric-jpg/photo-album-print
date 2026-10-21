@@ -170,6 +170,17 @@ export const LOGO_MARK_SCALE = 1.9;
 /** Liseré blanc posé sur la photo et sur sa carte (points A4). */
 export const LISERET = { width: 6, radius: 2 };
 
+/**
+ * Année affichée sous le titre de couverture, ou rien quand le titre la donne
+ * déjà (« Instructions du 21 10 2026 » suivi de « 2026 » faisait doublon). Une
+ * plage (« 2025 – 2026 ») disparaît si le titre contient toutes ses années.
+ */
+export function coverYearText(title: string, yearLabel: string): string {
+  const years = yearLabel.match(/\d{4}/g) ?? [];
+  if (!years.length) return yearLabel;
+  return years.every((y) => title.includes(y)) ? '' : yearLabel;
+}
+
 /** Familles réellement employées (le PDF n'embarque que celles-là). */
 export function famsUsed(t: Typeface): FontFam[] {
   const s = TYPE_SPECS[t];

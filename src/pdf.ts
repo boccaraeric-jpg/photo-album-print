@@ -47,6 +47,7 @@ import {
   LOGO_MARK_SCALE,
   LOGO_MARK_SVG,
   COMMENT_SCALE,
+  coverYearText,
   PRO_TEXT_SCALE,
   commentShrink,
   coverPicks,
@@ -912,7 +913,11 @@ export async function buildAlbumHtml(
   const format = effectiveFormat(options);
   const pageH = pageHeight(format);
   const coverTitle = escapeHtml(spec.uppercaseTitle ? title.toUpperCase() : title);
-  const coverYear = escapeHtml(photoEntries.length ? yearLabel(photoEntries) : '');
+  // Année sous le titre, sauf si le titre la contient déjà (`coverYearText`).
+  const coverYear = escapeHtml(
+    photoEntries.length ? coverYearText(title, yearLabel(photoEntries)) : '',
+  );
+  const yearHtml = coverYear ? `<p class="cover-year">${coverYear}</p>` : '';
   const srcOf = (p: Photo) => items.find((it) => it.photo.id === p.id)?.src ?? '';
   const imgTag = (src: string) => (src ? `<img src="${src}" />` : '');
   // Nombres seuls dans les attributs `style` (calculés, jamais saisis).
@@ -933,7 +938,7 @@ export async function buildAlbumHtml(
         <section class="sheet cover-abs">
           <div class="cv-head">
             <h1 class="cover-title">${coverTitle}</h1>
-            <p class="cover-year">${coverYear}</p>
+            ${yearHtml}
           </div>
           ${polas}
         </section>`;
@@ -951,7 +956,7 @@ export async function buildAlbumHtml(
           ${cells}
           <div class="cv-head grid-head" style="top:${px(layout.titleY)}">
             <h1 class="cover-title">${coverTitle}</h1>
-            <p class="cover-year">${coverYear}</p>
+            ${yearHtml}
           </div>
         </section>`;
   } else {
@@ -960,7 +965,7 @@ export async function buildAlbumHtml(
           <span class="crop tl"></span><span class="crop tr"></span>
           <span class="crop bl"></span><span class="crop br"></span>
           <h1 class="cover-title">${coverTitle}</h1>
-          <p class="cover-year">${coverYear}</p>
+          ${yearHtml}
           <div class="cover-hero">${imgTag(coverSrc)}</div>
           <div class="cover-foot">
             <span>${escapeHtml(subtitle)}</span>
