@@ -133,7 +133,10 @@ l'affichage ; un export = un dossier). Tout l'état vit dans `useState` au nivea
 dans **AsyncStorage** par des `useEffect` à chaque changement (clés `*.v1`). `loadData()` migre les
 anciennes données et **normalise `Photo.order`** (rang contigu par dossier). L'ordre d'affichage
 suit `comparePhotos` (`order`, sinon `createdAt`) ; le **réordonnancement** se fait par boutons
-**▲▼** dans `PhotoCard` (le glisser-déposer a été retiré : incompatible avec Reanimated 4). La
+**▲▼** dans `PhotoCard` (le glisser-déposer a été retiré : incompatible avec Reanimated 4), et pour
+aller loin d'un coup, le **mode « Déplacer »** (bouton ⇅ entre ▲ et ▼, état `movingId` d'`AlbumScreen`) :
+emplacements « Placer ici · position n » entre les cartes (`placeAt`, renumérotation complète), autres
+cartes inertes et estompées, barre du bas remplacée par un bandeau avec « Annuler » (retour Android aussi). La
 **photo de couverture** se choisit via l'**étoile** ★ de `PhotoCard` (`onSetCover`, une seule par
 dossier ; sinon la 1ʳᵉ photo sert de couverture par défaut).
 

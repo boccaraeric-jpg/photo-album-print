@@ -19,6 +19,10 @@ interface Props {
   /** Déplace l'entrée d'un cran vers le haut / le bas dans le dossier. */
   onMoveUp: () => void;
   onMoveDown: () => void;
+  /** Passe en mode « Déplacer » : l'entrée ira où l'on touche « Placer ici ». */
+  onMove: () => void;
+  /** Entrée en cours de déplacement : mise en évidence. */
+  moving?: boolean;
   isFirst: boolean;
   isLast: boolean;
 }
@@ -34,6 +38,8 @@ export function PhotoCard({
   onDelete,
   onMoveUp,
   onMoveDown,
+  onMove,
+  moving = false,
   isFirst,
   isLast,
 }: Props) {
@@ -42,7 +48,7 @@ export function PhotoCard({
   const hasComment = photo.comment.trim().length > 0;
 
   return (
-    <Pressable style={styles.card} onPress={() => onEdit(photo)}>
+    <Pressable style={[styles.card, moving && styles.cardMoving]} onPress={() => onEdit(photo)}>
       <View style={styles.reorder}>
         <Pressable
           style={styles.arrowBtn}
@@ -51,6 +57,22 @@ export function PhotoCard({
           disabled={isFirst}
         >
           <Text style={[styles.arrow, isFirst && styles.arrowDisabled]}>▲</Text>
+        </Pressable>
+        {/* Déplacer loin d'un coup (après la photo 4, en tête…) : ▲▼ ne
+            bougent que d'un cran. */}
+        <Pressable
+          style={[styles.arrowBtn, styles.moveBtn]}
+          hitSlop={6}
+          onPress={onMove}
+          disabled={isFirst && isLast}
+          accessibilityRole="button"
+          accessibilityLabel={L.albumScreen.move}
+        >
+          <Ionicons
+            name="swap-vertical"
+            size={15}
+            color={isFirst && isLast ? C.faint : C.paper}
+          />
         </Pressable>
         <Pressable
           style={styles.arrowBtn}
@@ -165,15 +187,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.line,
   },
+  cardMoving: { borderWidth: 2, borderColor: C.sienna },
   reorder: {
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 10,
+    gap: 5,
     marginRight: 8,
   },
   arrowBtn: {
     width: 30,
-    height: 26,
+    height: 24,
     borderRadius: 8,
     backgroundColor: C.tan,
     alignItems: 'center',
@@ -181,6 +204,7 @@ const styles = StyleSheet.create({
   },
   arrow: { fontFamily: F.monoBold, fontSize: 13, color: C.inkSoft },
   arrowDisabled: { color: C.faint },
+  moveBtn: { backgroundColor: C.sienna },
   thumb: {
     width: 76,
     height: 76,

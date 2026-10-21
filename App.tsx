@@ -1228,14 +1228,51 @@ onBack,
     [orderedPhotos, setPhotos],
   );
 
-  // Bouton retour Android : revient à la liste des dossiers.
+  // Mode « Déplacer » : l'entrée choisie ira là où l'on touche « Placer ici ».
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const movingIndex = movingId ? orderedPhotos.findIndex((p) => p.id === movingId) : -1;
+  const movingEntry = movingIndex >= 0 ? orderedPhotos[movingIndex] : null;
+  /** Place l'entrée en mouvement devant la position `slot` (0 = en tête, n = à la fin). */
+  const placeAt = useCallback(
+    (slot: number) => {
+      if (movingIndex < 0) return;
+      const arr = [...orderedPhotos];
+      const [entry] = arr.splice(movingIndex, 1);
+      arr.splice(slot > movingIndex ? slot - 1 : slot, 0, entry);
+      const rankById = new Map(arr.map((p, idx) => [p.id, idx]));
+      setPhotos((prev) =>
+        prev.map((p) => (rankById.has(p.id) ? { ...p, order: rankById.get(p.id)! } : p)),
+      );
+      setMovingId(null);
+    },
+    [movingIndex, orderedPhotos, setPhotos],
+  );
+  // Un emplacement adjacent à l'entrée elle-même ne la déplacerait pas.
+  const showSlot = (slot: number) =>
+    movingIndex >= 0 && slot !== movingIndex && slot !== movingIndex + 1;
+  // Position (1, 2…) qu'aura l'entrée si on la place devant `slot`.
+  const slotPosition = (slot: number) => (slot > movingIndex ? slot : slot + 1);
+  const moveSlot = (slot: number) => (
+    <Pressable
+      style={({ pressed }) => [styles.moveSlot, pressed && styles.moveSlotPressed]}
+      onPress={() => placeAt(slot)}
+      accessibilityRole="button"
+    >
+      <Ionicons name="arrow-forward-circle" size={18} color={C.sienna} />
+      <Text style={styles.moveSlotText}>{L.albumScreen.moveHere(slotPosition(slot))}</Text>
+    </Pressable>
+  );
+
+  // Bouton retour Android : quitte d'abord le mode « Déplacer », sinon revient
+  // à la liste des dossiers.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      onBack();
+      if (movingId) setMovingId(null);
+      else onBack();
       return true;
     });
     return () => sub.remove();
-  }, [onBack]);
+  }, [onBack, movingId]);
 
   // Import d'une seule photo partagée : ouvrir directement son éditeur.
   useEffect(() => {
@@ -1808,27 +1845,43 @@ onBack,
         keyExtractor={(p) => p.id}
         style={styles.listFlex}
         contentContainerStyle={styles.list}
+        extraData={movingId}
         renderItem={({ item, index }) => (
-          <PhotoCard
-            photo={item}
-            isCover={item.id === defaultCoverId}
-            onEdit={setEditing}
-            onView={setViewing}
-            onSetCover={(photo) => onSetCover(photo.id)}
-            onAdjust={setAdjusting}
-            onCrop={setCropping}
-            onDelete={removePhoto}
-            onMoveUp={() => movePhoto(item.id, 'up')}
-            onMoveDown={() => movePhoto(item.id, 'down')}
-            isFirst={index === 0}
-            isLast={index === orderedPhotos.length - 1}
-          />
+          <>
+            {showSlot(index) && moveSlot(index)}
+            {/* En mode « Déplacer », les cartes ne réagissent plus : seuls les
+                emplacements « Placer ici » et « Annuler » comptent. */}
+            <View
+              pointerEvents={movingId ? 'none' : 'auto'}
+              style={movingId && item.id !== movingId ? styles.dimmedCard : undefined}
+            >
+              <PhotoCard
+                photo={item}
+                isCover={item.id === defaultCoverId}
+                onEdit={setEditing}
+                onView={setViewing}
+                onSetCover={(photo) => onSetCover(photo.id)}
+                onAdjust={setAdjusting}
+                onCrop={setCropping}
+                onDelete={removePhoto}
+                onMoveUp={() => movePhoto(item.id, 'up')}
+                onMoveDown={() => movePhoto(item.id, 'down')}
+                onMove={() => setMovingId(item.id)}
+                moving={item.id === movingId}
+                isFirst={index === 0}
+                isLast={index === orderedPhotos.length - 1}
+              />
+            </View>
+          </>
         )}
         ListHeaderComponent={
           photos.length > 1 ? (
-            <Text style={styles.reorderHint}>{L.albumScreen.reorderHint}</Text>
+            <Text style={[styles.reorderHint, movingId && styles.reorderHintActive]}>
+              {movingId ? L.albumScreen.moveHint : L.albumScreen.reorderHint}
+            </Text>
           ) : null
         }
+        ListFooterComponent={showSlot(orderedPhotos.length) ? moveSlot(orderedPhotos.length) : null}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>{L.albumScreen.emptyTitle}</Text>
@@ -1837,42 +1890,67 @@ onBack,
         }
       />
 
-      <View style={[styles.toolbar, { paddingBottom: insets.bottom + 12 }]}>
-        <Text style={styles.renduLabel}>{L.albumScreen.modeLabel}</Text>
-        {preparing ? (
-          <View style={[styles.btn, styles.btnFamilial]}>
-            <ActivityIndicator color={C.paper} />
+      {movingEntry ? (
+        <View style={[styles.moveBanner, { paddingBottom: insets.bottom + 12 }]}>
+          {movingEntry.kind === 'text' ? (
+            <View style={[styles.moveThumb, styles.moveThumbText]}>
+              <Text style={styles.moveThumbMark}>¶</Text>
+            </View>
+          ) : (
+            <Image source={{ uri: movingEntry.uri }} style={styles.moveThumb} />
+          )}
+          <View style={styles.moveBannerBody}>
+            <Text style={styles.moveBannerTitle}>
+              {movingEntry.kind === 'text' ? L.albumScreen.movingText : L.albumScreen.movingPhoto}
+            </Text>
+            <Text style={styles.moveBannerText}>{L.albumScreen.moveBanner}</Text>
           </View>
-        ) : (
-          <View style={styles.renduRow}>
-            <Pressable
-              style={[
-                styles.btn,
-                styles.rowBtn,
-                styles.btnFamilial,
-                photos.length === 0 && styles.btnDisabled,
-              ]}
-              disabled={photos.length === 0}
-              onPress={openFamilial}
-            >
-              <Text style={styles.btnActionText}>{L.albumScreen.private}</Text>
-            </Pressable>
-            <Text style={styles.orText}>{L.albumScreen.or}</Text>
-            <Pressable
-              style={[
-                styles.btn,
-                styles.rowBtn,
-                styles.btnPro,
-                photos.length === 0 && styles.btnDisabled,
-              ]}
-              disabled={photos.length === 0}
-              onPress={openPro}
-            >
-              <Text style={styles.btnActionText}>{L.albumScreen.professional}</Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
+          <Pressable
+            style={styles.moveCancel}
+            onPress={() => setMovingId(null)}
+            accessibilityRole="button"
+          >
+            <Text style={styles.moveCancelText}>{L.common.cancel}</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={[styles.toolbar, { paddingBottom: insets.bottom + 12 }]}>
+          <Text style={styles.renduLabel}>{L.albumScreen.modeLabel}</Text>
+          {preparing ? (
+            <View style={[styles.btn, styles.btnFamilial]}>
+              <ActivityIndicator color={C.paper} />
+            </View>
+          ) : (
+            <View style={styles.renduRow}>
+              <Pressable
+                style={[
+                  styles.btn,
+                  styles.rowBtn,
+                  styles.btnFamilial,
+                  photos.length === 0 && styles.btnDisabled,
+                ]}
+                disabled={photos.length === 0}
+                onPress={openFamilial}
+              >
+                <Text style={styles.btnActionText}>{L.albumScreen.private}</Text>
+              </Pressable>
+              <Text style={styles.orText}>{L.albumScreen.or}</Text>
+              <Pressable
+                style={[
+                  styles.btn,
+                  styles.rowBtn,
+                  styles.btnPro,
+                  photos.length === 0 && styles.btnDisabled,
+                ]}
+                disabled={photos.length === 0}
+                onPress={openPro}
+              >
+                <Text style={styles.btnActionText}>{L.albumScreen.professional}</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+      )}
 
       <CommentModal
         photo={editing}
@@ -1994,6 +2072,49 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   busyCardCount: { fontFamily: F.mono, fontSize: 13, color: C.muted },
+  // Mode « Déplacer » (écran d'un dossier).
+  reorderHintActive: { color: C.sienna, fontFamily: F.monoBold },
+  moveSlot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 44,
+    marginBottom: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: C.sienna,
+    backgroundColor: 'rgba(166,75,36,0.06)',
+  },
+  moveSlotPressed: { backgroundColor: 'rgba(166,75,36,0.16)' },
+  moveSlotText: { fontFamily: F.monoBold, fontSize: 14, color: C.sienna },
+  dimmedCard: { opacity: 0.45 },
+  moveBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    backgroundColor: C.card,
+    borderTopWidth: 1,
+    borderTopColor: C.line,
+  },
+  moveThumb: { width: 48, height: 48, borderRadius: 8, backgroundColor: C.tan },
+  moveThumbText: { alignItems: 'center', justifyContent: 'center' },
+  moveThumbMark: { fontFamily: F.display, fontSize: 22, color: C.sienna },
+  moveBannerBody: { flex: 1 },
+  moveBannerTitle: { fontFamily: F.monoBold, fontSize: 14, color: C.ink },
+  moveBannerText: { fontFamily: F.mono, fontSize: 12, color: C.muted, marginTop: 2 },
+  moveCancel: {
+    paddingHorizontal: 16,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.tan,
+  },
+  moveCancelText: { fontFamily: F.monoBold, fontSize: 14, color: C.ink },
   reorderHint: {
     fontFamily: F.mono,
     fontSize: 11,
