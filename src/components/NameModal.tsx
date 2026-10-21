@@ -60,16 +60,19 @@ export function NameModal({
           <TextInput
             style={styles.input}
             value={text}
-            onChangeText={setText}
+            // Deux lignes au plus : la touche Retour va à la ligne (fin du nom
+            // sous le début), le bouton valide.
+            onChangeText={(t) => setText(t.split('\n').slice(0, 2).join('\n'))}
             placeholder={L.nameModal.folderPlaceholder}
             placeholderTextColor="#9ca3af"
             autoFocus
             autoCorrect
             spellCheck
             autoCapitalize="sentences"
-            returnKeyType="done"
-            onSubmitEditing={() => name && onSubmit(name)}
+            multiline
+            scrollEnabled={false}
           />
+          <Text style={styles.hint}>{L.nameModal.lineHint}</Text>
           <View style={styles.actions}>
             <Pressable style={[styles.btn, styles.btnGhost]} onPress={onClose}>
               <Text style={styles.btnGhostText}>{L.common.cancel}</Text>
@@ -115,6 +118,7 @@ const styles = StyleSheet.create({
     color: '#201B14',
     marginBottom: 14,
   },
+  hint: { fontFamily: F.mono, fontSize: 12, color: '#9ca3af', marginTop: 6 },
   input: {
     borderWidth: 1,
     borderColor: '#e5e7eb',

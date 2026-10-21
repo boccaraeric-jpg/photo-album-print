@@ -878,6 +878,16 @@ function TintedButton({
   );
 }
 
+/** Garde au plus `max` lignes (retours à la ligne en trop retirés). */
+function limitLines(text: string, max: number): string {
+  return text.split('\n').slice(0, max).join('\n');
+}
+
+/** Texte sur une seule ligne : retours à la ligne remplacés par une espace. */
+function oneLine(text: string): string {
+  return text.replace(/\s*\n\s*/g, ' ').trim();
+}
+
 interface HomeProps {
   albums: Album[];
   photos: Photo[];
@@ -1635,10 +1645,13 @@ onBack,
     [setPhotos],
   );
 
-  const albumTitle = album.name.trim() || L.albumScreen.defaultTitle;
-  // Titre affiché sur la couverture : le sien s'il en a un (retours à la ligne
-  // possibles), sinon le nom du dossier. `albumTitle` nomme les fichiers.
-  const coverTitle = album.coverTitle?.trim() || albumTitle;
+  // Nom sur une ligne (fichiers envoyés, fenêtres de partage) : un retour à la
+  // ligne voulu dans le nom du dossier y devient une espace.
+  const albumTitle = oneLine(album.name) || L.albumScreen.defaultTitle;
+  // Titre affiché sur la couverture : le sien s'il en a un, sinon le nom du
+  // dossier tel qu'écrit (retours à la ligne compris).
+  const folderTitle = album.name.trim() || L.albumScreen.defaultTitle;
+  const coverTitle = album.coverTitle?.trim() || folderTitle;
 
   // Étape 1 : prépare l'aperçu (même HTML que le PDF) à partir des options.
   const openPreview = useCallback(
@@ -1893,12 +1906,16 @@ onBack,
           </Pressable>
           <Image source={require('./assets/logo-mark.png')} style={styles.brandLogo} />
         </View>
+        {/* Nom du dossier : un retour à la ligne est permis (2 lignes au plus),
+            il est gardé dans la liste et sur la couverture. */}
         <TextInput
           style={styles.titleInput}
           value={album.name}
-          onChangeText={onRename}
+          onChangeText={(t) => onRename(limitLines(t, 2))}
           placeholder={L.nameModal.folderPlaceholder}
           placeholderTextColor="#9ca3af"
+          multiline
+          scrollEnabled={false}
           autoCorrect
           spellCheck
           autoCapitalize="sentences"
@@ -2075,7 +2092,7 @@ onBack,
         photos={orderedPhotos}
         scatterIds={album.scatterPhotoIds}
         coverTitle={album.coverTitle ?? ''}
-        folderName={albumTitle}
+        folderName={folderTitle}
         preparing={preparing}
         onPreview={openPreview}
         onSetMapModes={(modes) =>

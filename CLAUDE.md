@@ -391,8 +391,10 @@ d'entrée** (ils pilotent aussi les libellés) :
   plus les vraies tailles — vécu avec la taille du texte pro, sans effet visible sur l'iPhone.
 - **Titre de couverture** (`Album.coverTitle`, champ en tête de la rubrique Style, prérempli du nom
   du dossier) : peut être coupé à la main (`
-`, 3 lignes au plus) ; le **nom du dossier** reste sur
-  une ligne et nomme toujours les fichiers (`albumTitle` ≠ `coverTitle` dans `AlbumScreen`,
+`, 3 lignes au plus). Le **nom du dossier** accepte aussi
+  un retour à la ligne (2 lignes, `NameModal` et titre d'`AlbumScreen` multilignes, `limitLines`) ;
+  pour les fichiers et le partage il passe sur une ligne (`oneLine` → `albumTitle`), et nomme toujours
+  les fichiers (`albumTitle` ≠ `coverTitle` dans `AlbumScreen`,
   `buildAlbumImages(..., coverTitle)`). Mise en page : `coverTitleLayout` (`albumStyle.ts`) estime
   lignes et hauteur (`CHAR_EM`, désormais partagé avec `albumMap.ts`), réduit le titre au-delà de
   2 lignes ; le pêle-mêle se range **sous** le titre et s'y centre (`scatterSlots(..., zoneTop)`), la grille cède de la hauteur (`gridLayout(..., titleBlock)`), la

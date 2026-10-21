@@ -68,6 +68,7 @@ const fr = {
     edit: 'Modifier',
   },
   nameModal: {
+    lineHint: 'Touche Retour : passer la fin du nom à la ligne (2 lignes au plus).',
     folderPlaceholder: 'Nom du dossier',
   },
   comment: {
@@ -477,6 +478,7 @@ const en: Dict = {
     edit: 'Edit',
   },
   nameModal: {
+    lineHint: 'Return key: move the end of the name to a new line (2 lines at most).',
     folderPlaceholder: 'Folder name',
   },
   comment: {
