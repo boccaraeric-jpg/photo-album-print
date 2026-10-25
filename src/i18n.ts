@@ -161,6 +161,8 @@ const fr = {
     buyUpgrade: (price: string) => `Passer à la version complète · ${price}`,
     oneTime: 'Paiement unique, sans abonnement. Achat lié à votre compte App Store ou Google Play.',
     restore: 'Restaurer mes achats',
+    redeem: 'J’ai un code',
+    redeemFail: 'La saisie du code n’a pas pu s’ouvrir. Réessayez depuis l’App Store ou Google Play.',
     thanksTitle: 'Merci !',
     thanksBody: (full: boolean): string =>
       full ? 'Toutes les fonctions de ComClic sont débloquées.' : 'ComClic Light est débloqué : albums illimités.',
@@ -621,6 +623,8 @@ const en: Dict = {
     buyUpgrade: (price: string) => `Upgrade to the full version · ${price}`,
     oneTime: 'One-time payment, no subscription. Linked to your App Store or Google Play account.',
     restore: 'Restore purchases',
+    redeem: 'I have a code',
+    redeemFail: 'Code entry could not open. Try again from the App Store or Google Play.',
     thanksTitle: 'Thank you!',
     thanksBody: (full: boolean) =>
       full ? 'Every ComClic feature is unlocked.' : 'ComClic Light is unlocked: unlimited albums.',

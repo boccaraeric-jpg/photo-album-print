@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Alert } from 'react-native';
+import { Alert, AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requireOptionalNativeModule } from 'expo';
 import type { ExportOptions } from './types';
@@ -66,6 +66,12 @@ interface Entitlement {
   recordShare: (albumId: string) => void;
   buy: (key: ProductKey) => void;
   restore: () => void;
+  /**
+   * Code promotionnel (ami, client, influenceur) : fenêtre officielle d'Apple,
+   * ou page d'utilisation de code du Play Store. Le déblocage arrive ensuite
+   * comme un achat (écouteur d'achats, ou relecture au retour dans l'app).
+   */
+  redeemCode: () => void;
   busy: boolean;
   /**
    * Ouvre l'écran d'achat. `afterModal` : laisse le temps à un écran modal en
@@ -200,7 +206,14 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
     // de boutique changé…) : on ajoute seulement.
     const next = new Set(ownedRef.current);
     for (const p of purchases ?? []) {
-      if (p.purchaseState !== 'pending') next.add(p.productId);
+      if (p.purchaseState === 'pending') continue;
+      next.add(p.productId);
+      // Android : un achat non « accusé » sous 3 jours est remboursé par Google.
+      // Un code utilisé dans le Play Store arrive ici, app fermée entre-temps.
+      const acknowledged = (p as { isAcknowledgedAndroid?: boolean | null }).isAcknowledgedAndroid;
+      if (Platform.OS === 'android' && acknowledged === false) {
+        iap.finishTransaction({ purchase: p, isConsumable: false }).catch(() => {});
+      }
     }
     ownedRef.current = next;
     saveOwned(next);
@@ -306,6 +319,39 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
     [iap],
   );
 
+  // Retour dans l'app (après un code utilisé dans le Play Store ou l'App Store) :
+  // relecture des achats, et remerciement si un niveau vient d'être débloqué.
+  useEffect(() => {
+    if (!iap) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      const before = tierOf(ownedRef.current);
+      syncPurchases()
+        .then((now) => {
+          const after = tierOf(now);
+          if (after !== before && after !== 'trial') {
+            setPaywall(null);
+            const T = Lref.current.paywall;
+            Alert.alert(T.thanksTitle, T.thanksBody(after === 'full'));
+          }
+        })
+        .catch(() => {});
+    });
+    return () => sub.remove();
+  }, [iap, syncPurchases]);
+
+  const redeemCode = useCallback(() => {
+    if (!iap) return;
+    (async () => {
+      try {
+        if (Platform.OS === 'ios') await iap.presentCodeRedemptionSheetIOS();
+        else await iap.openRedeemOfferCodeAndroid();
+      } catch {
+        Alert.alert(Lref.current.paywall.errorTitle, Lref.current.paywall.redeemFail);
+      }
+    })();
+  }, [iap]);
+
   const restore = useCallback(() => {
     if (!iap) return;
     setBusy(true);
@@ -342,10 +388,24 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
       recordShare,
       buy,
       restore,
+      redeemCode,
       busy,
       openPaywall,
     }),
-    [tier, isFull, storeAvailable, prices, trialAlbums.length, canShare, recordShare, buy, restore, busy, openPaywall],
+    [
+      tier,
+      isFull,
+      storeAvailable,
+      prices,
+      trialAlbums.length,
+      canShare,
+      recordShare,
+      buy,
+      restore,
+      redeemCode,
+      busy,
+      openPaywall,
+    ],
   );
 
   return (

@@ -111,6 +111,17 @@ fonds et « Powered by ComClic » sont partout.
    mêmes prix, **activés**.
 4. Tests : **Paramètres → Tests de licence** → ajouter les comptes Gmail des testeurs.
 
+### Versions offertes (amis, clients, influenceurs)
+Codes **officiels** des boutiques uniquement — un système de codes « maison » qui débloquerait une
+fonction payante est interdit (Apple 3.1.1, Google) et ferait refuser l'app.
+- **Apple** : App Store Connect → l'app → Achats intégrés → `comclic.full` → **Codes d'offre** :
+  codes à usage unique ou code partagé, date d'expiration au choix.
+- **Google** : Play Console → Monétiser → **Promotions** → codes promotionnels pour `comclic.full`
+  (quota trimestriel limité).
+- Dans l'app : écran d'achat → **« J'ai un code »** (fenêtre officielle d'Apple ; page d'utilisation
+  de code du Play Store). Le déblocage arrive comme un achat ; au retour dans l'app, les achats sont
+  relus (`AppState` → `syncPurchases`) et, sur Android, accusés (sinon Google rembourse sous 3 jours).
+
 ### Règles
 - **Sans module d'achat** (build ≤ 13, Expo Go) l'app reste **entièrement débloquée** : une mise à
   jour à distance atteint aussi les anciens builds, qui n'ont aucun moyen de payer.

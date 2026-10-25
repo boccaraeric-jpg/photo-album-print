@@ -563,7 +563,9 @@ sauvegarde/restauration (`confirmBackup`, `peekBackup` ×2), annotation, et dans
 `entitledOptions` ramène les réglages réservés hors Full **au rendu**. ⚠️ **Module d'achat absent
 ⇒ tout débloqué** (anciens builds atteints par un update). Écran d'achat = `Modal` racine : fermer
 d'abord l'écran modal en cours (`showPaywall(reason, true)`, délai 450 ms) — iOS ne superpose pas
-deux modaux. Procédure des boutiques : `PUBLICATION.md`.
+deux modaux. Codes offerts : « J'ai un code » (`redeemCode` : `presentCodeRedemptionSheetIOS` /
+`openRedeemOfferCodeAndroid`) ; relecture des achats au retour au premier plan, et accusé Android
+(`isAcknowledgedAndroid`) dans `syncPurchases`. Procédure des boutiques : `PUBLICATION.md`.
 
 ## Liste des dossiers (accueil)
 Le tri par **poids** ignore les `originalUri` conservés pour la ré-édition : c'est le poids de

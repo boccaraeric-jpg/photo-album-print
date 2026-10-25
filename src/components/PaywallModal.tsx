@@ -43,7 +43,7 @@ export function PaywallModal({
   const { L } = useLang();
   const P = L.paywall;
   const insets = useSafeAreaInsets();
-  const { tier, prices, buy, restore, busy, trialAlbumsUsed } = useEntitlement();
+  const { tier, prices, buy, restore, redeemCode, busy, trialAlbumsUsed } = useEntitlement();
   const price = (k: ProductKey) => prices[k] ?? FALLBACK_PRICES[k];
 
   const lead =
@@ -125,9 +125,17 @@ export function PaywallModal({
           </View>
 
           <Text style={styles.oneTime}>{P.oneTime}</Text>
-          <Pressable onPress={restore} disabled={busy} hitSlop={8} accessibilityRole="button">
-            <Text style={styles.restore}>{P.restore}</Text>
-          </Pressable>
+          <View style={styles.links}>
+            <Pressable onPress={restore} disabled={busy} hitSlop={8} accessibilityRole="button">
+              <Text style={styles.restore}>{P.restore}</Text>
+            </Pressable>
+            <Text style={styles.linkSep}>·</Text>
+            {/* Code offert (ami, client, influenceur) : codes officiels des
+                boutiques, seule voie autorisée pour débloquer une fonction payante. */}
+            <Pressable onPress={redeemCode} disabled={busy} hitSlop={8} accessibilityRole="button">
+              <Text style={styles.restore}>{P.redeem}</Text>
+            </Pressable>
+          </View>
         </ScrollView>
       </View>
     </Modal>
@@ -197,6 +205,8 @@ const styles = StyleSheet.create({
   btnGhostText: { fontFamily: F.monoBold, fontSize: 15, color: C.ink },
   disabled: { opacity: 0.5 },
   oneTime: { fontFamily: F.mono, fontSize: 12.5, color: C.muted, textAlign: 'center' },
+  links: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
+  linkSep: { fontFamily: F.mono, fontSize: 14, color: C.muted },
   restore: {
     fontFamily: F.monoBold,
     fontSize: 14,
