@@ -553,6 +553,18 @@ paquet est bien installé (vu avec `expo-constants` après un `npm dedupe`). Le 
 cause, inutile de le chercher. Remise en route : arrêter Metro, supprimer `node_modules/.cache` et
 `$TEMP/metro-cache` + `$TEMP/metro-file-map-*`, puis `npx expo start --clear`.
 
+## Achats intégrés (`src/purchases.tsx`, `PaywallModal`)
+App **gratuite** + achats uniques `comclic.light` / `comclic.full` / `comclic.upgrade` (`expo-iap`
+**3.4.13**, version de l'époque SDK 54 — la 6.x vise le SDK 57 ; pas de serveur). `EntitlementProvider`
+(sous `LangProvider`) donne `tier` (`trial`/`light`/`full`), `canShare`/`recordShare` (essai : 3
+albums de 15 photos), `buy`/`restore`, `openPaywall`. Réservé à Full : rapport pro (`openPro`),
+sauvegarde/restauration (`confirmBackup`, `peekBackup` ×2), annotation, et dans `ExportModal`
+(`locked`) formats 16×21/16×16, couvertures montées, typos Classique/Manuscrite, cartes ;
+`entitledOptions` ramène les réglages réservés hors Full **au rendu**. ⚠️ **Module d'achat absent
+⇒ tout débloqué** (anciens builds atteints par un update). Écran d'achat = `Modal` racine : fermer
+d'abord l'écran modal en cours (`showPaywall(reason, true)`, délai 450 ms) — iOS ne superpose pas
+deux modaux. Procédure des boutiques : `PUBLICATION.md`.
+
 ## Liste des dossiers (accueil)
 Le tri par **poids** ignore les `originalUri` conservés pour la ré-édition : c'est le poids de
 l'album, pas l'occupation disque. Le nombre de photos par dossier vient d'une `Map` mémoïsée sur

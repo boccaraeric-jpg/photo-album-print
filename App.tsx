@@ -98,6 +98,13 @@ import { ShareImportModal } from './src/components/ShareImportModal';
 import { CommentModal } from './src/components/CommentModal';
 import { AdjustModal } from './src/components/AdjustModal';
 import { AnnotateModal } from './src/components/AnnotateModal';
+import {
+  entitledOptions,
+  EntitlementProvider,
+  TRIAL_ALBUMS,
+  useEntitlement,
+  type PaywallReason,
+} from './src/purchases';
 import { NameModal } from './src/components/NameModal';
 import { ExportModal } from './src/components/ExportModal';
 import { PreviewModal, type EntryPatch } from './src/components/PreviewModal';
@@ -141,7 +148,11 @@ export default function App() {
           no-op sans crasher (requireOptionalNativeModule). */}
       <ShareIntentProvider>
         <LangProvider>
-          <Root />
+          {/* Achats intégrés : niveau (essai / Light / Full), quota d'essai et
+              écran d'achat, pour toute l'app (cf. src/purchases.tsx). */}
+          <EntitlementProvider>
+            <Root />
+          </EntitlementProvider>
         </LangProvider>
       </ShareIntentProvider>
     </SafeAreaProvider>
@@ -175,6 +186,20 @@ function LangProvider({ children }: { children: ReactNode }) {
 
 function Root() {
   const { L, lang, setLang } = useLang();
+  const { isFull, openPaywall } = useEntitlement();
+  // Lu dans des effets asynchrones (partage entrant) : toujours la valeur à jour.
+  const fullRef = useRef(isFull);
+  fullRef.current = isFull;
+  /** Fonction de la version complète : explication, puis écran d'achat. */
+  const lockedAlert = useCallback(
+    (body: string = L.paywall.lockedBody) => {
+      Alert.alert(L.paywall.lockedTitle, body, [
+        { text: L.common.cancel, style: 'cancel' },
+        { text: L.paywall.lockedSee, onPress: () => openPaywall('feature') },
+      ]);
+    },
+    [L, openPaywall],
+  );
   const { hasShareIntent, shareIntent, resetShareIntent } =
     useShareIntentContext();
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -557,6 +582,10 @@ function Root() {
    */
   const confirmBackup = useCallback(() => {
     if (busyLabel) return;
+    if (!isFull) {
+      lockedAlert();
+      return;
+    }
     if (albums.length === 0) {
       backupAll();
       return;
@@ -570,7 +599,7 @@ function Root() {
         { text: L.backup.confirm, onPress: () => backupAll() },
       ],
     );
-  }, [albums, photos, L, busyLabel, backupAll]);
+  }, [albums, photos, L, busyLabel, backupAll, isFull, lockedAlert]);
 
   /**
    * Ouvre un fichier `.comclic` depuis l'app Fichiers (Mail, Messages, iCloud…).
@@ -605,6 +634,11 @@ function Root() {
       // sauvegarde, en lisant le manifeste seul — extraire les images avant
       // l'accord de l'utilisateur laisserait des fichiers orphelins s'il annule.
       const peek = await peekBackup(file.uri);
+      if (peek && !fullRef.current) {
+        setBusyLabel(null);
+        lockedAlert(L.paywall.restoreFullOnly);
+        return;
+      }
       if (peek) {
         setBusyLabel(null);
         const when = new Date(peek.createdAt).toLocaleDateString(localeTag(lang));
@@ -685,6 +719,12 @@ function Root() {
           if (!peek) parsed = await parseAlbumBundle(bundle.path);
         } finally {
           setBusyLabel(null);
+        }
+        if (peek && !cancelled && !fullRef.current) {
+          resetShareIntent();
+          setShowWelcome(false);
+          lockedAlert(L.paywall.restoreFullOnly);
+          return;
         }
         if (peek && !cancelled) {
           setShowWelcome(false);
@@ -886,6 +926,25 @@ function limitLines(text: string, max: number): string {
 /** Texte sur une seule ligne : retours à la ligne remplacés par une espace. */
 function oneLine(text: string): string {
   return text.replace(/\s*\n\s*/g, ' ').trim();
+}
+
+/**
+ * État de l'achat en pied d'accueil : essai (albums restants) ou Light, avec
+ * accès à l'écran d'achat. Rien en version complète.
+ */
+function PurchaseStatus() {
+  const { L } = useLang();
+  const { tier, trialAlbumsUsed, openPaywall } = useEntitlement();
+  if (tier === 'full') return null;
+  const label =
+    tier === 'trial'
+      ? L.paywall.statusTrial(Math.max(0, TRIAL_ALBUMS - trialAlbumsUsed))
+      : L.paywall.statusLight;
+  return (
+    <Pressable onPress={() => openPaywall('menu')} hitSlop={6} accessibilityRole="button">
+      <Text style={styles.purchaseStatus}>{label}</Text>
+    </Pressable>
+  );
 }
 
 interface HomeProps {
@@ -1130,6 +1189,7 @@ function HomeScreen({
         >
           <Text style={styles.howTo}>{L.backup.howToLink}</Text>
         </Pressable>
+        <PurchaseStatus />
       </View>
 
       <NameModal
@@ -1213,8 +1273,26 @@ onBack,
   const [previewRefreshing, setPreviewRefreshing] = useState(false);
   // Seul le dernier rendu demandé s'affiche (réglages touchés en rafale).
   const previewSeq = useRef(0);
-  const [exportOptions, setExportOptions] = useState<ExportOptions>(
+  const [storedExportOptions, setExportOptions] = useState<ExportOptions>(
     DEFAULT_EXPORT_OPTIONS,
+  );
+  const { isFull, canShare, recordShare, openPaywall } = useEntitlement();
+  // Options réellement rendues : hors version complète, les réglages réservés
+  // retombent sur ceux de la version Light (cf. `entitledOptions`).
+  const exportOptions = useMemo(
+    () => entitledOptions(storedExportOptions, isFull),
+    [storedExportOptions, isFull],
+  );
+  /** Fonction de la version complète : ferme l'écran en cours, puis l'achat. */
+  const showPaywall = useCallback(
+    (reason: PaywallReason, closeModals = false) => {
+      if (closeModals) {
+        setExportVisible(false);
+        setPreviewVisible(false);
+      }
+      openPaywall(reason, closeModals);
+    },
+    [openPaywall],
   );
 
   // Photos du dossier triées selon l'ordre manuel (glisser-déposer).
@@ -1750,13 +1828,14 @@ onBack,
       );
       const uri = await htmlToPdfFile(html, albumTitle, effectiveFormat(exportOptions));
       await shareFile(uri, albumTitle, 'application/pdf', 'com.adobe.pdf');
+      recordShare(album.id);
       setPreviewVisible(false);
     } catch {
       Alert.alert(L.common.error, L.alert.pdfFail);
     } finally {
       setSending(false);
     }
-  }, [orderedPhotos, albumTitle, coverTitle, exportOptions, defaultCoverId, album.scatterPhotoIds]);
+  }, [orderedPhotos, albumTitle, coverTitle, exportOptions, defaultCoverId, album.scatterPhotoIds, recordShare, album.id]);
 
   // Étape 2b : une image JPEG par page, partagée via la feuille d'envoi. Une
   // seule page → l'image directement ; plusieurs → un ZIP unique (expo-sharing
@@ -1780,13 +1859,14 @@ onBack,
         const zip = await zipImages(uris, albumTitle);
         await shareFile(zip, albumTitle, 'application/zip', 'public.zip-archive');
       }
+      recordShare(album.id);
       setPreviewVisible(false);
     } catch {
       Alert.alert(L.common.error, L.alert.imagesFail);
     } finally {
       setSending(false);
     }
-  }, [orderedPhotos, albumTitle, coverTitle, exportOptions, defaultCoverId, album.scatterPhotoIds]);
+  }, [orderedPhotos, albumTitle, coverTitle, exportOptions, defaultCoverId, album.scatterPhotoIds, recordShare, album.id]);
 
   // Étape 2c : les photos AFFICHÉES (fichiers d'origine réutilisables) + un
   // fichier de contexte, dans un ZIP — pour que le destinataire retravaille les
@@ -1807,6 +1887,7 @@ onBack,
       );
       setSendProgress(null);
       await shareFile(zip, albumTitle, 'application/zip', 'public.zip-archive');
+      recordShare(album.id);
       setPreviewVisible(false);
     } catch {
       Alert.alert(L.common.error, L.alert.photosPrepFail);
@@ -1814,7 +1895,7 @@ onBack,
       setSendProgress(null);
       setSending(false);
     }
-  }, [orderedPhotos, albumTitle, lang, L]);
+  }, [orderedPhotos, albumTitle, lang, L, recordShare, album.id]);
 
   // Le destinataire d'un album ComClic a besoin de l'app pour l'ouvrir : on lui
   // propose le lien d'installation dans un message texte séparé (la feuille de
@@ -1845,6 +1926,7 @@ onBack,
     try {
       const uri = await buildAlbumBundle(orderedPhotos, albumTitle, defaultCoverId);
       await shareFile(uri, albumTitle, 'application/zip', 'public.zip-archive');
+      recordShare(album.id);
       setPreviewVisible(false);
       // Un .comclic ne s'ouvre qu'avec l'app : proposer d'envoyer le lien
       // d'installation au destinataire, dans un second message.
@@ -1854,12 +1936,18 @@ onBack,
     } finally {
       setSending(false);
     }
-  }, [orderedPhotos, albumTitle, defaultCoverId, offerInstallLink]);
+  }, [orderedPhotos, albumTitle, defaultCoverId, offerInstallLink, recordShare, album.id]);
 
   // Choix du format au moment de l'envoi. Chaque option ouvre la feuille de
   // partage native (Messenger, Mail, AirDrop… y figurent selon le contenu).
   const chooseFormat = useCallback(() => {
     if (photos.length === 0) return;
+    // Essai : 3 albums de 15 photos au plus (un album déjà partagé le reste).
+    const check = canShare(album.id, photos.filter((p) => p.kind !== 'text').length);
+    if (check !== 'ok') {
+      showPaywall(check, true);
+      return;
+    }
     Alert.alert(L.format.title, L.format.subtitle, [
       { text: L.format.pdf, onPress: sendPdf },
       { text: L.format.albumImages, onPress: sendImages },
@@ -1867,7 +1955,7 @@ onBack,
       { text: L.format.comclicAlbum, onPress: sendComclicAlbum },
       { text: L.common.cancel, style: 'cancel' },
     ]);
-  }, [photos.length, sendPdf, sendImages, sendReusablePhotos, sendComclicAlbum]);
+  }, [photos, album.id, canShare, showPaywall, sendPdf, sendImages, sendReusablePhotos, sendComclicAlbum]);
 
   // Les deux boutons de rendu (barre du bas) sont les points d'entrée de l'export :
   // « Familial » ouvre d'abord la mise en page ; « Professionnel » va directement
@@ -1882,11 +1970,18 @@ onBack,
 
   const openPro = useCallback(() => {
     if (photos.length === 0) return;
+    if (!isFull) {
+      Alert.alert(L.paywall.lockedTitle, L.paywall.lockedBody, [
+        { text: L.common.cancel, style: 'cancel' },
+        { text: L.paywall.lockedSee, onPress: () => showPaywall('feature') },
+      ]);
+      return;
+    }
     const next: ExportOptions = { ...exportOptions, style: 'pro' };
     setExportOptions(next);
     saveExportOptions(next);
     setExportVisible(true);
-  }, [photos.length, exportOptions]);
+  }, [photos.length, exportOptions, isFull, L, showPaywall]);
 
   const sendLabel =
     exportOptions.style === 'pro'
@@ -1963,7 +2058,7 @@ onBack,
                 onSetCover={(photo) => onSetCover(photo.id)}
                 onAdjust={setAdjusting}
                 onCrop={startCrop}
-                onAnnotate={setAnnotating}
+                onAnnotate={(photo) => (isFull ? setAnnotating(photo) : showPaywall('feature'))}
                 onDelete={removePhoto}
                 onMoveUp={() => movePhoto(item.id, 'up')}
                 onMoveDown={() => movePhoto(item.id, 'down')}
@@ -2089,6 +2184,8 @@ onBack,
       <ExportModal
         visible={exportVisible}
         initial={exportOptions}
+        locked={!isFull}
+        onLocked={() => showPaywall('feature', true)}
         photos={orderedPhotos}
         scatterIds={album.scatterPhotoIds}
         coverTitle={album.coverTitle ?? ''}
@@ -2393,6 +2490,17 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: C.sienna,
     textAlign: 'center',
+  },
+  purchaseStatus: {
+    fontFamily: F.monoBold,
+    fontSize: 12,
+    color: C.ink,
+    textAlign: 'center',
+    backgroundColor: 'rgba(166,75,36,0.10)',
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    overflow: 'hidden',
   },
   howTo: {
     fontFamily: F.mono,

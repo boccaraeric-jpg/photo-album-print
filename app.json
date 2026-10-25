@@ -82,10 +82,17 @@
             "NSExtensionActivationSupportsFileWithMaxCount": 1
           },
           "iosAppGroupIdentifier": "group.com.boccarasteam.comclic",
-          "androidIntentFilters": ["image/*", "application/zip"],
-          "androidMultiIntentFilters": ["image/*"]
+          "androidIntentFilters": [
+            "image/*",
+            "application/zip"
+          ],
+          "androidMultiIntentFilters": [
+            "image/*"
+          ]
         }
-      ]
+      ],
+      "expo-iap",
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {

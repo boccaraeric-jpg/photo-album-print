@@ -128,6 +128,56 @@ const fr = {
     zoom: 'Zoom',
     flash: { auto: 'Flash auto', on: 'Flash activé', off: 'Flash coupé' },
   },
+  paywall: {
+    title: 'Passez à ComClic',
+    titleUpgrade: 'Passez à la version complète',
+    leadMenu: 'Un paiement unique, sans abonnement, pour profiter de ComClic sans limite.',
+    leadQuota: (n: number) =>
+      `Vous avez partagé vos ${n} albums d’essai. Choisissez votre version pour continuer.`,
+    leadTooManyPhotos: (n: number) =>
+      `La version d’essai partage des albums de ${n} photos au plus. Choisissez votre version pour partager celui-ci.`,
+    leadFeature: 'Cette fonction fait partie de la version complète.',
+    leadUpgrade: 'Débloquez toutes les fonctions de ComClic.',
+    trialStatus: (used: number, max: number, photos: number) =>
+      `Version d’essai : ${used} album${used > 1 ? 's' : ''} partagé${used > 1 ? 's' : ''} sur ${max}, ${photos} photos au plus par album`,
+    recommended: 'RECOMMANDÉ',
+    lightFeatures: [
+      'Albums illimités, sans limite de photos',
+      'PDF, images de l’album, envoi aux amis ComClic',
+      '18 couleurs de fond, commentaires, dictée, correcteur',
+    ],
+    fullIntro: 'Tout ComClic Light, plus :',
+    fullFeatures: [
+      'Rapport professionnel',
+      'Sauvegarde et restauration de tous vos dossiers',
+      'Formats 16 × 21 et 16 × 16 cm',
+      'Couvertures pêle-mêle et grille',
+      'Cartes des lieux',
+      'Typographies Classique et Manuscrite',
+      'Annotation des photos au marqueur',
+    ],
+    buyLight: (price: string) => `Acheter la version Light · ${price}`,
+    buyFull: (price: string) => `Acheter la version complète · ${price}`,
+    buyUpgrade: (price: string) => `Passer à la version complète · ${price}`,
+    oneTime: 'Paiement unique, sans abonnement. Achat lié à votre compte App Store ou Google Play.',
+    restore: 'Restaurer mes achats',
+    thanksTitle: 'Merci !',
+    thanksBody: (full: boolean): string =>
+      full ? 'Toutes les fonctions de ComClic sont débloquées.' : 'ComClic Light est débloqué : albums illimités.',
+    restoredTitle: 'Achats restaurés',
+    restoredBody: (full: boolean): string =>
+      full ? 'Votre version complète est réactivée.' : 'Votre version Light est réactivée.',
+    restoredNone: 'Aucun achat n’a été trouvé pour ce compte.',
+    errorTitle: 'Achat impossible',
+    errorBody: 'La boutique n’a pas pu traiter la demande. Vérifiez votre connexion, puis réessayez.',
+    lockedTitle: 'Version complète',
+    lockedBody: 'Cette fonction fait partie de la version complète de ComClic.',
+    lockedSee: 'Découvrir',
+    statusTrial: (left: number) =>
+      `Version d’essai · ${left} album${left > 1 ? 's' : ''} à partager · Débloquer`,
+    statusLight: 'ComClic Light · Passer à la version complète',
+    restoreFullOnly: 'La restauration d’une sauvegarde fait partie de la version complète.',
+  },
   annotate: {
     title: 'Annoter',
     free: 'Trait libre',
@@ -537,6 +587,56 @@ const en: Dict = {
     flip: 'Flip',
     zoom: 'Zoom',
     flash: { auto: 'Flash auto', on: 'Flash on', off: 'Flash off' },
+  },
+  paywall: {
+    title: 'Upgrade to ComClic',
+    titleUpgrade: 'Upgrade to the full version',
+    leadMenu: 'One payment, no subscription, to enjoy ComClic without limits.',
+    leadQuota: (n: number) =>
+      `You have shared your ${n} trial albums. Choose your version to continue.`,
+    leadTooManyPhotos: (n: number) =>
+      `The trial shares albums of up to ${n} photos. Choose your version to share this one.`,
+    leadFeature: 'This feature is part of the full version.',
+    leadUpgrade: 'Unlock every ComClic feature.',
+    trialStatus: (used: number, max: number, photos: number) =>
+      `Trial: ${used} of ${max} album${max > 1 ? 's' : ''} shared, up to ${photos} photos per album`,
+    recommended: 'RECOMMENDED',
+    lightFeatures: [
+      'Unlimited albums, no photo limit',
+      'PDF, album images, sending to ComClic friends',
+      '18 background colors, captions, dictation, spell check',
+    ],
+    fullIntro: 'Everything in ComClic Light, plus:',
+    fullFeatures: [
+      'Professional report',
+      'Backup and restore of all your folders',
+      '16 × 21 and 16 × 16 cm formats',
+      'Scattered and grid covers',
+      'Place maps',
+      'Classic and Handwritten typography',
+      'Marker annotation on photos',
+    ],
+    buyLight: (price: string) => `Buy the Light version · ${price}`,
+    buyFull: (price: string) => `Buy the full version · ${price}`,
+    buyUpgrade: (price: string) => `Upgrade to the full version · ${price}`,
+    oneTime: 'One-time payment, no subscription. Linked to your App Store or Google Play account.',
+    restore: 'Restore purchases',
+    thanksTitle: 'Thank you!',
+    thanksBody: (full: boolean) =>
+      full ? 'Every ComClic feature is unlocked.' : 'ComClic Light is unlocked: unlimited albums.',
+    restoredTitle: 'Purchases restored',
+    restoredBody: (full: boolean) =>
+      full ? 'Your full version is active again.' : 'Your Light version is active again.',
+    restoredNone: 'No purchase was found for this account.',
+    errorTitle: 'Purchase failed',
+    errorBody: 'The store could not process the request. Check your connection, then try again.',
+    lockedTitle: 'Full version',
+    lockedBody: 'This feature is part of the full version of ComClic.',
+    lockedSee: 'Learn more',
+    statusTrial: (left: number) =>
+      `Trial · ${left} album${left > 1 ? 's' : ''} left to share · Unlock`,
+    statusLight: 'ComClic Light · Upgrade to the full version',
+    restoreFullOnly: 'Restoring a backup is part of the full version.',
   },
   annotate: {
     title: 'Annotate',

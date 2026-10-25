@@ -74,6 +74,50 @@ publier un update, de lancer un build ou de toucher aux fiches des stores.
   comptes personnels, mais impose la validation du **site web** déclaré via une propriété Google
   Search Console (cf. `docs/`).
 
+## Achats intégrés (App Store & Google Play)
+
+Modèle : **app gratuite** + achats uniques (non consommables), sans abonnement, sans serveur
+(`expo-iap` 3.4.13 = StoreKit 2 / Play Billing, vérification sur l'appareil). Code : `src/purchases.tsx`.
+
+| Produit | Identifiant (iOS **et** Android) | Prix | Rôle |
+|---|---|---|---|
+| ComClic Light | `comclic.light` | 7,99 € | Albums illimités |
+| ComClic Full | `comclic.full` | 12,99 € | Tout débloqué |
+| Passage à Full | `comclic.upgrade` | 5,00 € | Proposé seulement à qui a Light |
+
+Essai : fonctions Light, **3 albums** partagés (un album déjà partagé le reste), **15 photos** au
+plus par album. Full seulement : rapport pro, sauvegarde/restauration, formats 16×21 / 16×16,
+couvertures pêle-mêle et grille, cartes, typographies Classique et Manuscrite, annotation. Les 18
+fonds et « Powered by ComClic » sont partout.
+
+### App Store Connect (une fois)
+1. **Accords, taxes et services bancaires** → signer l'accord **Applications payantes** et remplir
+   banque + fiscalité. Sans cela, aucun produit ne se charge (l'écran d'achat affiche les prix de
+   secours et l'achat échoue).
+2. Demander le **Small Business Program** (commission 15 % au lieu de 30 %).
+3. App → **Achats intégrés** → « + » → **Non consommable**, trois fois, avec les identifiants
+   ci-dessus (exactement), prix, nom et description FR/EN, et une **capture de l'écran d'achat**
+   (exigée pour la vérification).
+4. À la soumission de la version, cocher les trois achats intégrés dans la section « Achats
+   intégrés et abonnements » de la version : ils sont vérifiés **avec** l'app.
+5. Tests : **Utilisateurs et accès → Sandbox** → créer un testeur sandbox ; sur l'iPhone,
+   Réglages → App Store → Compte sandbox. Les achats TestFlight sont gratuits.
+
+### Google Play Console (une fois)
+1. Profil de paiement marchand rattaché au compte développeur.
+2. Envoyer d'abord un build contenant la facturation (n'importe quelle piste de test) : la
+   console n'ouvre les produits qu'à cette condition.
+3. **Monétiser → Produits → Produits intégrés** → créer les trois produits, mêmes identifiants,
+   mêmes prix, **activés**.
+4. Tests : **Paramètres → Tests de licence** → ajouter les comptes Gmail des testeurs.
+
+### Règles
+- **Sans module d'achat** (build ≤ 13, Expo Go) l'app reste **entièrement débloquée** : une mise à
+  jour à distance atteint aussi les anciens builds, qui n'ont aucun moyen de payer.
+- Achats et compteur d'essai gardés dans le trousseau (`expo-secure-store`) : sur iOS l'essai ne se
+  renouvelle pas en réinstallant l'app. Les achats se restaurent par « Restaurer mes achats ».
+- Ne **jamais** renommer un identifiant de produit : un achat déjà fait ne serait plus reconnu.
+
 ## Connexion Expo Go (pièges récurrents)
 > **Inapplicable tant que le projet est en SDK 54** (Expo Go est en SDK 57, cf. `CLAUDE.md`).
 > Conservé pour l'après-montée de SDK ou un development build. Ne pas s'y lancer pour « réparer »

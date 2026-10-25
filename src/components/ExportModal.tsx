@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { ALBUM_BACKGROUND_GROUPS, BACKGROUND_GROUP_KEYS, C, F } from '../theme';
 import { useLang } from '../i18n';
 import { effectiveCover, SCATTER_MAX, SCATTER_MIN, validScatterPicks } from '../albumStyle';
@@ -51,6 +52,13 @@ interface Props {
   folderName: string;
   /** Enregistre la carte de chaque photo (`undefined` = d'office, cf. `Photo.mapMode`). */
   onSetMapModes?: (modes: Record<string, Photo['mapMode']>) => void;
+  /**
+   * Hors version complète : formats 16 × 21 / 16 × 16, couvertures montées,
+   * typographies Classique et Manuscrite, cartes. Ces choix restent visibles,
+   * marqués d'un cadenas, et ouvrent l'écran d'achat (`onLocked`).
+   */
+  locked?: boolean;
+  onLocked?: () => void;
   onClose: () => void;
 }
 
@@ -118,12 +126,15 @@ function Tile({
   hint,
   selected,
   onPress,
+  locked = false,
   children,
 }: {
   label: string;
   hint?: string;
   selected: boolean;
   onPress: () => void;
+  /** Réservé à la version complète : cadenas, et l'appui ouvre l'achat. */
+  locked?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -132,9 +143,14 @@ function Tile({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, disabled: locked }}
     >
-      {children}
+      {locked && (
+        <View style={styles.lock}>
+          <Ionicons name="lock-closed" size={11} color={C.paper} />
+        </View>
+      )}
+      <View style={locked ? styles.lockedContent : undefined}>{children}</View>
       <Text style={[styles.tileLabel, selected && styles.tileLabelSelected]}>{label}</Text>
       {!!hint && <Text style={styles.tileHint}>{hint}</Text>}
     </Pressable>
@@ -296,6 +312,8 @@ export function ExportModal({
   initial,
   photos,
   scatterIds,
+  locked = false,
+  onLocked,
   coverTitle = '',
   folderName,
   preparing,
@@ -452,7 +470,12 @@ export function ExportModal({
                     label={L.export.formats[value]}
                     hint={L.export.formatHints[value]}
                     selected={options.format === value}
-                    onPress={() => setOptions((o) => ({ ...o, format: value }))}
+                    locked={locked && value !== 'a4'}
+                    onPress={() =>
+                      locked && value !== 'a4'
+                        ? onLocked?.()
+                        : setOptions((o) => ({ ...o, format: value }))
+                    }
                   >
                     <FormatSketch format={value} />
                   </Tile>
@@ -466,7 +489,12 @@ export function ExportModal({
                     key={value}
                     label={L.export.typefaces[value]}
                     selected={options.typeface === value}
-                    onPress={() => setOptions((o) => ({ ...o, typeface: value }))}
+                    locked={locked && value !== 'sans'}
+                    onPress={() =>
+                      locked && value !== 'sans'
+                        ? onLocked?.()
+                        : setOptions((o) => ({ ...o, typeface: value }))
+                    }
                   >
                     <Text
                       style={[styles.sample, { fontFamily: TYPEFACE_FONTS[value] }]}
@@ -487,7 +515,12 @@ export function ExportModal({
                     label={L.export.covers[value]}
                     hint={L.export.coverHints[value]}
                     selected={options.cover === value}
-                    onPress={() => setOptions((o) => ({ ...o, cover: value }))}
+                    locked={locked && value !== 'classic'}
+                    onPress={() =>
+                      locked && value !== 'classic'
+                        ? onLocked?.()
+                        : setOptions((o) => ({ ...o, cover: value }))
+                    }
                   >
                     <CoverSketch kind={value} />
                   </Tile>
@@ -771,7 +804,15 @@ export function ExportModal({
               open={openSection === 'maps'}
               onToggle={() => toggleSection('maps')}
             >
-              {placeCount > 0 ? (
+              {locked ? (
+                <View style={styles.lockedBox}>
+                  <Ionicons name="lock-closed" size={16} color={C.sienna} />
+                  <Text style={styles.lockedText}>{L.paywall.lockedBody}</Text>
+                  <Pressable style={styles.pickBtn} onPress={onLocked} accessibilityRole="button">
+                    <Text style={styles.pickBtnText}>{L.paywall.lockedSee}</Text>
+                  </Pressable>
+                </View>
+              ) : placeCount > 0 ? (
                 <>
                   <SwitchRow
                     label={L.export.photoMapsLabel}
@@ -1231,6 +1272,22 @@ const styles = StyleSheet.create({
     borderColor: C.sienna,
   },
   bgGroup: { marginBottom: 12 },
+  // Choix réservés à la version complète.
+  lock: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    zIndex: 1,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: C.sienna,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockedContent: { opacity: 0.45 },
+  lockedBox: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  lockedText: { flex: 1, fontFamily: F.mono, fontSize: 13, lineHeight: 18, color: C.inkSoft },
   titleInput: {
     minHeight: 64,
     maxHeight: 110,
