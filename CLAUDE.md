@@ -629,18 +629,25 @@ arrière après un update défaillant) ; en Expo Go `expo-updates` est inerte, d
 l'ajout à l'album ne doit jamais échouer pour autant.
 
 ## Le dossier `docs/` (site public, exigé par les stores)
-Trois fichiers, tous **obligatoires** une fois publiés — les supprimer casse quelque chose ailleurs :
+Quatre fichiers, tous **obligatoires** une fois publiés — les supprimer casse quelque chose ailleurs :
 - `index.html` : page d'installation visée par `INSTALL_URL` (`src/links.ts`).
 - `privacy.html` : politique de confidentialité. **Apple et Google exigent cette URL** pour toute
   fiche d'app. Contenu aligné sur le fonctionnement réel : aucune collecte, stockage local,
   géocodage délégué au service du système, partage à l'initiative de l'utilisateur, correcteur
   hors ligne. La mettre à jour si une fonction se met à envoyer quoi que ce soit sur un réseau.
+- `support.html` : page d'**assistance** (URL d'assistance exigée par l'App Store) — contact, achats,
+  restauration, sauvegarde, FAQ, résumé anglais. À tenir à jour avec les offres et limites.
 - `google<hash>.html` : preuve de propriété **Google Search Console**, exigée par la validation du
   site déclaré dans le compte développeur Play. Google revérifie périodiquement : le retirer fait
   perdre la validation du compte.
 
 ## Identité de l'app
-`slug` **`photo-album-print`** (historique) mais l'app s'appelle **ComClic**. Ne pas « corriger » le slug : il identifie le projet
+`slug` **`photo-album-print`** (historique) mais l'app s'appelle **ComClic** : `expo.name` vaut
+`ComClic` (nom sous l'icône) depuis la préparation de la soumission, et `expo.locales`
+(`locales/fr.json`, `locales/en.json`) traduit le nom affiché et **tous les textes d'autorisation**
+(appareil photo, photothèque, position, micro, dictée) — toucher ces fichiers = **nouveau build**.
+`ios.supportsTablet` = `false` (app jamais testée sur iPad : pas de captures ni de vérification
+iPad). Fiche App Store prête à copier : `store/fiche-app-store.md`. Ne pas « corriger » le slug : il identifie le projet
 côté EAS (builds, updates, canal `preview`).
 
 ## Commits

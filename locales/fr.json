@@ -1,0 +1,9 @@
+{
+  "CFBundleDisplayName": "ComClic",
+  "NSCameraUsageDescription": "ComClic utilise l’appareil photo pour prendre les photos de votre album.",
+  "NSPhotoLibraryUsageDescription": "ComClic accède à votre photothèque pour importer des photos dans votre album.",
+  "NSPhotoLibraryAddUsageDescription": "ComClic enregistre dans votre photothèque les photos prises dans l’app.",
+  "NSLocationWhenInUseUsageDescription": "ComClic utilise votre position pour indiquer le lieu de prise de vue sous chaque photo.",
+  "NSMicrophoneUsageDescription": "ComClic utilise le micro pour dicter vos commentaires de photo.",
+  "NSSpeechRecognitionUsageDescription": "ComClic transcrit votre voix en texte pour commenter vos photos."
+}

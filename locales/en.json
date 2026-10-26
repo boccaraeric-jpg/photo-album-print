@@ -1,0 +1,9 @@
+{
+  "CFBundleDisplayName": "ComClic",
+  "NSCameraUsageDescription": "ComClic uses the camera to take the photos of your album.",
+  "NSPhotoLibraryUsageDescription": "ComClic accesses your photo library to import photos into your album.",
+  "NSPhotoLibraryAddUsageDescription": "ComClic saves the photos taken in the app to your photo library.",
+  "NSLocationWhenInUseUsageDescription": "ComClic uses your location to show where each photo was taken.",
+  "NSMicrophoneUsageDescription": "ComClic uses the microphone to dictate your photo captions.",
+  "NSSpeechRecognitionUsageDescription": "ComClic transcribes your voice into text to caption your photos."
+}

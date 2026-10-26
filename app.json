@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "photo-album-print",
+    "name": "ComClic",
     "slug": "photo-album-print",
     "version": "1.0.0",
     "scheme": "comclic",
@@ -9,7 +9,7 @@
     "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "com.boccarasteam.comclic",
-      "supportsTablet": true,
+      "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleDevelopmentRegion": "fr",
@@ -105,6 +105,10 @@
     },
     "updates": {
       "url": "https://u.expo.dev/e309c8a1-b634-41dc-989c-51ac6e50e4fa"
+    },
+    "locales": {
+      "fr": "./locales/fr.json",
+      "en": "./locales/en.json"
     }
   }
 }
