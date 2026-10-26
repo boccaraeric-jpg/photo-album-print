@@ -43,7 +43,8 @@ export function PaywallModal({
   const { L } = useLang();
   const P = L.paywall;
   const insets = useSafeAreaInsets();
-  const { tier, prices, buy, restore, redeemCode, busy, trialAlbumsUsed } = useEntitlement();
+  const { tier, prices, buy, restore, redeemCode, busy, trialAlbumsUsed, storeAvailable, storeStatus, storeDetail } =
+    useEntitlement();
   const price = (k: ProductKey) => prices[k] ?? FALLBACK_PRICES[k];
 
   const lead =
@@ -125,6 +126,13 @@ export function PaywallModal({
           </View>
 
           <Text style={styles.oneTime}>{P.oneTime}</Text>
+          {/* Boutique sans produits ou en erreur : dit pourquoi l'achat échouerait. */}
+          {storeAvailable && (storeStatus === 'noProducts' || storeStatus === 'error') && (
+            <Text style={styles.storeNote}>
+              {storeStatus === 'noProducts' ? P.storeNoProducts : P.storeError}
+              {storeDetail ? ` (${storeDetail})` : ''}
+            </Text>
+          )}
           <View style={styles.links}>
             <Pressable onPress={restore} disabled={busy} hitSlop={8} accessibilityRole="button">
               <Text style={styles.restore}>{P.restore}</Text>
@@ -205,6 +213,13 @@ const styles = StyleSheet.create({
   btnGhostText: { fontFamily: F.monoBold, fontSize: 15, color: C.ink },
   disabled: { opacity: 0.5 },
   oneTime: { fontFamily: F.mono, fontSize: 12.5, color: C.muted, textAlign: 'center' },
+  storeNote: {
+    fontFamily: F.mono,
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#b42318',
+    textAlign: 'center',
+  },
   links: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
   linkSep: { fontFamily: F.mono, fontSize: 14, color: C.muted },
   restore: {

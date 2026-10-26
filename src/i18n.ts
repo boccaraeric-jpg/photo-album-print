@@ -162,6 +162,12 @@ const fr = {
     oneTime: 'Paiement unique, sans abonnement. Achat lié à votre compte App Store ou Google Play.',
     restore: 'Restaurer mes achats',
     redeem: 'J’ai un code',
+    errorCode: (code: string) => `Code de la boutique : ${code}`,
+    productMissing: (sku: string) =>
+      `La boutique ne propose pas encore le produit « ${sku} ». Vérifiez qu’il est créé et « Prêt à être soumis », puis relancez l’app.`,
+    storeNoProducts:
+      'La boutique ne renvoie encore aucun produit : achats intégrés pas encore prêts ou en cours de diffusion.',
+    storeError: 'La boutique ne répond pas.',
     redeemFail: 'La saisie du code n’a pas pu s’ouvrir. Réessayez depuis l’App Store ou Google Play.',
     thanksTitle: 'Merci !',
     thanksBody: (full: boolean): string =>
@@ -624,6 +630,12 @@ const en: Dict = {
     oneTime: 'One-time payment, no subscription. Linked to your App Store or Google Play account.',
     restore: 'Restore purchases',
     redeem: 'I have a code',
+    errorCode: (code: string) => `Store code: ${code}`,
+    productMissing: (sku: string) =>
+      `The store does not offer the product “${sku}” yet. Check that it is created and “Ready to Submit”, then relaunch the app.`,
+    storeNoProducts:
+      'The store returns no products yet: in-app purchases are not ready or still propagating.',
+    storeError: 'The store is not responding.',
     redeemFail: 'Code entry could not open. Try again from the App Store or Google Play.',
     thanksTitle: 'Thank you!',
     thanksBody: (full: boolean) =>

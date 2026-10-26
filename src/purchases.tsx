@@ -60,6 +60,12 @@ interface Entitlement {
   storeAvailable: boolean;
   /** Prix localisés des produits (« 7,99 € »), quand la boutique les a donnés. */
   prices: Partial<Record<ProductKey, string>>;
+  /**
+   * État de la boutique : produits chargés, aucun produit renvoyé (pas encore
+   * prêts dans App Store Connect / Play Console), ou erreur (avec son détail).
+   */
+  storeStatus: 'loading' | 'ready' | 'noProducts' | 'error';
+  storeDetail: string | null;
   /** Albums déjà partagés pendant l'essai. */
   trialAlbumsUsed: number;
   canShare: (albumId: string, photoCount: number) => ShareCheck;
@@ -104,6 +110,12 @@ export function entitledOptions(options: ExportOptions, isFull: boolean): Export
     showMap: false,
     photoMaps: false,
   };
+}
+
+/** Détail lisible d'une erreur de boutique (code, sinon message). */
+function errorDetail(e: unknown): string {
+  const err = e as { code?: string; message?: string } | null;
+  return String(err?.code || err?.message || e || '?').slice(0, 160);
 }
 
 /** Niveau déduit des produits possédés. */
@@ -173,6 +185,10 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
   const [owned, setOwned] = useState<Set<string>>(new Set());
   const [trialAlbums, setTrialAlbums] = useState<string[]>([]);
   const [prices, setPrices] = useState<Partial<Record<ProductKey, string>>>({});
+  const [storeStatus, setStoreStatus] = useState<Entitlement['storeStatus']>('loading');
+  const [storeDetail, setStoreDetail] = useState<string | null>(null);
+  const pricesRef = useRef(prices);
+  pricesRef.current = prices;
   const [busy, setBusy] = useState(false);
   const [paywall, setPaywall] = useState<PaywallReason | null>(null);
 
@@ -197,6 +213,31 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
   // Textes à jour pour les écouteurs posés une fois (langue changée entre-temps).
   const Lref = useRef(L);
   Lref.current = L;
+
+  /** Charge produits et prix ; renvoie les prix trouvés (vide si aucun produit). */
+  const loadProducts = useCallback(async (): Promise<Partial<Record<ProductKey, string>>> => {
+    if (!iap) return {};
+    try {
+      const products = await iap.fetchProducts({
+        skus: Object.values(PRODUCT_IDS),
+        type: 'in-app',
+      });
+      const byId: Partial<Record<ProductKey, string>> = {};
+      for (const p of (products ?? []) as { id: string; displayPrice: string }[]) {
+        const key = (Object.keys(PRODUCT_IDS) as ProductKey[]).find((k) => PRODUCT_IDS[k] === p.id);
+        if (key) byId[key] = p.displayPrice;
+      }
+      setPrices(byId);
+      const found = Object.keys(byId).length;
+      setStoreStatus(found ? 'ready' : 'noProducts');
+      setStoreDetail(found ? null : `0/${Object.keys(PRODUCT_IDS).length}`);
+      return byId;
+    } catch (e) {
+      setStoreStatus('error');
+      setStoreDetail(errorDetail(e));
+      return {};
+    }
+  }, [iap]);
 
   /** Relit les achats auprès de la boutique (restauration, lancement). */
   const syncPurchases = useCallback(async (): Promise<Set<string>> => {
@@ -248,26 +289,23 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
         syncPurchases().catch(() => {});
         return;
       }
-      Alert.alert(Lref.current.paywall.errorTitle, Lref.current.paywall.errorBody);
+      // Le code de la boutique est affiché : sans lui, impossible de savoir ce
+      // qui bloque (produit non prêt, compte, réseau…).
+      const T = Lref.current.paywall;
+      Alert.alert(T.errorTitle, `${T.errorBody}\n\n${T.errorCode(code || '?')}`);
     });
     (async () => {
       try {
         await iap.initConnection();
-        const products = await iap.fetchProducts({
-          skus: Object.values(PRODUCT_IDS),
-          type: 'in-app',
-        });
-        if (!alive) return;
-        const byId: Partial<Record<ProductKey, string>> = {};
-        for (const p of (products ?? []) as { id: string; displayPrice: string }[]) {
-          const key = (Object.keys(PRODUCT_IDS) as ProductKey[]).find((k) => PRODUCT_IDS[k] === p.id);
-          if (key) byId[key] = p.displayPrice;
+      } catch (e) {
+        if (alive) {
+          setStoreStatus('error');
+          setStoreDetail(errorDetail(e));
         }
-        setPrices(byId);
-        await syncPurchases();
-      } catch {
-        // Hors ligne ou boutique indisponible : le cache local fait foi.
+        return;
       }
+      await loadProducts();
+      syncPurchases().catch(() => {});
     })();
     return () => {
       alive = false;
@@ -309,14 +347,32 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
       if (!iap) return;
       setBusy(true);
       const sku = PRODUCT_IDS[key];
-      Promise.resolve(
-        iap.requestPurchase({
-          request: { apple: { sku }, google: { skus: [sku] } },
-          type: 'in-app',
-        }),
-      ).catch(() => setBusy(false));
+      (async () => {
+        // La boutique doit connaître le produit avant l'achat : nouvel essai de
+        // chargement s'il manque (produit rendu disponible entre-temps).
+        if (!pricesRef.current[key] && !(await loadProducts())[key]) {
+          setBusy(false);
+          const T = Lref.current.paywall;
+          Alert.alert(T.errorTitle, `${T.productMissing(sku)}\n\n${T.errorCode('product-not-found')}`);
+          return;
+        }
+        try {
+          await iap.requestPurchase({
+            request: { apple: { sku }, google: { skus: [sku] } },
+            type: 'in-app',
+          });
+        } catch (e) {
+          // Erreur levée sans passer par l'écouteur d'erreurs : on la montre aussi.
+          setBusy(false);
+          const detail = errorDetail(e);
+          if (!/cancel/i.test(detail)) {
+            const T = Lref.current.paywall;
+            Alert.alert(T.errorTitle, `${T.errorBody}\n\n${T.errorCode(detail)}`);
+          }
+        }
+      })();
     },
-    [iap],
+    [iap, loadProducts],
   );
 
   // Retour dans l'app (après un code utilisé dans le Play Store ou l'App Store) :
@@ -372,10 +428,15 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
     })();
   }, [iap, syncPurchases, L]);
 
-  const openPaywall = useCallback((reason: PaywallReason, afterModal = false) => {
-    if (afterModal) setTimeout(() => setPaywall(reason), 450);
-    else setPaywall(reason);
-  }, []);
+  const openPaywall = useCallback(
+    (reason: PaywallReason, afterModal = false) => {
+      // Produits pas encore chargés (boutique pas prête au lancement) : nouvel essai.
+      if (iap && !Object.keys(pricesRef.current).length) loadProducts().catch(() => {});
+      if (afterModal) setTimeout(() => setPaywall(reason), 450);
+      else setPaywall(reason);
+    },
+    [iap, loadProducts],
+  );
 
   const value = useMemo<Entitlement>(
     () => ({
@@ -383,6 +444,8 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
       isFull,
       storeAvailable,
       prices,
+      storeStatus,
+      storeDetail,
       trialAlbumsUsed: trialAlbums.length,
       canShare,
       recordShare,
@@ -397,6 +460,8 @@ export function EntitlementProvider({ children }: { children: ReactNode }) {
       isFull,
       storeAvailable,
       prices,
+      storeStatus,
+      storeDetail,
       trialAlbums.length,
       canShare,
       recordShare,
