@@ -24,7 +24,7 @@ import {
 const FALLBACK_PRICES: Record<ProductKey, string> = {
   light: '7,99 €',
   full: '12,99 €',
-  upgrade: '5,00 €',
+  upgrade: '4,99 €',
 };
 
 /**

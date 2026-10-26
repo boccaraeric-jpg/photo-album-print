@@ -24,7 +24,7 @@ import { PaywallModal } from './components/PaywallModal';
  * - **essai** (téléchargement gratuit) : fonctions de la version Light, et
  *   partage de **3 albums** de **15 photos** au plus ;
  * - **Light** (7,99 €, achat unique) : albums illimités, mêmes fonctions ;
- * - **Full** (12,99 €, ou Light + passage à 5 €) : tout, dont le rapport
+ * - **Full** (12,99 €, ou Light + passage à 4,99 €) : tout, dont le rapport
  *   professionnel, la sauvegarde, les formats 16 × 21 / 16 × 16, les
  *   couvertures montées, les cartes, les typographies et l'annotation.
  * Les 18 couleurs de fond et « Powered by ComClic » sont dans tous les niveaux.

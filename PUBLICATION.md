@@ -83,7 +83,7 @@ Modèle : **app gratuite** + achats uniques (non consommables), sans abonnement,
 |---|---|---|---|
 | ComClic Light | `comclic.light` | 7,99 € | Albums illimités |
 | ComClic Full | `comclic.full` | 12,99 € | Tout débloqué |
-| Passage à Full | `comclic.upgrade` | 5,00 € | Proposé seulement à qui a Light |
+| Passage à Full | `comclic.upgrade` | 4,99 € | Proposé seulement à qui a Light |
 
 Essai : fonctions Light, **3 albums** partagés (un album déjà partagé le reste), **15 photos** au
 plus par album. Full seulement : rapport pro, sauvegarde/restauration, formats 16×21 / 16×16,
