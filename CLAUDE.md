@@ -553,6 +553,14 @@ paquet est bien installé (vu avec `expo-constants` après un `npm dedupe`). Le 
 cause, inutile de le chercher. Remise en route : arrêter Metro, supprimer `node_modules/.cache` et
 `$TEMP/metro-cache` + `$TEMP/metro-file-map-*`, puis `npx expo start --clear`.
 
+## Plafond de 100 photos par dossier (`src/limits.ts`)
+`MAX_ALBUM_PHOTOS` = 100 (pages de texte exclues), **toutes versions** : le PDF/aperçu est un seul
+document en mémoire, l'album ComClic et le ZIP des images aussi ; au-delà, iOS tuerait l'app et le
+fichier dépasserait les messageries. Appliqué **à l'ajout** : `takePhoto`, `pickFromLibrary`
+(`selectionLimit` + garde-fou), `runImageImport` et `runAlbumImport` (partage entrant) ; message
+proposant un deuxième dossier. **Pas** à la restauration d'une sauvegarde (données de l'utilisateur),
+et un dossier déjà au-delà n'est jamais amputé. À valider sur appareil avec un album de 100 photos.
+
 ## Achats intégrés (`src/purchases.tsx`, `PaywallModal`)
 App **gratuite** + achats uniques `comclic.light` / `comclic.full` / `comclic.upgrade` (`expo-iap`
 **3.4.13**, version de l'époque SDK 54 — la 6.x vise le SDK 57 ; pas de serveur). `EntitlementProvider`

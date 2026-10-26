@@ -98,6 +98,7 @@ import { ShareImportModal } from './src/components/ShareImportModal';
 import { CommentModal } from './src/components/CommentModal';
 import { AdjustModal } from './src/components/AdjustModal';
 import { AnnotateModal } from './src/components/AnnotateModal';
+import { MAX_ALBUM_PHOTOS, photoRoomIn } from './src/limits';
 import {
   entitledOptions,
   EntitlementProvider,
@@ -381,11 +382,25 @@ function Root() {
     [resetShareIntent],
   );
 
+  /** Photos laissées de côté faute de place dans le dossier (100 au plus). */
+  const alertAlbumLimit = useCallback(
+    (added: number, skipped: number) => {
+      // Laissé le temps à l'écran d'import de se fermer (iOS avale sinon l'alerte).
+      setTimeout(() => {
+        Alert.alert(L.alert.albumFullTitle, L.alert.albumTrimmed(added, skipped, MAX_ALBUM_PHOTOS));
+      }, 500);
+    },
+    [L],
+  );
+
   // Import d'images brutes (partage de photos) dans le dossier choisi.
   const runImageImport = useCallback(
     async (paths: string[], albumId: string) => {
+      // 100 photos au plus par dossier : au-delà, l'album ne se préparerait plus.
+      const room = photoRoomIn(albumId, photos);
+      const kept = paths.slice(0, room);
       const created: Photo[] = [];
-      for (const path of paths) {
+      for (const path of kept) {
         const id = newId();
         try {
           const persisted = await persistImage(path, id);
@@ -403,8 +418,9 @@ function Root() {
       if (created.length) setPhotos((prev) => [...prev, ...created]);
       // Une seule photo → ouvrir son éditeur en arrivant dans le dossier.
       finishImport(albumId, created.length === 1 ? created[0].id : null);
+      if (kept.length < paths.length) alertAlbumLimit(kept.length, paths.length - kept.length);
     },
-    [finishImport],
+    [finishImport, photos, alertAlbumLimit],
   );
 
   // Import d'un album ComClic reçu : reconstruit chaque entrée avec ses méta
@@ -414,7 +430,17 @@ function Root() {
       const created: Photo[] = [];
       let coverId: string | undefined;
       const base = Date.now();
+      // 100 photos au plus par dossier (les pages de texte ne comptent pas).
+      let room = photoRoomIn(albumId, photos);
+      let skipped = 0;
       entries.forEach((e, i) => {
+        if (e.kind !== 'text' && e.uri) {
+          if (room <= 0) {
+            skipped++;
+            return;
+          }
+          room--;
+        }
         const id = newId();
         if (e.kind === 'text') {
           created.push({
@@ -445,8 +471,11 @@ function Root() {
         );
       }
       finishImport(albumId, null);
+      if (skipped) {
+        alertAlbumLimit(created.filter((p) => p.kind !== 'text').length, skipped);
+      }
     },
-    [finishImport],
+    [finishImport, photos, alertAlbumLimit],
   );
 
   /**
@@ -1442,14 +1471,27 @@ onBack,
   // Ouvre l'appareil photo **intégré** (`CameraModal`) plutôt que la caméra
   // système : celle d'iOS impose son écran « Use Photo / Retake » après chaque
   // déclenchement, redondant avec la suppression depuis le dossier.
+  // Place restante dans le dossier : 100 photos au plus (cf. `MAX_ALBUM_PHOTOS`).
+  const photoRoom = Math.max(
+    0,
+    MAX_ALBUM_PHOTOS - photos.filter((p) => p.kind !== 'text').length,
+  );
+  const alertAlbumFull = useCallback(() => {
+    Alert.alert(L.alert.albumFullTitle, L.alert.albumFullBody(MAX_ALBUM_PHOTOS));
+  }, [L]);
+
   const takePhoto = useCallback(async () => {
+    if (photoRoom <= 0) {
+      alertAlbumFull();
+      return;
+    }
     const perm = await requestCameraPermission();
     if (!perm?.granted) {
       Alert.alert(L.alert.permTitle, L.alert.permCameraBody);
       return;
     }
     setCapturing(true);
-  }, [requestCameraPermission, L]);
+  }, [requestCameraPermission, L, photoRoom, alertAlbumFull]);
 
   // Photo prise dans `CameraModal` : même traitement qu'avant (photothèque,
   // position de l'appareil, ouverture de l'éditeur de commentaire).
@@ -1495,6 +1537,10 @@ onBack,
   );
 
   const pickFromLibrary = useCallback(async () => {
+    if (photoRoom <= 0) {
+      alertAlbumFull();
+      return;
+    }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       Alert.alert(L.alert.permTitle, L.alert.permLibraryBody);
@@ -1509,14 +1555,19 @@ onBack,
       const res = await ImagePicker.launchImageLibraryAsync({
         quality: 0.8,
         allowsMultipleSelection: true,
+        // La photothèque bloque elle-même au-delà de la place restante.
+        selectionLimit: photoRoom,
         exif: true,
       });
       if (!res.canceled) {
+        // Garde-fou si la limite de sélection n'a pas été appliquée.
+        const assets = res.assets.slice(0, photoRoom);
+        const skipped = res.assets.length - assets.length;
         // Une seule photo → ouvre l'éditeur de commentaire ; plusieurs → ajout direct.
-        const openEditor = res.assets.length === 1;
-        const total = res.assets.length;
+        const openEditor = assets.length === 1;
+        const total = assets.length;
         setImporting({ done: 0, total });
-        for (const [i, asset] of res.assets.entries()) {
+        for (const [i, asset] of assets.entries()) {
           // Date **et** lieu passent par la photothèque quand l'EXIF de l'asset
           // est vide : PHPicker caviarde les métadonnées de la copie qu'il remet.
           await addAsset(
@@ -1527,11 +1578,17 @@ onBack,
           );
           setImporting({ done: i + 1, total });
         }
+        if (skipped > 0) {
+          Alert.alert(
+            L.alert.albumFullTitle,
+            L.alert.albumTrimmed(assets.length, skipped, MAX_ALBUM_PHOTOS),
+          );
+        }
       }
     } finally {
       setImporting(null);
     }
-  }, [addAsset]);
+  }, [addAsset, photoRoom, alertAlbumFull, L]);
 
   // Ajoute une page de texte seule (intro, dédicace, séparateur) et l'ouvre pour
   // saisir le texte. Réordonnable ensuite comme une photo par les boutons ▲▼.

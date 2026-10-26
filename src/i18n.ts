@@ -142,7 +142,7 @@ const fr = {
       `Version d’essai : ${used} album${used > 1 ? 's' : ''} partagé${used > 1 ? 's' : ''} sur ${max}, ${photos} photos au plus par album`,
     recommended: 'RECOMMANDÉ',
     lightFeatures: [
-      'Albums illimités, sans limite de photos',
+      'Albums illimités, jusqu’à 100 photos chacun',
       'PDF, images de l’album, envoi aux amis ComClic',
       '18 couleurs de fond, commentaires, dictée, correcteur',
     ],
@@ -434,6 +434,11 @@ Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un
     comclicAlbum: 'Album ComClic (pour un contact)',
   },
   alert: {
+    albumFullTitle: 'Dossier complet',
+    albumFullBody: (max: number) =>
+      `Un dossier contient au plus ${max} photos : au-delà, l’album ne pourrait plus être préparé ni envoyé. Créez un deuxième dossier pour la suite, par exemple « Voyage – partie 2 ».`,
+    albumTrimmed: (added: number, skipped: number, max: number) =>
+      `${added} photo${added > 1 ? 's' : ''} ajoutée${added > 1 ? 's' : ''}. ${skipped} n’${skipped > 1 ? 'ont' : 'a'} pas pu l’être : un dossier contient au plus ${max} photos. Créez un deuxième dossier pour la suite.`,
     deleteAlbumTitle: (name: string) => `Supprimer « ${name} » ?`,
     deleteAlbumBody:
       'Les photos de ce dossier seront retirées de l’app (mais pas de votre photothèque).',
@@ -610,7 +615,7 @@ const en: Dict = {
       `Trial: ${used} of ${max} album${max > 1 ? 's' : ''} shared, up to ${photos} photos per album`,
     recommended: 'RECOMMENDED',
     lightFeatures: [
-      'Unlimited albums, no photo limit',
+      'Unlimited albums, up to 100 photos each',
       'PDF, album images, sending to ComClic friends',
       '18 background colors, captions, dictation, spell check',
     ],
@@ -900,6 +905,11 @@ Folders will be ADDED to the ones already there: nothing is replaced. A name alr
     comclicAlbum: 'ComClic album (for a contact)',
   },
   alert: {
+    albumFullTitle: 'Folder full',
+    albumFullBody: (max: number) =>
+      `A folder holds up to ${max} photos: beyond that, the album could no longer be prepared or sent. Create a second folder for the rest, for example “Trip – part 2”.`,
+    albumTrimmed: (added: number, skipped: number, max: number) =>
+      `${added} photo${added > 1 ? 's' : ''} added. ${skipped} could not be: a folder holds up to ${max} photos. Create a second folder for the rest.`,
     deleteAlbumTitle: (name: string) => `Delete “${name}”?`,
     deleteAlbumBody:
       'The photos in this folder will be removed from the app (but not from your photo library).',
