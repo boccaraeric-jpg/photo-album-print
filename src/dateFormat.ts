@@ -79,6 +79,14 @@ export function formatPhotoDate(
   }
 }
 
+/**
+ * Format de date du rapport professionnel : « Détaillée » y porte l'heure de
+ * prise de vue (une expertise date ses constats à la minute).
+ */
+export function reportDateFormat(format: DateFormat): DateFormat {
+  return format === 'long' ? 'full' : format;
+}
+
 /** Date courte « JJ-MM-AAAA » (tirets, pour un nom de fichier valide). */
 export function fileDateStamp(ts: number = Date.now()): string {
   const d = new Date(ts);

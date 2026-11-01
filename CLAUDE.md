@@ -113,7 +113,13 @@ fait après coup sur le nom puis sur le manifeste.
 
 **Dictée vocale** (`expo-speech-recognition`, `src/components/VoiceCommentButton.tsx`) :
 reconnaissance **on-device** (iOS `SFSpeechRecognizer`) dans la langue courante de l'app ; la dictée
-**s'ajoute** au commentaire existant (résultats partiels en direct, phrases finales figées). Là
+**s'ajoute** au commentaire existant (résultats partiels en direct, phrases finales figées).
+**Ponctuation parlée** : `addsPunctuation: false` (iOS mettait un point à chaque pause) et
+`applySpokenPunctuation` (`src/dictation.ts`) convertit « point », « virgule », « point
+d'interrogation », « à la ligne », guillemets… (EN : period, comma…), sans toucher « point de vue »
+ni « au point », avec la typographie française. Motifs sans `` ni `\p{…}` (accents, Hermes).
+**Correction au clavier pendant l'écoute** ⇒ la dictée s'arrête (`writtenRef`) : sinon le résultat
+suivant réécrivait le commentaire depuis l'ancien texte et le passage effacé revenait. Là
 encore **natif** : `CommentModal` ne monte le bouton que si le **module natif répond** (`typeof
 mod.ExpoSpeechRecognitionModule?.start === 'function'` dans un `require` protégé), donc invisible
 dans Expo Go.
@@ -378,6 +384,10 @@ d'entrée** (ils pilotent aussi les libellés) :
   réduites d'autant (`proFrameH`), intitulés grandissant moitié moins.
 - **Position d'une page de texte** (`Photo.textVAlign` haut/milieu/bas, réglée dans l'aperçu, les deux
   styles) : défaut milieu en Loisir, haut en pro. `.tv-*` des deux gabarits, `startY` de `renderTextPage`.
+- **Page de garde du rapport pro** : composition centrée (sur-titre « Rapport photographique », titre,
+  filet, **photo étoilée ★** sinon la 1ʳᵉ — `ExportOptions.proCoverPhoto`, défaut oui —, mentions),
+  dans les deux moteurs (`.cover` de `buildProDocument`, branche `pro` de `renderCover`).
+  **Date « Détaillée » avec l'heure en pro** : `reportDateFormat` (`dateFormat.ts`, long → full).
 - **Taille des photos du rapport pro** : pour tout le rapport, `ExportOptions.proPhotoSize` (Mise en
   page › Photos, défaut moyenne) ; par photo, `Photo.proSize` (**distinct** de `size` du Loisir), réglée
   dans l'aperçu (aperçu désormais interactif dans les deux styles ; en pro, taille seule — prop `pro`

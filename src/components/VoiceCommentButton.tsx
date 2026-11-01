@@ -8,6 +8,7 @@ import {
 
 import { C, F } from '../theme';
 import { localeTag, useLang } from '../i18n';
+import { applySpokenPunctuation } from '../dictation';
 
 interface Props {
   /** Texte courant du commentaire (base à laquelle la dictée s'ajoute). */
@@ -35,6 +36,11 @@ export function VoiceCommentButton({ value, onChangeText }: Props) {
   // Texte présent avant/au fil de la dictée : chaque phrase finale s'y ajoute,
   // les résultats partiels sont recomposés par-dessus sans le perdre.
   const baseRef = useRef('');
+  // Dernier texte écrit par la dictée. Si le champ change autrement (l'utilisateur
+  // corrige au clavier pendant l'écoute), on arrête : le résultat suivant aurait
+  // réécrit le commentaire à partir de l'ancien texte, et le passage effacé
+  // revenait à l'enregistrement.
+  const writtenRef = useRef<string | null>(null);
 
   const setRec = (on: boolean) => {
     recordingRef.current = on;
@@ -56,6 +62,22 @@ export function VoiceCommentButton({ value, onChangeText }: Props) {
     [],
   );
 
+  // Correction au clavier pendant l'écoute : fin de la dictée, le texte corrigé
+  // fait foi (cf. `writtenRef`).
+  useEffect(() => {
+    if (!recordingRef.current || writtenRef.current === null) return;
+    if (value !== writtenRef.current) {
+      recordingRef.current = false;
+      setRecording(false);
+      writtenRef.current = null;
+      try {
+        ExpoSpeechRecognitionModule.abort();
+      } catch {
+        // déjà close
+      }
+    }
+  }, [value]);
+
   useSpeechRecognitionEvent('result', (e) => {
     // Le bouton est le seul déclencheur : hors enregistrement demandé, tout
     // résultat vient d'une session résiduelle et ne doit pas écrire dans le champ.
@@ -63,7 +85,15 @@ export function VoiceCommentButton({ value, onChangeText }: Props) {
     const transcript = e.results[0]?.transcript ?? '';
     if (!transcript) return;
     const base = baseRef.current;
-    const joined = base ? `${base} ${transcript}` : transcript;
+    // Ponctuation dite à voix haute (« point », « virgule »…) : une pause ne
+    // coupe plus la phrase. Au milieu d'une phrase, pas de majuscule ajoutée.
+    let spoken = applySpokenPunctuation(transcript, lang);
+    const sentenceStart = !base || /[.!?…]\s*$|\n$/.test(base);
+    if (!sentenceStart && /^[a-zà-öø-ÿœ]/.test(transcript)) {
+      spoken = spoken.charAt(0).toLowerCase() + spoken.slice(1);
+    }
+    const joined = !base ? spoken : base.endsWith('\n') ? base + spoken : `${base} ${spoken}`;
+    writtenRef.current = joined;
     onChangeText(joined);
     if (e.isFinal) baseRef.current = joined;
   });
@@ -87,6 +117,7 @@ export function VoiceCommentButton({ value, onChangeText }: Props) {
   const stop = () => {
     ExpoSpeechRecognitionModule.stop();
     setRec(false);
+    writtenRef.current = null;
   };
 
   const start = async () => {
@@ -96,13 +127,16 @@ export function VoiceCommentButton({ value, onChangeText }: Props) {
       return;
     }
     baseRef.current = value.trim();
+    writtenRef.current = value;
     setRec(true);
     ExpoSpeechRecognitionModule.start({
       lang: localeTag(lang),
       interimResults: true,
       continuous: true,
       requiresOnDeviceRecognition: true,
-      addsPunctuation: true,
+      // Pas de ponctuation automatique (un point à chaque pause) : on ponctue
+      // à la voix (cf. `applySpokenPunctuation`).
+      addsPunctuation: false,
     });
   };
 

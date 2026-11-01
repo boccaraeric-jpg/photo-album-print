@@ -138,6 +138,11 @@ export interface ExportOptions {
    * réglée dans l'aperçu (`Photo.proSize`) garde la sienne.
    */
   proPhotoSize: ProPhotoSize;
+  /**
+   * Rapport professionnel : photo sur la page de garde — la photo marquée d'une
+   * étoile ★ dans le dossier, sinon la première.
+   */
+  proCoverPhoto: boolean;
 }
 
 /** Critère de tri de la liste des dossiers (écran d'accueil). */

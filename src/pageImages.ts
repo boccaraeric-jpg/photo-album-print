@@ -10,7 +10,7 @@ import {
 } from '@shopify/react-native-skia';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { ExportOptions, Photo, ProPhotoSize } from './types';
-import { formatPhotoDate, photoDate } from './dateFormat';
+import { formatPhotoDate, photoDate, reportDateFormat } from './dateFormat';
 import { dict, localeTag, type Lang } from './i18n';
 import {
   pageBackground,
@@ -824,10 +824,12 @@ async function renderCover(
   if (!surface) return null;
   const canvas = surface.getCanvas();
 
-  const count = photos.length ? dict(lang).album.photoCount(photos.length) : '';
 
   if (pro) {
-    // Couverture sobre de rapport : fond blanc, titre et méta factuelles.
+    // Page de garde du rapport (pendant de `.cover` du PDF) : composition
+    // centrée — sur-titre, titre, filet, photo étoilée (sinon la 1ʳᵉ), mentions.
+    const D = dict(lang).doc;
+    const k = W / COVER_W;
     const bg = Skia.Paint();
     bg.setColor(Skia.Color('#ffffff'));
     canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
@@ -836,27 +838,70 @@ async function renderCover(
       month: 'long',
       year: 'numeric',
     });
-    let ty = 260;
+    const coverPhoto = options.proCoverPhoto
+      ? (photos.find((p) => p.id === coverPhotoId) ?? photos[0])
+      : undefined;
+    const img = coverPhoto ? await loadImage(coverPhoto.uri) : null;
+    const textW = W - 2 * 56 * k;
+    const x0 = 56 * k;
+    const kickerSize = 11 * k;
+    const titleSize = 34 * k;
+    const titleLines = wrapLines(fontFor(true, titleSize), title, textW, 3).length;
+    const titleH = titleLines * lineHeightFor(titleSize);
+    const photoH = img ? 320 * k : 0;
+    const factsSize = 13 * k;
+    const total =
+      lineHeightFor(kickerSize) + 14 * k + titleH + 18 * k + 2 * k + 28 * k +
+      (img ? photoH + 28 * k : 0) + 2 * lineHeightFor(factsSize);
+    let ty = Math.max(64 * k, (H - 76 * k + 64 * k - total) / 2);
     ty +=
-      drawText(canvas, title, PAD, ty, W - 2 * PAD, {
-        color: '#111827',
-        size: 64,
+      drawText(canvas, D.reportKicker, x0, ty, textW, {
+        color: '#6b7280',
+        size: kickerSize,
         bold: true,
+        align: TextAlign.Center,
+        maxLines: 1,
+        letterSpacing: 5,
+      }) + 14 * k;
+    ty +=
+      drawText(canvas, title, x0, ty, textW, {
+        color: '#111827',
+        size: titleSize,
+        bold: true,
+        align: TextAlign.Center,
         maxLines: 3,
-      }) + 30;
+      }) + 18 * k;
     const rule = Skia.Paint();
     rule.setColor(Skia.Color('#111827'));
-    canvas.drawRect(Skia.XYWHRect(PAD, ty, 130, 4), rule);
-    ty += 44;
-    ty +=
-      drawText(canvas, `${dict(lang).doc.establishedOn} ${today}`, PAD, ty, W - 2 * PAD, {
-        color: '#14181f',
-        size: 26,
-        maxLines: 1,
-      }) + 8;
-    drawText(canvas, `${count}`, PAD, ty, W - 2 * PAD, {
+    canvas.drawRect(Skia.XYWHRect(W / 2 - 32 * k, ty, 64 * k, 2 * k), rule);
+    ty += 2 * k + 28 * k;
+    if (img) {
+      // Photo entière, cadre blanc et ombre légère (comme le PDF).
+      const drawn = drawContainImage(canvas, img, x0, ty, textW, photoH);
+      if (drawn) {
+        const b = 8 * k;
+        const shadow = Skia.Paint();
+        shadow.setAntiAlias(true);
+        shadow.setColor(Skia.Color('rgba(17,24,39,0.18)'));
+        shadow.setMaskFilter(Skia.MaskFilter.MakeBlur(BlurStyle.Normal, 6 * k, true));
+        canvas.drawRect(Skia.XYWHRect(drawn.x - b, drawn.y - b + 2 * k, drawn.w + 2 * b, drawn.h + 2 * b), shadow);
+        const frame = Skia.Paint();
+        frame.setColor(Skia.Color('#ffffff'));
+        canvas.drawRect(Skia.XYWHRect(drawn.x - b, drawn.y - b, drawn.w + 2 * b, drawn.h + 2 * b), frame);
+        drawContainImage(canvas, img, x0, ty, textW, photoH);
+      }
+      ty += photoH + 28 * k;
+    }
+    ty += drawText(canvas, `${D.establishedOn} ${today}`, x0, ty, textW, {
+      color: '#14181f',
+      size: factsSize,
+      align: TextAlign.Center,
+      maxLines: 1,
+    });
+    drawText(canvas, `${D.photoCountLabel} : ${photos.length}`, x0, ty, textW, {
       color: '#6b7280',
-      size: 24,
+      size: factsSize,
+      align: TextAlign.Center,
       maxLines: 1,
     });
     return encodeSurface(surface, fileTitle, 0);
@@ -1359,7 +1404,12 @@ async function renderProPage(
     };
     if (options.showPlace) row(D.place, photo.place?.trim() || '—', false);
     if (options.dateFormat !== 'none') {
-      row(D.date, formatPhotoDate(photoDate(photo), options.dateFormat, lang) || '—', false, dateAlign);
+      row(
+        D.date,
+        formatPhotoDate(photoDate(photo), reportDateFormat(options.dateFormat), lang) || '—',
+        false,
+        dateAlign,
+      );
     }
     row(D.description, photo.comment.trim() || '—', true);
     return ty - y;

@@ -9,7 +9,7 @@ import type {
   ProPhotoSize,
 } from './types';
 import { readPrintBase64 } from './photoFiles';
-import { fileDateStamp, formatPhotoDate, photoDate } from './dateFormat';
+import { fileDateStamp, formatPhotoDate, photoDate, reportDateFormat } from './dateFormat';
 import { dict, localeTag, SUPPORTED, type Lang } from './i18n';
 import {
   pageBackground,
@@ -149,6 +149,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   proTextSize: 'normal',
   proTextBold: false,
   proPhotoSize: 'medium',
+  proCoverPhoto: true,
 };
 
 /** Garde la valeur si elle fait partie des choix connus, sinon le défaut. */
@@ -202,6 +203,7 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     proTextSize: oneOf(o.proTextSize, ['normal', 'large', 'xlarge'] as const, d.proTextSize),
     proTextBold: typeof o.proTextBold === 'boolean' ? o.proTextBold : d.proTextBold,
     proPhotoSize: oneOf(o.proPhotoSize, ['small', 'medium', 'large'] as const, d.proPhotoSize),
+    proCoverPhoto: typeof o.proCoverPhoto === 'boolean' ? o.proCoverPhoto : d.proCoverPhoto,
   };
 }
 
@@ -865,7 +867,7 @@ export async function buildAlbumHtml(
   // description). Réglages honorés en pro : encadrement, format et position de
   // la date, alignement des pages de texte. Le reste reste imposé.
   if (options.style === 'pro') {
-    return buildProDocument(items, title, options, lang, interactive);
+    return buildProDocument(items, title, options, lang, interactive, coverPhotoId);
   }
 
   // Cartes à côté des photos : images Apple Plans (créées une fois, gardées
@@ -1165,6 +1167,9 @@ function proMeta(label: string, value: string, cls = '', rich = false): string {
   return `<div class="row ${cls}"><dt>${label}</dt><dd>${body}</dd></div>`;
 }
 
+/** Hauteur de la photo de la page de garde du rapport (points A4). */
+const PRO_COVER_PHOTO_H = 320;
+
 /** Corps du texte d'un rapport pro, rapporté au corps normal (`proTextSize`). */
 function proScale(options: ExportOptions): number {
   return PRO_TEXT_SCALE[options.proTextSize ?? 'normal'];
@@ -1242,8 +1247,18 @@ function buildProDocument(
   lang: Lang,
   /** Aperçu : fiches et pages de texte cliquables (taille, position du texte). */
   interactive = false,
+  /** Photo de la page de garde : celle marquée d'une étoile ★ (sinon la 1ʳᵉ). */
+  coverPhotoId?: string,
 ): string {
-  const { textAlign, dateAlign, dateFormat, showPlace } = options;
+  const { textAlign, dateAlign, showPlace } = options;
+  // « Détaillée » porte l'heure dans le rapport (cf. `reportDateFormat`).
+  const dateFormat = reportDateFormat(options.dateFormat);
+  // Page de garde : la photo étoilée, sinon la première photo lisible.
+  const coverItem = options.proCoverPhoto
+    ? (items.find((it) => it.photo.id === coverPhotoId && it.src) ??
+      items.find((it) => it.photo.kind !== 'text' && it.src))
+    : undefined;
+  const photoTotal = items.filter((it) => it.photo.kind !== 'text').length;
   const scale = proScale(options);
   const pages = paginateProEntries(
     items.map((it) => it.photo),
@@ -1315,13 +1330,29 @@ function buildProDocument(
     .sheet { position: relative; min-height: ${L.pageH}px; background: #ffffff;
       page-break-after: always; }
     .sheet:last-of-type { page-break-after: auto; }
-    .cover { padding: 96px 56px 0; }
-    .cover .kicker { font-size: 12px; letter-spacing: 5px; color: #6b7280; font-weight: 700; }
-    .cover h1 { font-size: 34px; font-weight: 700; margin: 10px 0 18px; color: #111827; }
-    .cover .rule { height: 2px; background: #111827; width: 64px; margin-bottom: 26px; }
-    .cover .row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid #eef0f3; }
-    .cover dt { width: 150px; color: #6b7280; margin: 0; }
-    .cover dd { margin: 0; font-weight: 600; }
+    /* Page de garde : composition centrée (sur-titre, titre, filet, photo de
+       couverture, mentions). Feuille à hauteur de page : le flex y est sûr. */
+    .cover {
+      height: ${L.pageH}px; padding: 64px 56px ${L.padBottom}px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center;
+    }
+    .cover .kicker { margin: 0; font-size: 11px; letter-spacing: 5px; color: #6b7280; font-weight: 700; }
+    .cover h1 { font-size: 34px; line-height: 1.2; font-weight: 700; margin: 14px 0 18px; color: #111827; }
+    .cover .rule { height: 2px; background: #111827; width: 64px; margin: 0 0 28px; }
+    /* Cadre blanc et ombre visibles en entier : pas de rognage (overflow
+       visible), la photo cadre comprise tient dans la hauteur réservée. */
+    .cover-photo {
+      width: 100%; height: ${PRO_COVER_PHOTO_H}px; margin: 0 0 28px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cover-photo img {
+      box-sizing: border-box; max-width: 100%; max-height: 100%;
+      object-fit: contain; display: block;
+      border: 8px solid #ffffff; box-shadow: 0 2px 10px rgba(17,24,39,0.18);
+    }
+    .cover .facts { margin: 0; font-size: 13px; color: #14181f; line-height: 1.7; }
+    .cover .facts span { color: #6b7280; }
     /* Page de fiches : depuis le haut. Les petites se posent deux par ligne
        (inline-block) ; lignes centrées, pour qu'une petite seule ne reste pas
        calée à gauche. */
@@ -1383,12 +1414,12 @@ function buildProDocument(
       </head>
       <body${interactive ? ' class="desk"' : ''}>
         <section class="sheet cover">
+          <p class="kicker">${escapeHtml(D.reportKicker)}</p>
           <h1>${escapeHtml(title)}</h1>
           <div class="rule"></div>
-          <dl>
-            ${proMeta(D.establishedOn, today)}
-            ${proMeta(D.photoCountLabel, String(items.filter((it) => it.photo.kind !== 'text').length))}
-          </dl>
+          ${coverItem ? `<div class="cover-photo"><img src="${coverItem.src}" /></div>` : ''}
+          <p class="facts">${escapeHtml(D.establishedOn)} ${escapeHtml(today)}<br/>
+            <span>${escapeHtml(D.photoCountLabel)} : ${photoTotal}</span></p>
         </section>
         ${sheets}
       </body>

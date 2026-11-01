@@ -607,6 +607,12 @@ export function ExportModal({
                   ))}
                 </View>
                 <Text style={styles.note}>{L.export.proSizeNote}</Text>
+                <SwitchRow
+                  label={L.export.proCoverPhotoLabel}
+                  hint={L.export.proCoverPhotoHint}
+                  value={options.proCoverPhoto}
+                  onChange={(proCoverPhoto) => setOptions((o) => ({ ...o, proCoverPhoto }))}
+                />
               </>
             )}
             {!isPro && (
@@ -745,7 +751,8 @@ export function ExportModal({
                   key={value}
                   selected={options.dateFormat === value}
                   label={L.export.dateFormats[value]}
-                  hint={L.export.dateHints[value]}
+                  // Rapport pro : « Détaillée » porte l'heure (`reportDateFormat`).
+                  hint={isPro && value === 'long' ? L.export.dateHintLongTime : L.export.dateHints[value]}
                   onPress={() => setOptions((o) => ({ ...o, dateFormat: value }))}
                 />
               ))}
