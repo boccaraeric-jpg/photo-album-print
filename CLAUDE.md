@@ -113,7 +113,10 @@ fait après coup sur le nom puis sur le manifeste.
 
 **Dictée vocale** (`expo-speech-recognition`, `src/components/VoiceCommentButton.tsx`) :
 reconnaissance **on-device** (iOS `SFSpeechRecognizer`) dans la langue courante de l'app ; la dictée
-**s'ajoute** au commentaire existant (résultats partiels en direct, phrases finales figées).
+**s'insère au curseur** si le champ a le focus, à la fin sinon (résultats partiels en direct,
+phrases finales figées ; le texte après le curseur est gardé dans `tailRef`). Le curseur est relevé
+à l'**`onPressIn`** du micro (`getInsertPosition` → `caretRef` de `CommentModal`), jamais la
+sélection par défaut `{0,0}` d'un champ non touché — sinon on dicterait en tête.
 **Ponctuation parlée** : `addsPunctuation: false` (iOS mettait un point à chaque pause) et
 `applySpokenPunctuation` (`src/dictation.ts`) convertit « point », « virgule », « point
 d'interrogation », « à la ligne », guillemets… (EN : period, comma…), sans toucher « point de vue »
@@ -167,8 +170,13 @@ la carte en grille 2 colonnes (5 boutons). Les annotations voyagent gravées dan
 `.comclic`), pas en tant que traits modifiables.
 `AdjustModal` prévisualise en direct via une **matrice couleur 4×5 Skia** ; `bakeAdjustedImage()`
 grave un nouveau JPEG (la photo garde `originalUri` + `uri` gravé + `adjustments`). `CropModal`
-recadre par **format + position** (pas de gestes : fiable en Expo Go) via `expo-image-manipulator` ;
-la version recadrée **devient la nouvelle base** (`uri` + `originalUri` remplacés, `adjustments`
+recadre **à la manière de Photos (iPhone)** : coins et bords du cadre qu'on tire, photo qu'on glisse
+ou pince dessous (`PanResponder`, sans gesture-handler), formats libre/original/carré/4:3/3:2/16:9
+avec bascule portrait/paysage, pivot de 90°, « Réinitialiser ». Le cadre remplit toujours la scène :
+au glissé/pincement c'est l'image qui bouge, en tirant une poignée l'image est figée (`frozen`) puis
+tout se recentre au lâcher. Rectangle en **pixels de l'image pivotée**, appliqué en **une passe**
+sur l'original (`rotate` puis `crop`, `expo-image-manipulator`) ; l'image pivotée affichée n'est
+qu'un aperçu réduit. La version recadrée **devient la nouvelle base** (`uri` + `originalUri` remplacés, `adjustments`
 réinitialisés).
 
 **Chaîne d'export** (le cœur de l'app). Les **deux boutons du bas d'`AlbumScreen` sont les points
@@ -610,8 +618,8 @@ longue attente (iOS qui prépare les fichiers choisis) a lieu **dans** `launchIm
 qu'aux builds natifs.
 Commandes de l'écran : déclencheur, bascule avant/arrière, flash (auto/on/off) et **zoom au
 curseur** (`@react-native-community/slider`, prop `zoom` de `CameraView`, 0 → 1). Pas de pincement :
-`react-native-gesture-handler` n'est pas une dépendance du projet et les gestes sont évités (même
-raison que `CropModal`). Le zoom et `ready` sont **réinitialisés à chaque ouverture** — la
+`react-native-gesture-handler` n'est pas une dépendance du projet (`CropModal` et `AnnotateModal` font
+leurs gestes en `PanResponder`). Le zoom et `ready` sont **réinitialisés à chaque ouverture** — la
 prévisualisation est démontée à la fermeture, un `ready` resté vrai autoriserait un déclenchement
 avant `onCameraReady`.
 
