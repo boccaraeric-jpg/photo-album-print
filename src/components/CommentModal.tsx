@@ -41,7 +41,8 @@ import { SpellCheckModal } from './SpellCheckModal';
 // permission, dans `VoiceCommentButton`.
 let VoiceButton: ComponentType<{
   value: string;
-  onChangeText: (t: string) => void;
+  onChangeText: (t: string, caret: number) => void;
+  getInsertPosition?: () => number | null;
 }> | null = null;
 try {
   const mod = require('expo-speech-recognition');
@@ -116,6 +117,12 @@ export function CommentModal({ photo, mapAuto = false, onSave, onClose }: Props)
   // change (les offsets ne voudraient plus rien dire). En état (et non en ref) :
   // la barre annonce sa cible, ce qui lève toute ambiguïté pour l'utilisateur.
   const [remembered, setRemembered] = useState<Selection | null>(null);
+  // Curseur du commentaire pour la dictée : elle s'insère là où l'utilisateur a
+  // placé le curseur, à condition que le champ ait le focus (curseur visible).
+  // Sans focus, on dicte à la fin — ne pas prendre la sélection par défaut
+  // {0,0}, qui ferait dicter en tête d'un champ jamais touché.
+  const caretRef = useRef<Selection | null>(null);
+  const commentFocused = useRef(false);
   const [matches, setMatches] = useState<SpellMatch[]>([]);
   const [spellVisible, setSpellVisible] = useState(false);
 
@@ -130,6 +137,7 @@ export function CommentModal({ photo, mapAuto = false, onSave, onClose }: Props)
     setForceSel(undefined);
     setRemembered(null);
     setEditing(false);
+    caretRef.current = null;
   }, [photo?.id]);
 
   // Lieu résolu en arrière-plan (géocodage) après l'ouverture : le remplir s'il
@@ -187,6 +195,19 @@ export function CommentModal({ photo, mapAuto = false, onSave, onClose }: Props)
   // à montrer et qu'on n'est pas en train de taper : sans marque, rien ne change
   // pour qui n'utilise pas les boutons B/U.
   const showRendered = !isText && !editing && hasMarks(text);
+
+  const dictationPosition = () =>
+    commentFocused.current && caretRef.current ? caretRef.current.end : null;
+  // Texte écrit par la dictée : le curseur suit le passage dicté (une nouvelle
+  // dictée reprend donc à la suite), et la plage mémorisée pour B/U ne vaut plus.
+  const onDictated = (t: string, caret: number) => {
+    setText(t);
+    setRemembered(null);
+    const at = { start: caret, end: caret };
+    caretRef.current = at;
+    setSel(at);
+    setForceSel(at);
+  };
 
   return (
     <Modal
@@ -276,13 +297,17 @@ export function CommentModal({ photo, mapAuto = false, onSave, onClose }: Props)
               autoFocus={editing}
               onFocus={() => {
                 focused.current = 'comment';
+                commentFocused.current = true;
                 setEditing(true);
                 // Clavier déjà ouvert (passage du lieu au commentaire) : pas de
                 // nouvel événement clavier, on remonte le champ tout de suite.
                 if (keyboard) revealField();
               }}
               // Fin de saisie → retour au texte rendu (cf. `showRendered`).
-              onBlur={() => setEditing(false)}
+              onBlur={() => {
+                commentFocused.current = false;
+                setEditing(false);
+              }}
               value={text}
               onChangeText={(t) => {
                 setForceSel(undefined);
@@ -293,6 +318,7 @@ export function CommentModal({ photo, mapAuto = false, onSave, onClose }: Props)
               onSelectionChange={(e) => {
                 const next = e.nativeEvent.selection;
                 setSel(next);
+                caretRef.current = next;
                 // Seules les plages NON vides sont mémorisées : le signal de
                 // sélection vide émis à la perte du focus ne doit pas l'effacer.
                 if (next.end > next.start) setRemembered(next);
@@ -315,7 +341,11 @@ export function CommentModal({ photo, mapAuto = false, onSave, onClose }: Props)
             />
             )}
             {VoiceButton && (
-              <VoiceButton value={text} onChangeText={setText} />
+              <VoiceButton
+                value={text}
+                onChangeText={onDictated}
+                getInsertPosition={dictationPosition}
+              />
             )}
             {/* Passe offline = index phonétique FR : proposée seulement en
                 français. En anglais, le correcteur natif iOS suffit. */}

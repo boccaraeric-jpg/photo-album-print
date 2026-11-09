@@ -13,21 +13,30 @@ import { applySpokenPunctuation } from '../dictation';
 interface Props {
   /** Texte courant du commentaire (base à laquelle la dictée s'ajoute). */
   value: string;
-  /** Met à jour le texte du commentaire (dictée en direct). */
-  onChangeText: (text: string) => void;
+  /**
+   * Met à jour le texte du commentaire (dictée en direct). `caret` = position
+   * juste après le passage dicté, pour y laisser le curseur.
+   */
+  onChangeText: (text: string, caret: number) => void;
+  /**
+   * Position du curseur dans le champ au moment de l'appui, ou `null` si le
+   * champ n'a pas le focus (la dictée va alors à la fin, comme avant).
+   */
+  getInsertPosition?: () => number | null;
 }
 
 /**
  * Bouton micro : dicte un commentaire par reconnaissance vocale **on-device**
  * (iOS `SFSpeechRecognizer`), dans la langue courante de l'app. La dictée
- * s'**ajoute** au texte existant (elle ne l'écrase pas) ; les résultats partiels
- * s'affichent en direct, chaque phrase finale est figée.
+ * s'**insère au curseur** si le champ a le focus (à la fin sinon), sans rien
+ * écraser ; les résultats partiels s'affichent en direct, chaque phrase finale
+ * est figée.
  *
  * ⚠️ Module **natif** : ce composant n'est monté que si la reconnaissance est
  * disponible (cf. `CommentModal`), donc jamais dans Expo Go — les hooks ci-dessous
  * ne s'exécutent que sur un build EAS / TestFlight.
  */
-export function VoiceCommentButton({ value, onChangeText }: Props) {
+export function VoiceCommentButton({ value, onChangeText, getInsertPosition }: Props) {
   const { L, lang } = useLang();
   const [recording, setRecording] = useState(false);
   // Miroir de `recording` lisible depuis les écouteurs : ceux-ci sont **globaux**
@@ -36,6 +45,13 @@ export function VoiceCommentButton({ value, onChangeText }: Props) {
   // Texte présent avant/au fil de la dictée : chaque phrase finale s'y ajoute,
   // les résultats partiels sont recomposés par-dessus sans le perdre.
   const baseRef = useRef('');
+  // Texte situé APRÈS le curseur au lancement de la dictée : il reste en place,
+  // derrière le passage dicté. Vide quand on dicte en fin de commentaire.
+  const tailRef = useRef('');
+  // Curseur relevé à l'appui-bas (`onPressIn`) : à ce moment le champ a encore
+  // son focus et sa vraie sélection ; après, la demande de permission ou la
+  // perte de focus peuvent la remettre à zéro.
+  const pressCaretRef = useRef<number | null>(null);
   // Dernier texte écrit par la dictée. Si le champ change autrement (l'utilisateur
   // corrige au clavier pendant l'écoute), on arrête : le résultat suivant aurait
   // réécrit le commentaire à partir de l'ancien texte, et le passage effacé
@@ -92,10 +108,15 @@ export function VoiceCommentButton({ value, onChangeText }: Props) {
     if (!sentenceStart && /^[a-zà-öø-ÿœ]/.test(transcript)) {
       spoken = spoken.charAt(0).toLowerCase() + spoken.slice(1);
     }
-    const joined = !base ? spoken : base.endsWith('\n') ? base + spoken : `${base} ${spoken}`;
+    const head = !base ? spoken : base.endsWith('\n') ? base + spoken : `${base} ${spoken}`;
+    const tail = tailRef.current;
+    // Une espace entre le passage dicté et la suite, sauf devant une fin de
+    // ligne ou une ponctuation qui se colle au mot précédent.
+    const sep = !tail || /^[\s,.…)\]»]/.test(tail) ? '' : ' ';
+    const joined = head + sep + tail;
     writtenRef.current = joined;
-    onChangeText(joined);
-    if (e.isFinal) baseRef.current = joined;
+    onChangeText(joined, head.length);
+    if (e.isFinal) baseRef.current = head;
   });
 
   useSpeechRecognitionEvent('end', () => setRec(false));
@@ -126,7 +147,18 @@ export function VoiceCommentButton({ value, onChangeText }: Props) {
       Alert.alert(L.comment.micDeniedTitle, L.comment.micDeniedBody);
       return;
     }
-    baseRef.current = value.trim();
+    const pos = pressCaretRef.current;
+    pressCaretRef.current = null;
+    if (pos === null || pos >= value.trimEnd().length) {
+      // Fin du commentaire (ou champ sans focus) : comportement d'origine.
+      baseRef.current = value.trim();
+      tailRef.current = '';
+    } else {
+      // Au curseur : ce qui précède sert de base, ce qui suit est conservé.
+      // Les espaces de part et d'autre sont recomposées à l'écriture.
+      baseRef.current = value.slice(0, pos).replace(/[ \t]+$/, '');
+      tailRef.current = value.slice(pos).replace(/^[ \t]+/, '');
+    }
     writtenRef.current = value;
     setRec(true);
     ExpoSpeechRecognitionModule.start({
@@ -143,6 +175,9 @@ export function VoiceCommentButton({ value, onChangeText }: Props) {
   return (
     <Pressable
       style={[styles.btn, recording && styles.btnRecording]}
+      onPressIn={() => {
+        if (!recording) pressCaretRef.current = getInsertPosition?.() ?? null;
+      }}
       onPress={recording ? stop : start}
       hitSlop={8}
     >
