@@ -77,9 +77,12 @@ export function applySpokenPunctuation(text: string, lang: Lang): string {
     s = s.replace(/([^\s ])([;:!?»])/g, '$1 $2');
     s = s.replace(/«[ \t]*/g, '« ');
   }
-  // Majuscule en début de texte et après . ! ? … ou un retour à la ligne.
+  // Majuscule en début de texte et après . ! ? … (suivi d'une espace ou d'un
+  // retour à la ligne). Un retour à la ligne SANS point ne la déclenche pas.
+  // Le premier mot est ensuite tranché par `VoiceCommentButton` selon le texte
+  // qui précède la dictée.
   s = s.replace(
-    new RegExp(`(^|[.!?…]\\s+|\\n)([${LOWER}])`, 'g'),
+    new RegExp(`(^|[.!?…]\\s+)([${LOWER}])`, 'g'),
     (_m, before: string, c: string) => before + c.toUpperCase(),
   );
   return s.replace(/[ \t]{2,}/g, ' ');

@@ -102,10 +102,17 @@ export function VoiceCommentButton({ value, onChangeText, getInsertPosition }: P
     if (!transcript) return;
     const base = baseRef.current;
     // Ponctuation dite à voix haute (« point », « virgule »…) : une pause ne
-    // coupe plus la phrase. Au milieu d'une phrase, pas de majuscule ajoutée.
+    // coupe plus la phrase.
     let spoken = applySpokenPunctuation(transcript, lang);
-    const sentenceStart = !base || /[.!?…]\s*$|\n$/.test(base);
-    if (!sentenceStart && /^[a-zà-öø-ÿœ]/.test(transcript)) {
+    // Majuscule au premier mot SEULEMENT en début de commentaire ou après un
+    // point (. ! ? …) — pas après une virgule ni un simple retour à la ligne.
+    // iOS met d'office une majuscule au début de chaque dictée : on ne s'y fie
+    // pas, sinon un mot capitalisé surgissait au milieu de la phrase.
+    const sentenceStart = !base || /[.!?…]\s*$/.test(base);
+    if (sentenceStart) {
+      spoken = spoken.charAt(0).toUpperCase() + spoken.slice(1);
+    } else if (!(lang === 'en' && /^I\b/.test(spoken))) {
+      // Exception : le « I » anglais reste en capitale.
       spoken = spoken.charAt(0).toLowerCase() + spoken.slice(1);
     }
     const head = !base ? spoken : base.endsWith('\n') ? base + spoken : `${base} ${spoken}`;
