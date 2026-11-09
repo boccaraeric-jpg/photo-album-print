@@ -209,11 +209,7 @@ const fr = {
     hint: 'Tirez les coins ou les bords · glissez ou pincez la photo',
     reset: 'Réinitialiser',
     rotate: 'Pivoter',
-    orientation: 'Portrait / paysage',
     apply: 'Appliquer',
-    ratioFree: 'Libre',
-    ratioOriginal: 'Original',
-    ratioSquare: 'Carré',
     failed: 'Le recadrage a échoué.',
   },
   preview: {
@@ -683,11 +679,7 @@ const en: Dict = {
     hint: 'Drag the corners or edges · move or pinch the photo',
     reset: 'Reset',
     rotate: 'Rotate',
-    orientation: 'Portrait / landscape',
     apply: 'Apply',
-    ratioFree: 'Free',
-    ratioOriginal: 'Original',
-    ratioSquare: 'Square',
     failed: 'Cropping failed.',
   },
   preview: {

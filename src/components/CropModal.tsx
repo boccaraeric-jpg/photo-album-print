@@ -7,7 +7,6 @@ import {
   Modal,
   PanResponder,
   Pressable,
-  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -34,16 +33,6 @@ type Rect = { x: number; y: number; w: number; h: number };
 type Size = { w: number; h: number };
 /** Passage image → écran : `écran = image × s + o`. */
 type Xf = { s: number; ox: number; oy: number };
-
-type RatioKey = 'free' | 'original' | 'square' | '4:3' | '3:2' | '16:9';
-const RATIOS: { key: RatioKey; label?: string; r?: number }[] = [
-  { key: 'free' },
-  { key: 'original' },
-  { key: 'square', r: 1 },
-  { key: '4:3', label: '4:3', r: 4 / 3 },
-  { key: '3:2', label: '3:2', r: 3 / 2 },
-  { key: '16:9', label: '16:9', r: 16 / 9 },
-];
 
 /** Marge autour du cadre dans la scène : place des poignées, contexte assombri. */
 const MARGIN = 28;
@@ -76,15 +65,6 @@ function clampPos(c: Rect, size: Size): Rect {
   };
 }
 
-/** Plus grand cadre au format `r`, centré au mieux sur `center`. */
-function ratioRect(r: number | null, size: Size, center?: { x: number; y: number }): Rect {
-  if (r == null) return fullRect(size);
-  const [w, h] = size.w / size.h > r ? [size.h * r, size.h] : [size.w, size.w / r];
-  const cx = center?.x ?? size.w / 2;
-  const cy = center?.y ?? size.h / 2;
-  return clampPos({ x: cx - w / 2, y: cy - h / 2, w, h }, size);
-}
-
 /** Pincement : le cadre rétrécit (zoom avant) ou grandit autour de son centre. */
 function zoomRect(base: Rect, k: number, size: Size): Rect {
   let w = base.w / k;
@@ -103,57 +83,20 @@ function zoomRect(base: Rect, k: number, size: Size): Rect {
 
 /**
  * Coin (`sx`, `sy` = ±1) ou bord (l'un des deux à 0) tiré de (`dx`, `dy`) pixels
- * image. Le côté opposé reste en place ; au format imposé, un bord fait grandir
- * l'autre dimension de part et d'autre de son centre.
+ * image. Le côté opposé reste en place. Recadrage libre : aucun format imposé.
  */
-function resizeRect(
-  base: Rect,
-  sx: number,
-  sy: number,
-  dx: number,
-  dy: number,
-  r: number | null,
-  size: Size,
-): Rect {
+function resizeRect(base: Rect, sx: number, sy: number, dx: number, dy: number, size: Size): Rect {
   const m = minSide(size);
   const right = base.x + base.w;
   const bottom = base.y + base.h;
-  const cx = base.x + base.w / 2;
-  const cy = base.y + base.h / 2;
-  // Place disponible depuis le point fixe, dans chaque direction.
-  const maxW = sx < 0 ? right : sx > 0 ? size.w - base.x : 2 * Math.min(cx, size.w - cx);
-  const maxH = sy < 0 ? bottom : sy > 0 ? size.h - base.y : 2 * Math.min(cy, size.h - cy);
-
-  let w = sx ? base.w + sx * dx : base.w;
-  let h = sy ? base.h + sy * dy : base.h;
-
-  if (r == null) {
-    w = sx ? clamp(w, m, maxW) : base.w;
-    h = sy ? clamp(h, m, maxH) : base.h;
-    return {
-      x: sx < 0 ? right - w : base.x,
-      y: sy < 0 ? bottom - h : base.y,
-      w,
-      h,
-    };
-  }
-
-  if (sx && sy) w = (w + h * r) / 2;
-  else if (sy) w = h * r;
-  h = w / r;
-  const down = Math.min(1, maxW / w, maxH / h);
-  w *= down;
-  h *= down;
-  const up = Math.max(1, m / w, m / h);
-  w *= up;
-  h *= up;
-  const rect = {
-    x: sx < 0 ? right - w : sx > 0 ? base.x : cx - w / 2,
-    y: sy < 0 ? bottom - h : sy > 0 ? base.y : cy - h / 2,
+  const w = sx ? clamp(base.w + sx * dx, m, sx < 0 ? right : size.w - base.x) : base.w;
+  const h = sy ? clamp(base.h + sy * dy, m, sy < 0 ? bottom : size.h - base.y) : base.h;
+  return {
+    x: sx < 0 ? right - w : base.x,
+    y: sy < 0 ? bottom - h : base.y,
     w,
     h,
   };
-  return clampPos(rect, size);
 }
 
 type Gesture =
@@ -168,8 +111,9 @@ const touchDist = (e: GestureResponderEvent) => {
 
 /**
  * Recadrage à la manière de l'app Photos de l'iPhone : on tire les coins ou les
- * bords du cadre, on glisse la photo dessous, on la pince pour zoomer ; formats
- * (libre, original, carré, 4:3, 3:2, 16:9, portrait/paysage) et pivot de 90°.
+ * bords du cadre, on glisse la photo dessous, on la pince pour zoomer ; pivot de
+ * 90°. Recadrage libre seulement : les formats imposés ont été retirés (retour
+ * testeurs, trop de choix).
  *
  * Gestes en `PanResponder` (RN de base, pas de gesture-handler, comme
  * `AnnotateModal`). Le cadre occupe toujours la scène : pendant un glissé ou un
@@ -185,8 +129,6 @@ export function CropModal({ photo, onSave, onClose }: Props) {
   const [rotation, setRotation] = useState(0); // degrés, sens horaire
   const [viewUri, setViewUri] = useState<string | null>(null);
   const [crop, setCrop] = useState<Rect | null>(null);
-  const [ratio, setRatio] = useState<RatioKey>('free');
-  const [portrait, setPortrait] = useState(false);
   const [stage, setStage] = useState<Size | null>(null);
   const [frozen, setFrozen] = useState<Xf | null>(null);
   const [active, setActive] = useState(false);
@@ -204,7 +146,6 @@ export function CropModal({ photo, onSave, onClose }: Props) {
     setRotation(0);
     setViewUri(photo?.uri ?? null);
     setCrop(null);
-    setRatio('free');
     setFrozen(null);
     setActive(false);
     if (photo) {
@@ -213,20 +154,11 @@ export function CropModal({ photo, onSave, onClose }: Props) {
         (w, h) => {
           setBaseSize({ w, h });
           setCrop({ x: 0, y: 0, w, h });
-          setPortrait(h > w);
         },
         () => setBaseSize(null),
       );
     }
   }, [photo]);
-
-  const ratioValue = (key: RatioKey, sz: Size, port: boolean): number | null => {
-    if (key === 'free') return null;
-    if (key === 'original') return sz.w / sz.h;
-    const r = RATIOS.find((x) => x.key === key)?.r ?? 1;
-    return port && r !== 1 ? 1 / r : r;
-  };
-  const r = size ? ratioValue(ratio, size, portrait) : null;
 
   const xf: Xf | null =
     frozen ?? (crop && stage && stage.w > 2 * MARGIN && stage.h > 2 * MARGIN
@@ -235,8 +167,8 @@ export function CropModal({ photo, onSave, onClose }: Props) {
 
   // Les gestionnaires du PanResponder sont créés une fois : ils lisent l'état
   // courant par cette référence.
-  const live = useRef({ crop, xf, size, r });
-  live.current = { crop, xf, size, r };
+  const live = useRef({ crop, xf, size });
+  live.current = { crop, xf, size };
   const gesture = useRef<Gesture | null>(null);
 
   const pan = useMemo(() => {
@@ -302,7 +234,7 @@ export function CropModal({ photo, onSave, onClose }: Props) {
       },
       onPanResponderMove: (e: GestureResponderEvent, gs: PanResponderGestureState) => {
         const g = gesture.current;
-        const { crop: c, xf: t, size: sz, r: rr } = live.current;
+        const { crop: c, xf: t, size: sz } = live.current;
         if (!g || !c || !t || !sz) return;
         if (e.nativeEvent.touches.length >= 2) {
           if (g.mode !== 'pinch') startPinch(e);
@@ -320,7 +252,7 @@ export function CropModal({ photo, onSave, onClose }: Props) {
           setCrop(clampPos({ ...g.base, x: g.base.x - dx, y: g.base.y - dy }, sz));
           return;
         }
-        setCrop(resizeRect(g.base, g.sx, g.sy, gs.dx / g.s, gs.dy / g.s, rr, sz));
+        setCrop(resizeRect(g.base, g.sx, g.sy, gs.dx / g.s, gs.dy / g.s, sz));
       },
       onPanResponderRelease: end,
       onPanResponderTerminate: end,
@@ -328,21 +260,6 @@ export function CropModal({ photo, onSave, onClose }: Props) {
   }, []);
 
   if (!photo) return null;
-
-  const chooseRatio = (key: RatioKey, port = portrait) => {
-    if (!size || !crop) return;
-    setRatio(key);
-    setPortrait(port);
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setCrop(
-      key === 'free'
-        ? crop
-        : ratioRect(ratioValue(key, size, port), size, {
-            x: crop.x + crop.w / 2,
-            y: crop.y + crop.h / 2,
-          }),
-    );
-  };
 
   const rotate = async () => {
     if (!baseSize || busy) return;
@@ -362,11 +279,9 @@ export function CropModal({ photo, onSave, onClose }: Props) {
               )
             ).uri;
       const sz = next % 180 ? { w: baseSize.h, h: baseSize.w } : baseSize;
-      const port = sz.h > sz.w;
       setViewUri(view);
       setRotation(next);
-      setPortrait(port);
-      setCrop(ratioRect(ratioValue(ratio, sz, port), sz));
+      setCrop(fullRect(sz));
     } catch {
       Alert.alert(L.common.error, L.crop.failed);
     } finally {
@@ -379,8 +294,6 @@ export function CropModal({ photo, onSave, onClose }: Props) {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setRotation(0);
     setViewUri(photo.uri);
-    setRatio('free');
-    setPortrait(baseSize.h > baseSize.w);
     setCrop(fullRect(baseSize));
   };
 
@@ -432,7 +345,6 @@ export function CropModal({ photo, onSave, onClose }: Props) {
     xf && crop
       ? { x: xf.ox + crop.x * xf.s, y: xf.oy + crop.y * xf.s, w: crop.w * xf.s, h: crop.h * xf.s }
       : null;
-  const fixedRatio = ratio === '4:3' || ratio === '3:2' || ratio === '16:9';
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -534,35 +446,6 @@ export function CropModal({ photo, onSave, onClose }: Props) {
 
         <Text style={styles.hint}>{L.crop.hint}</Text>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.ratios}
-        >
-          {RATIOS.map((ro) => {
-            const on = ratio === ro.key;
-            const label =
-              ro.key === 'free'
-                ? L.crop.ratioFree
-                : ro.key === 'original'
-                  ? L.crop.ratioOriginal
-                  : ro.key === 'square'
-                    ? L.crop.ratioSquare
-                    : portrait
-                      ? ro.label!.split(':').reverse().join(':')
-                      : ro.label!;
-            return (
-              <Pressable
-                key={ro.key}
-                style={[styles.chip, on && styles.chipOn]}
-                onPress={() => chooseRatio(ro.key)}
-              >
-                <Text style={[styles.chipText, on && styles.chipTextOn]}>{label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
         <View style={styles.tools}>
           <Pressable
             style={styles.tool}
@@ -573,20 +456,6 @@ export function CropModal({ photo, onSave, onClose }: Props) {
           >
             <MaterialIcons name="rotate-90-degrees-ccw" size={24} color="#fff" />
             <Text style={styles.toolText}>{L.crop.rotate}</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.tool, !fixedRatio && styles.dim]}
-            onPress={() => chooseRatio(ratio, !portrait)}
-            disabled={!fixedRatio}
-            accessibilityLabel={L.crop.orientation}
-            hitSlop={6}
-          >
-            <MaterialIcons
-              name={portrait ? 'crop-portrait' : 'crop-landscape'}
-              size={24}
-              color="#fff"
-            />
-            <Text style={styles.toolText}>{L.crop.orientation}</Text>
           </Pressable>
         </View>
 
@@ -664,20 +533,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 20,
   },
-  ratios: { gap: 8, paddingHorizontal: 20, paddingVertical: 12 },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  chipOn: { backgroundColor: C.sienna },
-  chipText: { fontFamily: F.mono, fontSize: 13, color: '#fff' },
-  chipTextOn: { color: C.paper },
   tools: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 40,
+    paddingTop: 14,
     paddingBottom: 8,
   },
   tool: { alignItems: 'center', gap: 4 },

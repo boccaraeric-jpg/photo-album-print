@@ -120,7 +120,10 @@ sélection par défaut `{0,0}` d'un champ non touché — sinon on dicterait en 
 **Ponctuation parlée** : `addsPunctuation: false` (iOS mettait un point à chaque pause) et
 `applySpokenPunctuation` (`src/dictation.ts`) convertit « point », « virgule », « point
 d'interrogation », « à la ligne », guillemets… (EN : period, comma…), sans toucher « point de vue »
-ni « au point », avec la typographie française. Motifs sans `` ni `\p{…}` (accents, Hermes).
+ni « au point », avec la typographie française. **Majuscule seulement en début de commentaire ou
+après . ! ? …** — ni après une virgule, ni après un simple « à la ligne ». iOS capitalise d'office le
+premier mot de chaque dictée : `VoiceCommentButton` tranche lui-même la casse du premier mot (le « I »
+anglais excepté), sinon un mot en majuscule surgissait au milieu d'une phrase. Motifs sans `` ni `\p{…}` (accents, Hermes).
 **Correction au clavier pendant l'écoute** ⇒ la dictée s'arrête (`writtenRef`) : sinon le résultat
 suivant réécrivait le commentaire depuis l'ancien texte et le passage effacé revenait. Là
 encore **natif** : `CommentModal` ne monte le bouton que si le **module natif répond** (`typeof
@@ -171,8 +174,8 @@ la carte en grille 2 colonnes (5 boutons). Les annotations voyagent gravées dan
 `AdjustModal` prévisualise en direct via une **matrice couleur 4×5 Skia** ; `bakeAdjustedImage()`
 grave un nouveau JPEG (la photo garde `originalUri` + `uri` gravé + `adjustments`). `CropModal`
 recadre **à la manière de Photos (iPhone)** : coins et bords du cadre qu'on tire, photo qu'on glisse
-ou pince dessous (`PanResponder`, sans gesture-handler), formats libre/original/carré/4:3/3:2/16:9
-avec bascule portrait/paysage, pivot de 90°, « Réinitialiser ». Le cadre remplit toujours la scène :
+ou pince dessous (`PanResponder`, sans gesture-handler), pivot de 90°, « Réinitialiser ». **Libre
+seulement** : les formats imposés (carré, 4:3…) ont été retirés, jugés trop nombreux par les testeurs. Le cadre remplit toujours la scène :
 au glissé/pincement c'est l'image qui bouge, en tirant une poignée l'image est figée (`frozen`) puis
 tout se recentre au lâcher. Rectangle en **pixels de l'image pivotée**, appliqué en **une passe**
 sur l'original (`rotate` puis `crop`, `expo-image-manipulator`) ; l'image pivotée affichée n'est
