@@ -148,7 +148,12 @@ suit `comparePhotos` (`order`, sinon `createdAt`) ; le **réordonnancement** se 
 **▲▼** dans `PhotoCard` (le glisser-déposer a été retiré : incompatible avec Reanimated 4), et pour
 aller loin d'un coup, le **mode « Déplacer »** (bouton ⇅ entre ▲ et ▼, état `movingId` d'`AlbumScreen`) :
 emplacements « Placer ici · position n » entre les cartes (`placeAt`, renumérotation complète), autres
-cartes inertes et estompées, barre du bas remplacée par un bandeau avec « Annuler » (retour Android aussi). La
+cartes inertes et estompées, barre du bas remplacée par un bandeau avec « Annuler » (retour Android aussi). **Tri par
+date** (bouton « 🕒 Trier par date » en tête de liste, dès 2 photos) : action **ponctuelle**, pas un mode —
+`sortEntriesByDate` (`storage.ts`) renumérote `order` par `takenAt ?? createdAt`, plus anciennes ou plus
+récentes d'abord ; chaque page de texte **reste après la photo qui la précédait** (celles de tête restent
+en tête). « Annuler le tri » restaure les rangs d'avant (`sortUndo`, perdu en quittant le dossier ou dès
+un ▲▼ / « Déplacer »). La
 **photo de couverture** se choisit via l'**étoile** ★ de `PhotoCard` (`onSetCover`, une seule par
 dossier ; sinon la 1ʳᵉ photo sert de couverture par défaut).
 

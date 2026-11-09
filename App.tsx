@@ -31,6 +31,7 @@ import type { Adjustments, Album, AlbumSort, ExportOptions, Photo, Annotation } 
 import { autoMapIds } from './src/albumMap';
 import {
   comparePhotos,
+  sortEntriesByDate,
   loadAlbumSort,
   loadData,
   loadExportOptions,
@@ -1359,9 +1360,48 @@ onBack,
           rankById.has(p.id) ? { ...p, order: rankById.get(p.id)! } : p,
         ),
       );
+      setSortUndo(null);
     },
     [orderedPhotos, setPhotos],
   );
+
+  // Tri par date : action ponctuelle (l'ordre reste ensuite modifiable à la
+  // main). `sortUndo` garde les rangs d'avant pour « Annuler le tri » ; il vit
+  // tant qu'on reste dans le dossier, et tombe dès qu'on réordonne à la main
+  // (annuler écraserait alors ce nouvel ordre).
+  const [sortUndo, setSortUndo] = useState<Map<string, number | undefined> | null>(null);
+  const photoCount = useMemo(
+    () => orderedPhotos.filter((p) => p.kind !== 'text').length,
+    [orderedPhotos],
+  );
+  const applyDateSort = useCallback(
+    (newestFirst: boolean) => {
+      const before = new Map(orderedPhotos.map((p) => [p.id, p.order]));
+      const rankById = new Map(
+        sortEntriesByDate(orderedPhotos, newestFirst).map((p, idx) => [p.id, idx]),
+      );
+      setPhotos((prev) =>
+        prev.map((p) => (rankById.has(p.id) ? { ...p, order: rankById.get(p.id)! } : p)),
+      );
+      setSortUndo(before);
+    },
+    [orderedPhotos, setPhotos],
+  );
+  const askDateSort = useCallback(() => {
+    Alert.alert(L.albumScreen.sortTitle, L.albumScreen.sortBody, [
+      { text: L.albumScreen.sortOldest, onPress: () => applyDateSort(false) },
+      { text: L.albumScreen.sortNewest, onPress: () => applyDateSort(true) },
+      { text: L.common.cancel, style: 'cancel' },
+    ]);
+  }, [L, applyDateSort]);
+  const undoDateSort = useCallback(() => {
+    if (!sortUndo) return;
+    // Photo ajoutée depuis le tri : absente de la mémoire, elle garde son rang.
+    setPhotos((prev) =>
+      prev.map((p) => (sortUndo.has(p.id) ? { ...p, order: sortUndo.get(p.id) } : p)),
+    );
+    setSortUndo(null);
+  }, [sortUndo, setPhotos]);
 
   // Mode « Déplacer » : l'entrée choisie ira là où l'on touche « Placer ici ».
   const [movingId, setMovingId] = useState<string | null>(null);
@@ -1379,6 +1419,7 @@ onBack,
         prev.map((p) => (rankById.has(p.id) ? { ...p, order: rankById.get(p.id)! } : p)),
       );
       setMovingId(null);
+      setSortUndo(null);
     },
     [movingIndex, orderedPhotos, setPhotos],
   );
@@ -2129,9 +2170,25 @@ onBack,
         )}
         ListHeaderComponent={
           photos.length > 1 ? (
-            <Text style={[styles.reorderHint, movingId && styles.reorderHintActive]}>
-              {movingId ? L.albumScreen.moveHint : L.albumScreen.reorderHint}
-            </Text>
+            <>
+              {!movingId && sortUndo ? (
+                <View style={styles.dateSortRow}>
+                  <Text style={styles.dateSortDone}>✓ {L.albumScreen.sorted}</Text>
+                  <Pressable onPress={undoDateSort} hitSlop={8} style={styles.dateSortBtn}>
+                    <Text style={styles.dateSortBtnText}>↺ {L.albumScreen.sortUndo}</Text>
+                  </Pressable>
+                </View>
+              ) : !movingId && photoCount > 1 ? (
+                <View style={styles.dateSortRow}>
+                  <Pressable onPress={askDateSort} hitSlop={8} style={styles.dateSortBtn}>
+                    <Text style={styles.dateSortBtnText}>{L.albumScreen.sortByDate}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              <Text style={[styles.reorderHint, movingId && styles.reorderHintActive]}>
+                {movingId ? L.albumScreen.moveHint : L.albumScreen.reorderHint}
+              </Text>
+            </>
           ) : null
         }
         ListFooterComponent={showSlot(orderedPhotos.length) ? moveSlot(orderedPhotos.length) : null}
@@ -2380,6 +2437,21 @@ const styles = StyleSheet.create({
     backgroundColor: C.tan,
   },
   moveCancelText: { fontFamily: F.monoBold, fontSize: 14, color: C.ink },
+  dateSortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 10,
+  },
+  dateSortDone: { fontFamily: F.mono, fontSize: 12, color: C.muted },
+  dateSortBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: C.tan,
+  },
+  dateSortBtnText: { fontFamily: F.monoBold, fontSize: 13, color: C.sienna },
   reorderHint: {
     fontFamily: F.mono,
     fontSize: 11,

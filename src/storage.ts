@@ -40,6 +40,28 @@ export function comparePhotos(a: Photo, b: Photo): number {
 }
 
 /**
+ * Range les entrées d'un dossier (déjà dans l'ordre d'affichage) par date de
+ * prise de vue — à défaut, date d'ajout, comme `photoDate`. Les pages de texte
+ * n'ont pas de date : chacune reste **après la photo qui la précédait** (elle
+ * la commente), et celles placées en tête du dossier y restent. Tri stable :
+ * deux photos de même date gardent leur ordre relatif.
+ */
+export function sortEntriesByDate(entries: Photo[], newestFirst: boolean): Photo[] {
+  const head: Photo[] = [];
+  const groups: { at: number; idx: number; items: Photo[] }[] = [];
+  for (const e of entries) {
+    if (e.kind === 'text') {
+      if (groups.length) groups[groups.length - 1].items.push(e);
+      else head.push(e);
+    } else {
+      groups.push({ at: e.takenAt ?? e.createdAt, idx: groups.length, items: [e] });
+    }
+  }
+  groups.sort((a, b) => (newestFirst ? b.at - a.at : a.at - b.at) || a.idx - b.idx);
+  return [...head, ...groups.flatMap((g) => g.items)];
+}
+
+/**
  * Charge les dossiers et les photos persistés.
  *
  * Migration depuis la version sans dossiers : si aucun dossier n'est encore
