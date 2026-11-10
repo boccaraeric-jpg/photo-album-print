@@ -24,7 +24,7 @@ publier un update, de lancer un build ou de toucher aux fiches des stores.
   updates publiés à la suite s'appliquent **un par lancement**.
 - Le repère à donner au testeur n'est **pas** le numéro TestFlight (figé par le build) mais
   l'étiquette de `versionLabel()` en bas de `WelcomeScreen` (horodatage + fin d'`updateId`) :
-  comparer avec la fin de l'`iOS update ID` affiché par `eas update`. Voir `CLAUDE.md`, « Petits
+  comparer avec la fin de l'`iOS update ID` affiché par `eas update`. Voir `ARCHITECTURE.md`, « Petits
   modules ».
 - `runtimeVersion` doit rester `{ "policy": "sdkVersion" }` dans `app.json` (la politique
   `appVersion` casse le chargement dans Expo Go). Le runtime d'un update (`exposdk:54.0.0`) doit
