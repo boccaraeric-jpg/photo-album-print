@@ -1093,7 +1093,10 @@ function renderTextPage(
   return encodeSurface(surface, title, pageNo);
 }
 
-/** Photo pleine page (bord à bord) + légende courte en pied (Skia). */
+/**
+ * Photo pleine page + légende courte en pied (Skia). Photo entière, au plus
+ * grand dans la page, jamais rognée (comme `.full-img` du PDF).
+ */
 async function renderFullPage(
   item: Photo,
   options: ExportOptions,
@@ -1114,7 +1117,7 @@ async function renderFullPage(
 
   const capH = 150;
   const img = await loadImage(item.uri);
-  drawCoverImage(canvas, img, 0, 0, W, H - capH, 0);
+  drawContainImage(canvas, img, 0, 0, W, H - capH);
 
   // Carte en médaillon dans le coin bas-droit de la photo (cf. `.full-map`).
   if (maps.has(item.id)) {

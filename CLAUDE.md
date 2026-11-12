@@ -367,12 +367,22 @@ d'entrée** (ils pilotent aussi les libellés) :
   ensuite **réduit** à sa vraie taille (`printScale` : `html { zoom }` + `@page`, et `print` passé à
   `expo-print`) — 16 × 21 cm = 453,5 × 595,3 pt ; 780 et non 781, sinon une fraction de point déborde
   en page blanche. Images Skia : 1240 px de large, `imageH` de haut. Contrôlé sous Chrome (taille et
-  nombre de pages) ; ⚠️ le `zoom` à l'impression iOS reste à confirmer sur appareil.
+  nombre de pages). ⚠️ Le `<meta viewport>` du PDF doit valoir la **largeur réelle** de la page
+  (453,54 en 16 cm), pas 595 : iOS l'honore à l'impression, et à 595 la feuille zoomée se mettait en
+  page sur 781 unités — couverture montée (absolue sur 595) décalée à gauche, pages réduites à 76 %
+  (vécu sur un 16 × 16 imprimé, 12/11/2026 ; correctif à confirmer sur appareil).
   **16 × 16 (carré, `square`)** : hauteur 594, gabarits **propres** et non un simple retranchement —
   `SQUARE_PH` (pdf.ts), moyennes **côte à côte** (`.fmt-square` sur `body` ; Skia `gridFor(..., square)`
   = 2 colonnes × 1 rangée), carte d'une moyenne **sous** la photo (`mapBelow`, sauf photo seule
   agrandie), couverture classique resserrée, pêle-mêle moins réduit en largeur (`sx`), écart grille →
   titre réduit, légende de la page « Nos lieux » sur 3 colonnes (`cols` d'`albumMap.ts`).
+- **Hauteur des photos (PDF)** : `PH_HEIGHTS` / `SQUARE_PH` (`pdf.ts`) sont des hauteurs **visées**
+  (petite 240, moyenne 300, grande 570 en A4 — agrandies, retour testeur « petite vraiment petite »).
+  `fitPhotoHeight` estime les légendes de chaque page (`estimateLines`) et abaisse la hauteur par
+  `--ph` sur la feuille quand elles ne tiennent pas : ne pas relever une hauteur sans lui, la feuille
+  est de hauteur fixe et couperait. Skia remplit déjà ses cases (rien à régler).
+  **Pleine page = photo entière** (`object-fit: contain`, `drawContainImage`) : plus de rognage,
+  bandes de fond si les proportions diffèrent de la page.
 - **Photos centrées sur la page** (familial) : `.sheet.photos` a la hauteur exacte de la page et
   centre le bloc en flex (seule exception au « pas de flex vertical », sûre parce que la feuille est
   de hauteur fixe et que les tailles de `sizeCss` tiennent dans la page) ; numéro en pied hors flux ;

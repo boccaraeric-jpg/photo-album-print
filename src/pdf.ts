@@ -16,13 +16,14 @@ import {
   paginateEntries,
   PER_PAGE,
   paginateProEntries,
+  wideSlots,
   PRO_LAYOUT,
   proFrameH,
   PRO_SMALL_DT,
 } from './paginate';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
-import { richToHtml } from './richText';
+import { richToHtml, stripMarks } from './richText';
 import {
   buildMapModel,
   buildMiniMapModel,
@@ -49,6 +50,7 @@ import {
   COMMENT_SCALE,
   coverTitleLayout,
   COVER_W,
+  estimateLines,
   PRO_TEXT_SCALE,
   commentShrink,
   coverPicks,
@@ -257,6 +259,8 @@ interface PageCtx {
   interactive: boolean;
   /** Entrées de la page en cours (le fond est commun à toute la page). */
   pageIds?: string[];
+  /** Réglages de l'album : gabarits des photos (`fitPhotoHeight`). */
+  options: ExportOptions;
 }
 
 /**
@@ -276,16 +280,20 @@ function paintAttrs(bg: string | undefined, frame: ExportOptions['frame']): {
   return bg ? { cls: ' painted', style: ` style="${themeVars(bg, frame)}"` } : { cls: '', style: '' };
 }
 
+/** Commentaire et ligne « lieu · date » d'une photo, tels qu'ils seront posés. */
+function captionParts(photo: Photo, ctx: PageCtx): { comment: string; meta: string } {
+  const place = ctx.showPlace ? photo.place?.trim() : undefined;
+  const date = formatPhotoDate(photoDate(photo), ctx.dateFormat, ctx.lang);
+  return { comment: photo.comment.trim(), meta: [place, date].filter(Boolean).join(' · ') };
+}
+
 function figureHtml(item: Item, variant: '' | 'solo' | 'large', ctx: PageCtx): string {
-  const { dateFormat, showPlace, lang } = ctx;
+  const { lang } = ctx;
   const { photo, src, map } = item;
-  const comment = photo.comment.trim();
-  const place = showPlace ? photo.place?.trim() : undefined;
-  const date = formatPhotoDate(photoDate(photo), dateFormat, lang);
+  const { comment, meta } = captionParts(photo, ctx);
   const img = src
     ? `<img src="${src}" />`
     : `<span class="missing">${dict(lang).doc.imageUnavailable}</span>`;
-  const meta = [place, date].filter(Boolean).join(' · ');
   const caption =
     comment || meta
       ? `<figcaption class="caption">
@@ -325,14 +333,24 @@ function pageHtml(
   // seule sur sa page, une petite photo garde sa case.
   const body = perPage === 4 && !solo ? `<div class="grid4">${figures}</div>` : figures;
   const paint = paintAttrs(pageBackground(group.map((it) => it.photo)), ctx.frame);
+  // Légendes longues : la photo cède la place (jamais de contenu hors page).
+  const fit = fitPhotoHeight(group, size, variant, ctx);
+  const styles = [paint.style ? paint.style.slice(8, -1) : '', fit ? `--ph: ${fit}px;` : '']
+    .filter(Boolean)
+    .join(' ');
   return `
-    <section class="sheet photos sz-${size}${paint.cls}"${paint.style}>
+    <section class="sheet photos sz-${size}${paint.cls}"${styles ? ` style="${styles}"` : ''}>
       ${body}
       <p class="footer"><span>${pageNo}</span></p>
     </section>`;
 }
 
-/** Photo pleine page (bord à bord) + légende courte (≤ 15 mots) en pied. */
+/**
+ * Photo pleine page + légende courte (≤ 15 mots) en pied. La photo est montrée
+ * **entière**, au plus grand dans la page : bord à bord quand ses proportions
+ * sont celles de la page, sinon centrée sur le fond (jamais rognée — une
+ * capture d'écran de texte y perdait ses premières lignes).
+ */
 function fullPageHtml(item: Item, ctx: PageCtx): string {
   const { photo, src, map } = item;
   const { lang } = ctx;
@@ -419,18 +437,25 @@ const CAPTION_BASES: Record<ExportOptions['photoSize'], number> = {
  * unités de haut, les moyennes s'y posent côte à côte (une seule rangée).
  */
 const SQUARE_PH: Record<PhotoSize | 'solo', number> = {
-  small: 160,
-  medium: 300,
-  large: 380,
-  full: 380, // non utilisé (la pleine page a son propre gabarit)
-  solo: 280,
+  small: 180,
+  medium: 340,
+  large: 430,
+  full: 430, // non utilisé (la pleine page a son propre gabarit)
+  solo: 340,
 };
 
-const PH_HEIGHTS: Record<ExportOptions['photoSize'], string> = {
-  small: '170px',
-  medium: '250px',
-  large: '500px',
-  full: '500px', // non utilisé (la pleine page a son propre gabarit)
+/**
+ * Hauteurs **visées** de la zone image (A4, points). Agrandies (retour
+ * testeur : « la petite est vraiment petite ») jusqu'à remplir la page quand
+ * les légendes tiennent sur une ligne ; au-delà, `fitPhotoHeight` reprend à la
+ * photo ce que les légendes demandent, page par page.
+ */
+const PH_HEIGHTS: Record<PhotoSize | 'solo', number> = {
+  small: 240,
+  medium: 300,
+  large: 570,
+  full: 570, // non utilisé (la pleine page a son propre gabarit)
+  solo: 440,
 };
 
 /**
@@ -462,18 +487,14 @@ function themeVars(bg: string, frame: ExportOptions['frame']): string {
 
 const SIZES: PhotoSize[] = ['small', 'medium', 'large'];
 
-/**
- * Hauteurs d'une taille de photo, sous `.sz-<taille>` : depuis la taille par
- * photo (aperçu), des pages de tailles différentes cohabitent dans un album.
- */
-function sizeCss(size: PhotoSize, options: ExportOptions): string {
+/** Hauteurs de photo et légende d'une taille, selon les réglages. */
+function photoBox(size: PhotoSize, options: ExportOptions) {
   const spec = TYPE_SPECS[options.typeface];
   const vAlign = options.commentVAlign ?? 'top';
   // Position verticale du commentaire : « haut » = flux d'origine, sans bande.
   const band = vAlign === 'top' ? 0 : CAPTION_BANDS[size];
   const baseSize = size === 'small' ? COMMENT_BASE.small : COMMENT_BASE.other;
-  // Bande de position + place d'un commentaire plus grand, prises sur la photo :
-  // la carte garde sa hauteur, la pagination ne bouge pas.
+  // Bande de position + place d'un commentaire plus grand, prises sur la photo.
   const shrink =
     (band ? band - CAPTION_BASES[size] : 0) +
     commentShrink(baseSize, options.typeface, options.commentSize);
@@ -481,23 +502,122 @@ function sizeCss(size: PhotoSize, options: ExportOptions): string {
     Math.round(baseSize * spec.captionScale * COMMENT_SCALE[options.commentSize] * 10) / 10;
   // Format moins haut que l'A4 : la hauteur perdue est prise sur les photos —
   // partagée entre les deux rangées (petite, moyenne), entière pour une photo
-  // agrandie (commentaire long : il lui faut sa marge), à moitié pour la grande
-  // (sa page gardait déjà du blanc en A4). Les légendes gardent leur place : la
-  // pagination ne change pas.
+  // seule sur sa page (grande, agrandie).
   const format = effectiveFormat(options);
   const cut = heightCut(format);
-  const rowCut = size === 'large' ? cut : Math.round(cut / 2);
   // Page carrée : hauteurs propres (moyennes côte à côte, cf. `.fmt-square`).
   const square = isSquare(format);
-  const ph = square ? SQUARE_PH[size] : parseInt(PH_HEIGHTS[size], 10) - rowCut;
-  const solo = square ? SQUARE_PH.solo : 380 - cut;
-  const large = square ? SQUARE_PH.large : 480 - Math.round(cut / 2);
+  const H = square ? SQUARE_PH : PH_HEIGHTS;
+  const lost = (rows: number) => (square ? 0 : Math.round(cut / rows));
+  return {
+    band,
+    captionSize,
+    vAlign,
+    ph: H[size] - lost(size === 'large' ? 1 : 2) - shrink,
+    solo: H.solo - lost(1) - shrink,
+    large: H.large - lost(1) - shrink,
+  };
+}
+
+/** Marges d'une carte selon l'encadrement (`frameCss`) : verticales, horizontales. */
+const FRAME_PAD: Record<ExportOptions['frame'], [number, number]> = {
+  card: [20, 20],
+  border: [24, 24],
+  polaroid: [32, 28],
+  none: [0, 0],
+};
+
+/** Largeur utile d'une page photo (595 moins les marges de `.sheet`). */
+const SHEET_INNER = PAGE_WIDTH - 2 * 28;
+/** Plus petite hauteur de photo consentie à une légende très longue. */
+const MIN_PHOTO_H = 90;
+
+/**
+ * Hauteur de photo d'une page quand ses légendes ne laissent pas la place à la
+ * hauteur visée (`photoBox`) : la page a une hauteur fixe, un contenu trop haut
+ * serait coupé. Hauteur des légendes **estimée** (`estimateLines`, comme le
+ * titre de couverture) d'après la largeur de la carte. Rend `null` si la
+ * hauteur visée tient — cas courant, le HTML reste alors sans surcharge.
+ */
+function fitPhotoHeight(
+  group: Item[],
+  size: PhotoSize,
+  variant: '' | 'solo' | 'large',
+  ctx: PageCtx,
+): number | null {
+  const { options } = ctx;
+  const box = photoBox(size, options);
+  const target = variant === 'large' ? box.large : variant === 'solo' ? box.solo : box.ph;
+  const spec = TYPE_SPECS[options.typeface];
+  const format = effectiveFormat(options);
+  const [padV, padH] = FRAME_PAD[options.frame];
+  const grid = variant === '' && size === 'small';
+  const sideBySide = variant === '' && size === 'medium' && isSquare(format);
+  const metaH = 4 + META_SIZE * spec.dateScale * 1.3;
+
+  // Hauteur d'une carte hors photo : marges du cadre + légende.
+  const fixed = group.map((it) => {
+    const cardW =
+      variant === 'solo'
+        ? Math.min(460, SHEET_INNER)
+        : grid && !it.map
+          ? (SHEET_INNER - 12) / 2
+          : sideBySide
+            ? (SHEET_INNER - 16) / 2
+            : SHEET_INNER;
+    const { comment, meta } = captionParts(it.photo, ctx);
+    if (!comment && !meta) return padV;
+    const bold = spec.captionBold || comment.includes('**');
+    const lines = comment
+      ? estimateLines(stripMarks(comment), box.captionSize, spec.caption, bold, cardW - padH - 8)
+      : 0;
+    const text = lines * box.captionSize * spec.lineHeight + (meta ? metaH : 0);
+    return padV + 10 + Math.max(box.band, text);
+  });
+
+  // Rangées de la page : hauteur fixe de chacune, écarts entre elles.
+  let rows: number[];
+  let gaps: number;
+  if (grid) {
+    const slots = wideSlots(
+      group.map((it) => it.photo),
+      new Set(group.filter((it) => it.map).map((it) => it.photo.id)),
+    );
+    const byRow = new Map<number, number>();
+    slots.forEach(([slot], i) => {
+      const r = Math.floor(slot / 2);
+      byRow.set(r, Math.max(byRow.get(r) ?? 0, fixed[i] + 4));
+    });
+    rows = [...byRow.values()];
+    gaps = 12 * (rows.length - 1);
+  } else if (sideBySide) {
+    rows = [Math.max(...fixed)];
+    gaps = 0;
+  } else {
+    rows = fixed;
+    gaps = 16 * (rows.length - 1);
+  }
+  // Marges de la feuille (24 + 48) et marge de sûreté (inclinaison du polaroïd,
+  // erreur d'estimation).
+  const room = pageHeight(format) - 72 - 10;
+  const fit = Math.floor((room - gaps - rows.reduce((a, b) => a + b, 0)) / rows.length);
+  return fit >= target ? null : Math.max(MIN_PHOTO_H, fit);
+}
+
+/**
+ * Hauteurs d'une taille de photo, sous `.sz-<taille>` : depuis la taille par
+ * photo (aperçu), des pages de tailles différentes cohabitent dans un album.
+ * `--ph` (posée sur la feuille par `pageHtml`) abaisse la hauteur d'une page
+ * aux légendes longues.
+ */
+function sizeCss(size: PhotoSize, options: ExportOptions): string {
+  const { band, captionSize, vAlign, ph, solo, large } = photoBox(size, options);
   const z = `.sz-${size}`;
   return `
   ${z} .card { margin-bottom: ${size === 'small' ? 12 : 16}px; }
-  ${z} .ph { height: ${ph - shrink}px; }
-  ${z} .card.solo .ph { height: ${solo - shrink}px; }
-  ${z} .card.large .ph { height: ${large - shrink}px; }
+  ${z} .ph { height: var(--ph, ${ph}px); }
+  ${z} .card.solo .ph { height: var(--ph, ${solo}px); }
+  ${z} .card.large .ph { height: var(--ph, ${large}px); }
   ${z} .caption { font-size: ${captionSize}px; }
   ${
     band
@@ -725,11 +845,11 @@ function buildStyles(options: ExportOptions): string {
     color: var(--meta-ink);
   }
 
-  /* --- Photo pleine page (bord à bord) --- */
+  /* --- Photo pleine page : entière, au plus grand (jamais rognée) --- */
   .full-sheet { padding: 0; page-break-after: always; }
   .full-sheet:last-of-type { page-break-after: auto; }
   .full-img { position: relative; height: ${778 - cut}px; overflow: hidden; }
-  .full-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .full-img > img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .full-cap {
     height: 64px; padding: 0 44px; display: flex; align-items: center; justify-content: center;
     font-size: ${Math.round(14 * spec.captionScale * commentScale * 10) / 10}px; line-height: 1.4;
@@ -1013,6 +1133,7 @@ export async function buildAlbumHtml(
     frame: options.frame,
     lang,
     interactive,
+    options,
   };
   const pages = paginateEntries(pageSource, options.photoSize, {
     wide: mapIds,
@@ -1037,8 +1158,13 @@ export async function buildAlbumHtml(
         ${CSP_META}
         <!-- width = largeur de page A4 en points : l'aperçu WebView met la page
              à l'échelle de l'écran ; ignoré par expo-print (dimensions fournies).
-             En aperçu, la largeur ajoute les marges du plan de travail. -->
-        <meta name="viewport" content="width=${interactive ? PAGE_WIDTH + 2 * DESK_GAP : PAGE_WIDTH}, initial-scale=1" />
+             En aperçu, la largeur ajoute les marges du plan de travail.
+             PDF d'un format réduit (16 × 21, 16 × 16) : largeur de la page
+             réelle. À 595, iOS mettait en page la feuille réduite par le zoom de
+             printScale sur 781 unités : la couverture montée, posée en absolu
+             sur 595, partait à gauche (les pages photo, en largeurs relatives,
+             restaient centrées). -->
+        <meta name="viewport" content="width=${interactive ? PAGE_WIDTH + 2 * DESK_GAP : Math.round(PAGE_FORMATS[format].print.width * 100) / 100}, initial-scale=1" />
         <style>${buildStyles(options)}${interactive ? deskCss(pageH) : printScale(format)}</style>
       </head>
       <body class="${[interactive ? 'desk' : '', isSquare(format) ? 'fmt-square' : ''].filter(Boolean).join(' ')}">
