@@ -381,8 +381,11 @@ d'entrée** (ils pilotent aussi les libellés) :
   `fitPhotoHeight` estime les légendes de chaque page (`estimateLines`) et abaisse la hauteur par
   `--ph` sur la feuille quand elles ne tiennent pas : ne pas relever une hauteur sans lui, la feuille
   est de hauteur fixe et couperait. Skia remplit déjà ses cases (rien à régler).
-  **Pleine page = photo entière** (`object-fit: contain`, `drawContainImage`) : plus de rognage,
-  bandes de fond si les proportions diffèrent de la page.
+  **Pleine page = photo entière, jamais rognée** : gabarit `FULL_PAGE` (`albumStyle.ts`, commun aux
+  deux moteurs) — la photo tient dans la page moins une **marge égale** (26) sur les quatre côtés,
+  la légende se pose juste dessous, le bloc se **centre** sur la page (`.full-sheet` en flex, hauteur
+  fixe ; `renderFullPage`). Plus de bandeau de légende réservé en pied : il collait la photo au bord
+  haut (retour testeur). Hauteur de la photo par `--fh` (légende estimée), en px et non en %.
 - **Photos centrées sur la page** (familial) : `.sheet.photos` a la hauteur exacte de la page et
   centre le bloc en flex (seule exception au « pas de flex vertical », sûre parce que la feuille est
   de hauteur fixe et que les tailles de `sizeCss` tiennent dans la page) ; numéro en pied hors flux ;

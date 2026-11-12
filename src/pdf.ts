@@ -51,6 +51,7 @@ import {
   coverTitleLayout,
   COVER_W,
   estimateLines,
+  FULL_PAGE,
   PRO_TEXT_SCALE,
   commentShrink,
   coverPicks,
@@ -346,22 +347,44 @@ function pageHtml(
 }
 
 /**
- * Photo pleine page + légende courte (≤ 15 mots) en pied. La photo est montrée
- * **entière**, au plus grand dans la page : bord à bord quand ses proportions
- * sont celles de la page, sinon centrée sur le fond (jamais rognée — une
- * capture d'écran de texte y perdait ses premières lignes).
+ * Photo pleine page + légende courte (≤ 15 mots). La photo est montrée
+ * **entière** (jamais rognée — une capture d'écran de texte y perdait ses
+ * premières lignes), au plus grand dans la page moins une marge égale sur les
+ * quatre côtés (`FULL_PAGE`) ; la légende suit juste dessous et le bloc se
+ * centre sur la page. Toutes les pleines pages partagent donc le même cadre.
  */
 function fullPageHtml(item: Item, ctx: PageCtx): string {
   const { photo, src, map } = item;
-  const { lang } = ctx;
+  const { lang, options } = ctx;
   const comment = limitWords(photo.comment, 15);
   const img = src
     ? `<img src="${src}" />`
     : `<span class="missing">${dict(lang).doc.imageUnavailable}</span>`;
   // Pleine page : la carte se pose en médaillon dans le coin de la photo.
   const inset = map ? `<div class="full-map">${map}</div>` : '';
-  const inner = `<div class="full-img">${img}${inset}</div>
-      <div class="full-cap">${comment ? richToHtml(comment, escapeHtml) : ''}</div>`;
+  // Hauteur laissée à la photo : la page moins les marges et la légende
+  // (hauteur estimée, comme `fitPhotoHeight`).
+  const spec = TYPE_SPECS[options.typeface];
+  const capSize = FULL_PAGE.capSize * spec.captionScale * COMMENT_SCALE[options.commentSize];
+  const width = PAGE_WIDTH - 2 * FULL_PAGE.margin;
+  const lines = comment
+    ? Math.min(
+        FULL_PAGE.capMaxLines,
+        estimateLines(
+          stripMarks(comment),
+          capSize,
+          spec.caption,
+          spec.captionBold || comment.includes('**'),
+          width,
+        ),
+      )
+    : 0;
+  const capH = lines ? FULL_PAGE.capGap + Math.ceil(lines * capSize * FULL_PAGE.capLine) : 0;
+  const maxH = pageHeight(effectiveFormat(options)) - 2 * FULL_PAGE.margin - capH;
+  const inner = `<div class="full-box" style="--fh: ${maxH}px;">
+        <div class="full-img">${img}${inset}</div>
+        ${comment ? `<div class="full-cap">${richToHtml(comment, escapeHtml)}</div>` : ''}
+      </div>`;
   const paint = paintAttrs(pageBackground([photo]), ctx.frame);
   return `
     <section class="sheet full-sheet${paint.cls}" id="e-${escapeHtml(photo.id)}"${paint.style}>
@@ -845,14 +868,25 @@ function buildStyles(options: ExportOptions): string {
     color: var(--meta-ink);
   }
 
-  /* --- Photo pleine page : entière, au plus grand (jamais rognée) --- */
-  .full-sheet { padding: 0; page-break-after: always; }
+  /* --- Photo pleine page : entière, marge égale, bloc centré (FULL_PAGE) ---
+     Feuille de hauteur fixe : le centrage en flex y est sûr, comme pour les
+     pages photo. La photo prend sa taille réelle bornée par le cadre (en px,
+     jamais en %) : son conteneur l'épouse, le médaillon tombe dans son coin. */
+  .full-sheet {
+    height: ${pageH}px; padding: 0; overflow: hidden; page-break-after: always;
+    display: flex; align-items: center; justify-content: center;
+  }
   .full-sheet:last-of-type { page-break-after: auto; }
-  .full-img { position: relative; height: ${778 - cut}px; overflow: hidden; }
-  .full-img > img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .full-box { display: flex; flex-direction: column; align-items: center; }
+  .full-img { position: relative; overflow: hidden; line-height: 0; }
+  .full-img > img {
+    display: block; width: auto; height: auto;
+    max-width: ${PAGE_WIDTH - 2 * FULL_PAGE.margin}px; max-height: var(--fh);
+  }
   .full-cap {
-    height: 64px; padding: 0 44px; display: flex; align-items: center; justify-content: center;
-    font-size: ${Math.round(14 * spec.captionScale * commentScale * 10) / 10}px; line-height: 1.4;
+    margin-top: ${FULL_PAGE.capGap}px; max-width: ${PAGE_WIDTH - 2 * FULL_PAGE.margin}px;
+    font-size: ${Math.round(FULL_PAGE.capSize * spec.captionScale * commentScale * 10) / 10}px;
+    line-height: ${FULL_PAGE.capLine};
     text-align: center; color: var(--full-ink);
     font-family: ${fam(spec.caption)}; font-weight: ${captionWeight};
   }

@@ -196,6 +196,24 @@ export function famsUsed(t: Typeface): FontFam[] {
  * Largeur des textes (estimation commune aux deux moteurs)
  * ------------------------------------------------------------------------ */
 
+/**
+ * Photo pleine page (points A4), partagé par le PDF et Skia : la photo, entière,
+ * tient dans la page moins une marge égale sur les quatre côtés ; sa légende se
+ * pose juste dessous et le bloc photo + légende se centre sur la page. Sans
+ * marge, une photo plus étroite que la page se collait au bord haut.
+ */
+export const FULL_PAGE = {
+  /** Marge autour du bloc, sur les quatre côtés. */
+  margin: 26,
+  /** Écart entre la photo et sa légende. */
+  capGap: 14,
+  /** Corps de la légende (avant `captionScale` et `COMMENT_SCALE`). */
+  capSize: 14,
+  capLine: 1.4,
+  /** Lignes de légende au plus (15 mots). */
+  capMaxLines: 3,
+};
+
 /** Largeur moyenne d'un caractère (en em), normale et grasse, par famille. */
 export const CHAR_EM: Record<FontFam, [number, number]> = {
   sans: [0.58, 0.64],

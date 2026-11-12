@@ -53,6 +53,7 @@ import {
   coverTitleLayout,
   PRO_TEXT_SCALE,
   COVER_W,
+  FULL_PAGE,
   coverPicks,
   effectiveCover,
   gridLayout,
@@ -1094,8 +1095,9 @@ function renderTextPage(
 }
 
 /**
- * Photo pleine page + légende courte en pied (Skia). Photo entière, au plus
- * grand dans la page, jamais rognée (comme `.full-img` du PDF).
+ * Photo pleine page + légende courte (Skia). Même gabarit que le PDF
+ * (`FULL_PAGE`, `.full-sheet`) : photo entière dans la page moins une marge
+ * égale, légende juste dessous, bloc centré sur la page.
  */
 async function renderFullPage(
   item: Photo,
@@ -1115,17 +1117,36 @@ async function renderFullPage(
   bg.setColor(Skia.Color(options.background));
   canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
 
-  const capH = 150;
+  const k = W / COVER_W;
+  const margin = FULL_PAGE.margin * k;
+  const boxW = W - 2 * margin;
+
+  // Légende mesurée d'abord : la photo prend la hauteur qui reste.
+  const comment = limitWords(item.comment, 15);
+  const spec = TYPE_SPECS[options.typeface];
+  const capOpts = {
+    size: FULL_PAGE.capSize * spec.captionScale * COMMENT_SCALE[options.commentSize] * k,
+    maxLines: FULL_PAGE.capMaxLines,
+    fam: spec.caption,
+    bold: spec.captionBold,
+  };
+  const textH = comment ? measureRich(comment, boxW, capOpts) : 0;
+  const capH = textH ? FULL_PAGE.capGap * k + textH : 0;
+  const boxH = H - 2 * margin - capH;
+
+  // Photo entière dans le cadre ; le bloc photo + légende se centre sur la page.
   const img = await loadImage(item.uri);
-  drawContainImage(canvas, img, 0, 0, W, H - capH);
+  const scale = img ? Math.min(boxW / img.width(), boxH / img.height()) : 1;
+  const photoH = img ? img.height() * scale : boxH;
+  const top = (H - photoH - capH) / 2;
+  const drawn = drawContainImage(canvas, img, margin, top, boxW, photoH);
 
   // Carte en médaillon dans le coin bas-droit de la photo (cf. `.full-map`).
-  if (maps.has(item.id)) {
-    const k = W / COVER_W;
+  if (drawn && maps.has(item.id)) {
     const mw = FULL_MAP.w * k;
     const mh = FULL_MAP.h * k;
-    const mx = W - FULL_MAP.margin * k - mw;
-    const my = H - capH - FULL_MAP.margin * k - mh;
+    const mx = drawn.x + drawn.w - FULL_MAP.margin * k - mw;
+    const my = drawn.y + drawn.h - FULL_MAP.margin * k - mh;
     const b = FULL_MAP.border * k;
     const shadow = Skia.Paint();
     shadow.setAntiAlias(true);
@@ -1138,17 +1159,9 @@ async function renderFullPage(
     drawMiniMap(canvas, item, await loadMiniMap(maps, item.id), mx, my, mw, mh);
   }
 
-  const comment = limitWords(item.comment, 15);
-  if (comment) {
-    const spec = TYPE_SPECS[options.typeface];
-    // Première ligne centrée dans le bandeau quel que soit le corps (en
-    // Montserrat : H - 96, la position d'origine).
-    const size = 14 * spec.captionScale * COMMENT_SCALE[options.commentSize] * (W / COVER_W);
-    const opts = { size, maxLines: 2, fam: spec.caption, bold: spec.captionBold };
-    // Bloc centré verticalement dans le bandeau, quelle que soit sa hauteur.
-    const top = H - capH / 2 - measureRich(comment, W - 2 * PAD, opts) / 2;
-    drawRichText(canvas, comment, PAD, top, W - 2 * PAD, {
-      ...opts,
+  if (textH) {
+    drawRichText(canvas, comment, margin, top + photoH + FULL_PAGE.capGap * k, boxW, {
+      ...capOpts,
       color: dark ? ink : CAPTION_INK,
       align: TextAlign.Center,
     });
