@@ -117,6 +117,11 @@ reconnaissance **on-device** (iOS `SFSpeechRecognizer`) dans la langue courante 
 phrases finales figées ; le texte après le curseur est gardé dans `tailRef`). Le curseur est relevé
 à l'**`onPressIn`** du micro (`getInsertPosition` → `caretRef` de `CommentModal`), jamais la
 sélection par défaut `{0,0}` d'un champ non touché — sinon on dicterait en tête.
+**Android** (`androidOnDevice`) : sur l'appareil seulement si le modèle de la langue est installé
+(Android 13+) ; sinon l'app propose de le télécharger (`androidTriggerOfflineModelDownload`), et à
+défaut passe par le **service vocal du système (Google, en ligne)** — choix retenu pour la session,
+remis à zéro après un échec. `requiresOnDeviceRecognition: true` d'office faisait échouer toute
+dictée sur un Android sans modèle. Politique de confidentialité alignée (`docs/privacy.html`).
 **Ponctuation parlée** : `addsPunctuation: false` (iOS mettait un point à chaque pause) et
 `applySpokenPunctuation` (`src/dictation.ts`) convertit « point », « virgule », « point
 d'interrogation », « à la ligne », guillemets… (EN : period, comma…), sans toucher « point de vue »
@@ -472,7 +477,9 @@ testeur, on tapait à l'aveugle). À son ouverture (`keyboardWillShow` iOS / `ke
 Android) : photo réduite à 84 pt, poignée masquée, marges du bas resserrées (plus besoin de la marge
 de barre d'accueil), puis `keyboardDidShow` fait défiler jusqu'au **champ touché** (commentaire ou
 lieu, positions relevées par `onLayout`). Ne pas retirer le `KeyboardAvoidingView` : il remonte la
-feuille, ce code remonte le champ dans la feuille.
+feuille, ce code remonte le champ dans la feuille. `behavior="padding"` sur **les deux** plateformes
+(aussi `NameModal`) : le SDK 54 impose le bord à bord sur Android, la fenêtre n'y est plus
+redimensionnée par le clavier — l'ancien `undefined` laissait le champ sous le clavier.
 
 **Lieu et date de prise de vue** (`src/exif.ts`, `src/photoLocation.ts`, `src/geocode.ts`) :
 PHPicker (iOS) **caviarde les métadonnées** de l'asset remis à l'app, donc l'EXIF est souvent vide.
@@ -480,6 +487,12 @@ Deux résolutions bâties sur le même schéma — EXIF, puis `expo-media-librar
 `resolveCoords()` pour le GPS (puis, pour une photo prise dans l'app, la **position de l'appareil**)
 et `resolveTakenAt()` pour la date (`creationTime` de la photothèque). Sans ce second repli, une
 photo importée héritait de sa date d'**import** — `photoDate()` retombant sur `createdAt`.
+⚠️ **Android : la photothèque n'est jamais lue** (`Platform.OS !== 'ios'` dans les deux résolutions) :
+`READ_MEDIA_IMAGES` / `VIDEO` / `AUDIO` / `VISUAL_USER_SELECTED` et `ACCESS_MEDIA_LOCATION` sont dans
+`android.blockedPermissions` (`app.json`), car Google Play refuse l'accès à toute la galerie à une app
+à qui le sélecteur de photos suffit. Lieu et date viennent alors de l'EXIF seul (le sélecteur Android
+retire souvent le GPS : saisie manuelle du lieu). L'enregistrement dans la galerie
+(`saveToPhotoLibrary`, écriture seule) ne demande rien à partir d'Android 13.
 `reverseGeocode()` transforme les coordonnées en « Ville, Pays » (permission demandée **seulement
 sur Android**). Repli : saisie manuelle du `Photo.place` dans `CommentModal`.
 

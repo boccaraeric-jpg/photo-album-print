@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ExpoSpeechRecognitionModule,
@@ -7,8 +7,87 @@ import {
 } from 'expo-speech-recognition';
 
 import { C, F } from '../theme';
-import { localeTag, useLang } from '../i18n';
+import { localeTag, useLang, type Dict } from '../i18n';
 import { applySpokenPunctuation } from '../dictation';
+
+/** Alerte à deux issues, attendue comme une promesse. */
+function ask(title: string, body: string, yes: string, no: string): Promise<boolean> {
+  return new Promise((resolve) =>
+    Alert.alert(
+      title,
+      body,
+      [
+        { text: no, style: 'cancel', onPress: () => resolve(false) },
+        { text: yes, onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) },
+    ),
+  );
+}
+
+// Choix fait pour la session (Android) : ne pas reposer la question à chaque dictée.
+let androidMode: 'device' | 'network' | null = null;
+
+/**
+ * Android : la reconnaissance **sur l'appareil** n'existe qu'à partir
+ * d'Android 13, et seulement si le modèle de la langue est téléchargé — sans
+ * lui, `requiresOnDeviceRecognition` faisait échouer chaque dictée. Ordre :
+ * modèle installé → sur l'appareil ; absent → on propose de le télécharger ;
+ * appareil incapable ou téléchargement refusé → service vocal du système
+ * (Google, en ligne, comme le micro du clavier Android — cf. `docs/privacy.html`).
+ *
+ * @returns `true` sur l'appareil, `false` en ligne, `null` = ne pas démarrer
+ *          (téléchargement en cours dans la fenêtre du système).
+ */
+async function androidOnDevice(locale: string, L: Dict): Promise<boolean | null> {
+  if (androidMode) return androidMode === 'device';
+  let supported = false;
+  try {
+    supported = ExpoSpeechRecognitionModule.supportsOnDeviceRecognition();
+  } catch {
+    supported = false;
+  }
+  if (!supported) {
+    androidMode = 'network';
+    return false;
+  }
+  const short = locale.slice(0, 2).toLowerCase();
+  try {
+    const { installedLocales } = await ExpoSpeechRecognitionModule.getSupportedLocales({});
+    if (installedLocales.some((l) => l.toLowerCase().replace('_', '-').startsWith(short))) {
+      androidMode = 'device';
+      return true;
+    }
+  } catch {
+    // Liste indisponible : on propose quand même le téléchargement.
+  }
+  const download = await ask(
+    L.comment.offlineModelTitle,
+    L.comment.offlineModelBody,
+    L.comment.offlineModelDownload,
+    L.comment.offlineModelOnline,
+  );
+  if (!download) {
+    androidMode = 'network';
+    return false;
+  }
+  try {
+    const res = await ExpoSpeechRecognitionModule.androidTriggerOfflineModelDownload({ locale });
+    if (res.status === 'download_success') {
+      androidMode = 'device';
+      return true;
+    }
+    if (res.status === 'opened_dialog') {
+      // Android 13 : le système gère le téléchargement dans sa propre fenêtre.
+      Alert.alert(L.comment.offlineModelTitle, L.comment.offlineModelRetry);
+      return null;
+    }
+  } catch {
+    // Échec du téléchargement : repli en ligne.
+  }
+  androidMode = 'network';
+  return false;
+}
 
 interface Props {
   /** Texte courant du commentaire (base à laquelle la dictée s'ajoute). */
@@ -138,7 +217,12 @@ export function VoiceCommentButton({ value, onChangeText, getInsertPosition }: P
     // n'est pas installé sur l'iPhone (`requiresOnDeviceRecognition`). Sans ce
     // message, l'appui sur le micro ne produisait rien de visible.
     if (e.error !== 'aborted' && e.error !== 'no-speech') {
-      Alert.alert(L.comment.micFailedTitle, L.comment.micFailedBody);
+      Alert.alert(
+        L.comment.micFailedTitle,
+        Platform.OS === 'android' ? L.comment.micFailedBodyAndroid : L.comment.micFailedBody,
+      );
+      // Un modèle hors ligne cassé ne doit pas bloquer les essais suivants.
+      if (Platform.OS === 'android') androidMode = null;
     }
   });
 
@@ -156,6 +240,9 @@ export function VoiceCommentButton({ value, onChangeText, getInsertPosition }: P
     }
     const pos = pressCaretRef.current;
     pressCaretRef.current = null;
+    const locale = localeTag(lang);
+    const onDevice = Platform.OS === 'android' ? await androidOnDevice(locale, L) : true;
+    if (onDevice === null) return;
     if (pos === null || pos >= value.trimEnd().length) {
       // Fin du commentaire (ou champ sans focus) : comportement d'origine.
       baseRef.current = value.trim();
@@ -169,10 +256,10 @@ export function VoiceCommentButton({ value, onChangeText, getInsertPosition }: P
     writtenRef.current = value;
     setRec(true);
     ExpoSpeechRecognitionModule.start({
-      lang: localeTag(lang),
+      lang: locale,
       interimResults: true,
       continuous: true,
-      requiresOnDeviceRecognition: true,
+      requiresOnDeviceRecognition: onDevice,
       // Pas de ponctuation automatique (un point à chaque pause) : on ponctue
       // à la voix (cf. `applySpokenPunctuation`).
       addsPunctuation: false,

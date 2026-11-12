@@ -100,6 +100,15 @@ const fr = {
     micFailedTitle: 'Dictée indisponible',
     micFailedBody:
       'La reconnaissance vocale hors ligne n’a pas démarré. Vérifie que la dictée est activée dans Réglages → Général → Clavier, avec la langue de l’app installée.',
+    micFailedBodyAndroid:
+      'La reconnaissance vocale n’a pas démarré. Vérifie qu’un service de saisie vocale (Google) est installé et activé, ou que tu es connecté à Internet.',
+    offlineModelTitle: 'Dictée hors ligne',
+    offlineModelBody:
+      'Pour dicter sans connexion, le téléphone doit télécharger la langue de reconnaissance vocale (une seule fois). Sinon, la dictée passe par le service vocal en ligne de Google.',
+    offlineModelDownload: 'Télécharger',
+    offlineModelOnline: 'Utiliser en ligne',
+    offlineModelRetry:
+      'Termine le téléchargement dans la fenêtre d’Android, puis touche à nouveau « Dicter ».',
   },
   version: {
     embedded: 'version intégrée',
@@ -578,6 +587,14 @@ const en: Dict = {
     micFailedTitle: 'Dictation unavailable',
     micFailedBody:
       'On-device speech recognition did not start. Check that dictation is enabled in Settings → General → Keyboard, with the app language installed.',
+    micFailedBodyAndroid:
+      'Speech recognition did not start. Check that a voice typing service (Google) is installed and enabled, or that you are online.',
+    offlineModelTitle: 'Offline dictation',
+    offlineModelBody:
+      'To dictate without a connection, the phone needs to download the speech recognition language (once). Otherwise, dictation uses Google’s online voice service.',
+    offlineModelDownload: 'Download',
+    offlineModelOnline: 'Use online',
+    offlineModelRetry: 'Finish the download in the Android window, then tap “Dictate” again.',
   },
   version: {
     embedded: 'built-in version',

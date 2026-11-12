@@ -218,7 +218,11 @@ export function CommentModal({ photo, mapAuto = false, onSave, onClose }: Props)
     >
       <View style={styles.root}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        // `padding` sur Android aussi : le SDK 54 y impose l'affichage bord à
+        // bord, la fenêtre n'est plus redimensionnée par le clavier (l'ancien
+        // `adjustResize`) et il recouvrait le champ. Pas de double marge si un
+        // appareil redimensionne encore : le recouvrement mesuré tombe à 0.
+        behavior="padding"
         style={styles.backdrop}
       >
         <View style={[styles.sheet, keyboard && styles.sheetKeyboard]}>
