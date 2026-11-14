@@ -619,6 +619,15 @@ export function ExportModal({
                   value={options.proSummary}
                   onChange={(proSummary) => setOptions((o) => ({ ...o, proSummary }))}
                 />
+                {options.proSummary && (
+                  <SwitchRow
+                    label={L.export.proSummaryEndLabel}
+                    hint={L.export.proSummaryEndHint}
+                    value={options.proSummaryEnd}
+                    onChange={(proSummaryEnd) => setOptions((o) => ({ ...o, proSummaryEnd }))}
+                  />
+                )}
+
                 <SwitchRow
                   label={L.export.proCoordsLabel}
                   hint={L.export.proCoordsHint}

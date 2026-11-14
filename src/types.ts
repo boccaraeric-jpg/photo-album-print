@@ -147,6 +147,8 @@ export interface ExportOptions {
   proCoords: boolean;
   /** Rapport professionnel : table récapitulative des photos après la page de garde. */
   proSummary: boolean;
+  /** Rapport professionnel : la table récapitulative en fin de rapport (défaut : après la page de garde). */
+  proSummaryEnd: boolean;
   /** Rapport professionnel : auteur ou société, sur la page de garde (vide = absent). */
   proAuthor: string;
   /** Rapport professionnel : référence du dossier, page de garde et en-têtes. */

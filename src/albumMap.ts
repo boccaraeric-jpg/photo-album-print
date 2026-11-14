@@ -1,3 +1,4 @@
+import { localizePlaceName } from './placeI18n';
 import { dict, localeTag, type Lang } from './i18n';
 import type { Photo, Typeface } from './types';
 import { photoDate } from './dateFormat';
@@ -124,8 +125,11 @@ export function collectPlaces(photos: Photo[], lang: Lang = 'fr'): Place[] {
       g.times.push(photoDate(p));
     } else {
       groups.set(key, {
-        name: parts[0] ?? coordLabel(lat, lon, lang),
-        country: parts.length > 1 ? parts[parts.length - 1] : '',
+        // Noms dans la langue de l'album (le regroupement, lui, reste fait sur
+        // le texte enregistré).
+        name: parts[0] ? localizePlaceName(parts[0], lang) : coordLabel(lat, lon, lang),
+        country: parts.length > 1 ? localizePlaceName(parts[parts.length - 1], lang) : '',
+
         lat,
         lon,
         k: 1,

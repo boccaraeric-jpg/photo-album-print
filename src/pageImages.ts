@@ -880,11 +880,12 @@ async function renderCover(
     const author = (options.proAuthor ?? '').trim();
     const reference = (options.proReference ?? '').trim();
     const period = photos.length ? formatRange(photos, lang) : '';
+    const colon = lang === 'fr' ? ' :' : ':';
     const facts = [
-      author ? `${D.author} : ${author}` : '',
-      reference ? `${D.reference} : ${reference}` : '',
-      period ? `${D.period} : ${period}` : '',
-      `${D.photoCountLabel} : ${photos.length}`,
+      author ? `${D.author}${colon} ${author}` : '',
+      reference ? `${D.reference}${colon} ${reference}` : '',
+      period ? `${D.period}${colon} ${period}` : '',
+      `${D.photoCountLabel}${colon} ${photos.length}`,
     ].filter(Boolean);
     const total =
       lineHeightFor(kickerSize) + 14 * k + titleH + 18 * k + 2 * k + 28 * k +
@@ -1401,6 +1402,8 @@ function renderProSummary(
   index: number,
   lang: Lang,
   head: ProHead,
+  /** Table en fin de rapport : le fichier se range après les fiches. */
+  atEnd = false,
 ): PagePayload | null {
   const D = dict(lang).doc;
   const H = imageHeight(options);
@@ -1452,7 +1455,7 @@ function renderProSummary(
     '#111827',
   );
   for (const cells of rows) line(cells, S.size * k, '#14181f', '#f1f2f4');
-  return encodeSurface(surface, title, 0, `00-recap-${index + 1}`);
+  return encodeSurface(surface, title, 0, `${atEnd ? 'zz' : '00'}-recap-${index + 1}`);
 }
 
 /**
@@ -1586,7 +1589,7 @@ async function renderProPage(
     // Une ligne sans valeur n'est pas posée (comme dans le PDF).
     if (options.showPlace) {
       const gps = options.proCoords && photo.coords ? formatCoords(photo.coords, lang) : '';
-      const place = [properPlace(photo.place ?? ''), gps].filter(Boolean).join(' · ');
+      const place = [properPlace(photo.place ?? '', lang), gps].filter(Boolean).join(' · ');
       if (place) row(D.place, place, false);
     }
     if (options.dateFormat !== 'none') {
@@ -1851,9 +1854,11 @@ export async function buildAlbumImages(
         narrow: isSquare(effectiveFormat(eff)),
       });
   // Rapport pro : en-tête courant de chaque page, et table récapitulative
-  // juste après la page de garde (comme `buildProDocument`).
+  // juste après la page de garde ou en fin de rapport (`proSummaryEnd`), comme
+  // `buildProDocument`.
   const head: ProHead | undefined = pro ? proHeadTexts(title, eff, lang) : undefined;
-  if (pro && head && eff.proSummary) {
+  const pushSummary = async (atEnd: boolean) => {
+    if (!pro || !head || !eff.proSummary || !!eff.proSummaryEnd !== atEnd) return;
     const rows = proSummaryRows(pages, eff.showPlace, lang);
     for (let i = 0; i < rows.length; i += PRO_SUMMARY.perPage) {
       await push(
@@ -1864,10 +1869,12 @@ export async function buildAlbumImages(
           i / PRO_SUMMARY.perPage,
           lang,
           head,
+          atEnd,
         ),
       );
     }
-  }
+  };
+  await pushSummary(false);
   let numbered = 0;
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
@@ -1932,7 +1939,9 @@ export async function buildAlbumImages(
   }
 
   // Page de fin, comme le PDF (le rapport pro n'en a pas).
-  if (!pro) await push(renderEndPage(photoEntries, eff, title, lang, coverTitle ?? title));
+  await pushSummary(true);
+  if (!pro) await push(renderEndPage(
+photoEntries, eff, title, lang, coverTitle ?? title));
 
 
   return uris;

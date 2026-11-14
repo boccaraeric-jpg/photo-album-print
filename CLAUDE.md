@@ -459,7 +459,16 @@ d'entrée** (ils pilotent aussi les libellés) :
   Une ligne sans valeur (lieu, description) n'est plus posée ; plus d'aplat gris derrière la photo ;
   une **grande** fiche remplit sa page (`proLargeFrameH`, 14 pt de sûreté, sans dépasser la photo à
   pleine largeur). `proEntryHeight(..., coords)` compte la ligne « Lieu » qui passe à la ligne.
-  Dates : « 1er » en français (`frenchFirst`), heure « 9 h 41 ».
+  Dates : « 1er » en français (`frenchFirst`), heure « 9 h 41 ». La table peut se ranger **en fin de
+  rapport** (`proSummaryEnd`, interrupteur visible quand la table est active ; images : fichiers
+  `zz-recap-n`).
+- **Lieux dans la langue de l'album** (`src/placeI18n.ts`) : `Photo.place` est un texte figé dans la
+  langue du téléphone au géocodage (« Athènes, Grèce »). À l'affichage seulement, `properPlace(place,
+  lang)` convertit pays et grandes villes par une **table hors ligne** français ↔ anglais (le
+  géocodeur du système ne répond pas dans une langue choisie) ; un nom absent sort tel quel, un
+  homonyme entre les deux langues (« Mexico ») n'est jamais converti. Vaut pour PDF, images, page
+  « Nos lieux » (`collectPlaces`) et `contexte.txt`. Toute nouvelle langue demande sa colonne.
+
 - **Page de garde du rapport pro** : composition centrée (sur-titre « Rapport photographique », titre,
 
   filet, **photo étoilée ★** sinon la 1ʳᵉ — `ExportOptions.proCoverPhoto`, défaut oui —, mentions),

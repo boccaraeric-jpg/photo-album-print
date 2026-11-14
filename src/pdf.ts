@@ -164,6 +164,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   proCoverPhoto: true,
   proCoords: false,
   proSummary: true,
+  proSummaryEnd: false,
   proAuthor: '',
   proReference: '',
 };
@@ -235,6 +236,7 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     proCoverPhoto: typeof o.proCoverPhoto === 'boolean' ? o.proCoverPhoto : d.proCoverPhoto,
     proCoords: typeof o.proCoords === 'boolean' ? o.proCoords : d.proCoords,
     proSummary: typeof o.proSummary === 'boolean' ? o.proSummary : d.proSummary,
+    proSummaryEnd: typeof o.proSummaryEnd === 'boolean' ? o.proSummaryEnd : d.proSummaryEnd,
     proAuthor: plainLine(o.proAuthor, 60),
     proReference: plainLine(o.proReference, 40),
 
@@ -1683,7 +1685,7 @@ export function proSummaryRows(pages: AlbumPage[], showPlace: boolean, lang: Lan
       rows.push([
         String(rows.length + 1),
         formatPhotoDate(photoDate(p), 'shortTime', lang),
-        (showPlace ? properPlace(p.place ?? '') : '') || '—',
+        (showPlace ? properPlace(p.place ?? '', lang) : '') || '—',
         String(i + 1),
       ]);
     }
@@ -1745,7 +1747,9 @@ function proEntryHtml(
   // Une ligne sans valeur n'est pas posée : « Lieu — » et « Description — »
   // n'apprenaient rien et alourdissaient la fiche (retour testeur).
   const gps = showPlace && coords && photo.coords ? formatCoords(photo.coords, lang) : '';
-  const place = showPlace ? [properPlace(photo.place ?? ''), gps].filter(Boolean).join(' · ') : '';
+  const place = showPlace
+    ? [properPlace(photo.place ?? '', lang), gps].filter(Boolean).join(' · ')
+    : '';
   const desc = photo.comment.trim();
   const img = src
     ? `<img src="${src}" />`
@@ -1874,7 +1878,8 @@ function buildProDocument(
     })
     .join('');
 
-  // Table récapitulative (après la page de garde) : n°, date, lieu et page de
+  // Table récapitulative (après la page de garde, ou en fin de rapport selon
+  // `proSummaryEnd`) : n°, date, lieu et page de
   // chaque photo, `PRO_SUMMARY.perPage` lignes par page.
   const S = PRO_SUMMARY;
   const summaryRows = proSummaryRows(pages, showPlace, lang).map(
@@ -2019,13 +2024,15 @@ function buildProDocument(
       box-shadow: 0 0 0 1px rgba(31,29,26,0.12), 0 3px 12px rgba(31,29,26,0.28); }`
         : ''
     }`;
+  const colon = lang === 'fr' ? ' :' : ':';
 
   const facts = [
     `${escapeHtml(D.establishedOn)} ${escapeHtml(today)}`,
-    author ? `<span>${escapeHtml(D.author)} :</span> ${escapeHtml(author)}` : '',
-    reference ? `<span>${escapeHtml(D.reference)} :</span> ${escapeHtml(reference)}` : '',
-    period ? `<span>${escapeHtml(D.period)} :</span> ${escapeHtml(period)}` : '',
-    `<span>${escapeHtml(D.photoCountLabel)} : ${photoTotal}</span>`,
+    // Deux-points : précédés d'une espace en français, collés en anglais.
+    author ? `<span>${escapeHtml(D.author)}${colon}</span> ${escapeHtml(author)}` : '',
+    reference ? `<span>${escapeHtml(D.reference)}${colon}</span> ${escapeHtml(reference)}` : '',
+    period ? `<span>${escapeHtml(D.period)}${colon}</span> ${escapeHtml(period)}` : '',
+    `<span>${escapeHtml(D.photoCountLabel)}${colon} ${photoTotal}</span>`,
   ]
     .filter(Boolean)
     .join('<br/>');
@@ -2045,8 +2052,10 @@ function buildProDocument(
           ${coverItem ? `<div class="cover-photo"><img src="${coverItem.src}" /></div>` : ''}
           <p class="facts">${facts}</p>
         </section>
-        ${summary}
+        ${options.proSummaryEnd ? '' : summary}
         ${sheets}
+        ${options.proSummaryEnd ? summary : ''}
+
 
       </body>
     </html>`;

@@ -1,4 +1,5 @@
 import type { Lang } from './i18n';
+import { localizePlace } from './placeI18n';
 
 /*
  * Écriture d'un lieu et de la ligne « lieu · date » sous une photo, commune
@@ -31,8 +32,10 @@ const WORD = /[A-Za-zÀ-ÖØ-öø-ÿĀ-ɏḀ-ỿ]+/g;
  * « Saint-Cyr-sur-Mer », « Villeneuve-d'Ascq »). Les autres lettres ne sont
  * jamais modifiées : « USA » ou « McDonald » restent tels quels.
  */
-export function properPlace(place: string): string {
-  const text = place.trim();
+export function properPlace(place: string, lang?: Lang): string {
+  // Langue de l'album fournie : villes et pays connus passent dans cette
+  // langue (« Athènes, Grèce » → « Athens, Greece », cf. `placeI18n.ts`).
+  const text = lang ? localizePlace(place, lang) : place.trim();
   let first = true;
   return text.replace(WORD, (word, offset: number) => {
     // Un mot de liaison garde sa minuscule, sauf en tête d'un segment
@@ -65,5 +68,6 @@ export function formatCoords(coords: { lat: number; lon: number }, lang: Lang): 
 export function metaLine(place: string | undefined, date: string, lang: Lang): string {
 
   const shownDate = lang === 'en' ? date : date.toLowerCase();
-  return [place ? properPlace(place) : '', shownDate].filter(Boolean).join(' · ');
+  return [place ? properPlace(place, lang) : '', shownDate].filter(Boolean).join(' · ');
+
 }
