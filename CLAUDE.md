@@ -288,7 +288,8 @@ d'entrée** (ils pilotent aussi les libellés) :
   `commentSize` (normal / **grand par défaut** / très grand, `COMMENT_SCALE`), corps et encres
   partagés dans `albumStyle.ts` (`COMMENT_BASE`, `CAPTION_INK`, `META_*`), Caveat en **bold**
   (`captionBold`). La photo cède la place (`commentShrink`), le seuil de page seule baisse
-  (`isLongComment(photo, scale)`). Skia n'a plus de coupure à 2 lignes : la bande se mesure.
+  (`isLongComment(photo, scale)`), et il est **divisé par deux en 16 × 16** pour les moyennes côte à
+  côte (`narrow` de `paginateEntries`, colonne deux fois plus étroite : 2-3 phrases écrasaient la photo). Skia n'a plus de coupure à 2 lignes : la bande se mesure.
   Les montages **gardent** la photo ★ dans les pages (la règle d'exclusion ne vaut qu'en `classic`).
   En `script`, les pages de texte restent en Lora (Caveat illisible au long cours) ; les **dates**
   (lieu · date, période de la page de fin) suivent la typographie choisie (`spec.date`, Caveat
@@ -384,7 +385,9 @@ d'entrée** (ils pilotent aussi les libellés) :
   **16 × 16 (carré, `square`)** : hauteur 594, gabarits **propres** et non un simple retranchement —
   `SQUARE_PH` (pdf.ts), moyennes **côte à côte** (`.fmt-square` sur `body` ; Skia `gridFor(..., square)`
   = 2 colonnes × 1 rangée), carte d'une moyenne **sous** la photo (`mapBelow`, sauf photo seule
-  agrandie ; `MAP_SHARE_BELOW` = 44 % de la hauteur, en **hauteurs explicites** `calc()` dans `sizeCss`
+  agrandie ; `MAP_SHARE_BELOW` = 35 % de la hauteur — 44 % dominait la photo, retour testeur —, cadre et marges
+  resserrés côte à côte dans le PDF (`SQUARE_SIDE` / `SQUARE_GAP` / `SQUARE_TRIM`, à reporter dans
+  `fitPhotoHeight`), en **hauteurs explicites** `calc()` dans `sizeCss`
   — en flex colonne la photo gardait toute la hauteur et la carte s'écrasait en filet blanc sous un
   portrait, en ruban sous un paysage), couverture classique resserrée, pêle-mêle moins réduit en largeur (`sx`), écart grille →
   titre réduit, légende de la page « Nos lieux » sur 3 colonnes (`cols` d'`albumMap.ts`).

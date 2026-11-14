@@ -54,7 +54,18 @@ export interface PaginateOptions {
   commentScale?: number;
   /** Honorer la taille propre à chaque photo (`Photo.size`) — familial seulement. */
   perPhotoSize?: boolean;
+  /**
+   * Page carrée : les moyennes s'y posent côte à côte, dans une colonne deux
+   * fois plus étroite. Le seuil de page seule y est divisé d'autant
+   * (`NARROW_FACTOR`) : un commentaire de deux ou trois phrases y prenait deux
+   * fois plus de lignes et écrasait la photo (et sa carte) sans jamais
+   * atteindre le seuil prévu pour la pleine largeur.
+   */
+  narrow?: boolean;
 }
+
+/** Colonne étroite (carré, moyennes côte à côte) : le commentaire compte double. */
+const NARROW_FACTOR = 2;
 
 /**
  * Répartit les entrées (photos + pages de texte) en pages. Les pages de texte
@@ -71,7 +82,7 @@ export interface PaginateOptions {
 export function paginateEntries(
   entries: Photo[],
   albumSize: PhotoSize,
-  { wide, commentScale = 1, perPhotoSize = false }: PaginateOptions = {},
+  { wide, commentScale = 1, perPhotoSize = false, narrow = false }: PaginateOptions = {},
 ): AlbumPage[] {
   const pages: AlbumPage[] = [];
   let group: Photo[] = [];
@@ -94,7 +105,8 @@ export function paginateEntries(
     const perPage = PER_PAGE[size];
     if (group.length && size !== groupSize) flush();
     groupSize = size;
-    if (perPage <= 1 || isLongComment(e, commentScale)) {
+    const long = isLongComment(e, commentScale * (narrow && size === 'medium' ? NARROW_FACTOR : 1));
+    if (perPage <= 1 || long) {
       flush();
       pages.push({ type: 'photos', items: [e], size, solo: perPage > 1 });
       continue;

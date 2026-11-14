@@ -466,10 +466,12 @@ const CAPTION_BASES: Record<ExportOptions['photoSize'], number> = {
  */
 const SQUARE_PH: Record<PhotoSize | 'solo', number> = {
   small: 180,
-  medium: 340,
+  medium: 370,
   large: 430,
   full: 430, // non utilisé (la pleine page a son propre gabarit)
-  solo: 340,
+  // Photo seule sur sa page (long commentaire) : nettement plus grande que
+  // côte à côte — c'est la raison d'être de cette page.
+  solo: 400,
 };
 
 /**
@@ -555,6 +557,23 @@ const FRAME_PAD: Record<ExportOptions['frame'], [number, number]> = {
   none: [0, 0],
 };
 
+/**
+ * Page carrée, moyennes côte à côte : marges de la feuille, écart entre les
+ * deux cartes et marge intérieure du cadre resserrés (`SQUARE_TRIM` retranché
+ * de chaque côté du cadre), au profit des photos — retour testeur : trop de
+ * cadre et de marge autour d'une photo accompagnée de sa carte.
+ */
+const SQUARE_SIDE = 18;
+const SQUARE_GAP = 12;
+const SQUARE_TRIM = 4;
+/** Marge intérieure d'une carte en page carrée côte à côte, selon l'encadrement. */
+const SQUARE_CARD_PAD: Record<ExportOptions['frame'], string> = {
+  card: `${10 - SQUARE_TRIM}px`,
+  border: `${10 - SQUARE_TRIM}px`,
+  polaroid: `${14 - SQUARE_TRIM}px ${14 - SQUARE_TRIM}px ${18 - SQUARE_TRIM}px`,
+  none: '0',
+};
+
 /** Largeur utile d'une page photo (595 moins les marges de `.sheet`). */
 const SHEET_INNER = PAGE_WIDTH - 2 * 28;
 /** Plus petite hauteur de photo consentie à une légende très longue. */
@@ -578,20 +597,24 @@ function fitPhotoHeight(
   const target = variant === 'large' ? box.large : variant === 'solo' ? box.solo : box.ph;
   const spec = TYPE_SPECS[options.typeface];
   const format = effectiveFormat(options);
-  const [padV, padH] = FRAME_PAD[options.frame];
   const grid = variant === '' && size === 'small';
   const sideBySide = variant === '' && size === 'medium' && isSquare(format);
+  // Côte à côte en page carrée : cadre resserré (`SQUARE_CARD_PAD`).
+  const trim = sideBySide && options.frame !== 'none' ? 2 * SQUARE_TRIM : 0;
+  const [padV, padH] = FRAME_PAD[options.frame].map((v) => v - trim);
   const metaH = 4 + META_SIZE * spec.dateScale * 1.3;
 
   // Hauteur d'une carte hors photo : marges du cadre + légende.
   const fixed = group.map((it) => {
     const cardW =
       variant === 'solo'
-        ? Math.min(460, SHEET_INNER)
+        ? isSquare(format)
+          ? PAGE_WIDTH - 2 * SQUARE_SIDE
+          : Math.min(460, SHEET_INNER)
         : grid && !it.map
           ? (SHEET_INNER - 12) / 2
           : sideBySide
-            ? (SHEET_INNER - 16) / 2
+            ? (PAGE_WIDTH - 2 * SQUARE_SIDE - SQUARE_GAP) / 2
             : SHEET_INNER;
     const { comment, meta } = captionParts(it.photo, ctx);
     if (!comment && !meta) return padV;
@@ -838,18 +861,23 @@ function buildStyles(options: ExportOptions): string {
      photo (une colonne n'a pas la largeur de les mettre côte à côte), couverture
      classique resserrée. Mêmes cases que Skia (gridFor, carte dessous). --- */
   .fmt-square .sheet.photos.sz-medium {
-    flex-direction: row; align-items: center; justify-content: center; gap: 16px;
+    flex-direction: row; align-items: center; justify-content: center; gap: ${SQUARE_GAP}px;
+    padding-left: ${SQUARE_SIDE}px; padding-right: ${SQUARE_SIDE}px;
   }
   .fmt-square .sheet.photos.sz-medium > .card {
-    flex: 0 1 calc(50% - 8px); margin-bottom: 0;
+    flex: 0 1 calc(50% - ${SQUARE_GAP / 2}px); margin-bottom: 0;
   }
   .fmt-square .sheet.photos.sz-medium > .card.solo { flex-basis: 100%; }
+  /* Photo seule : toute la largeur de la page (pas le plafond de 460 de l'A4). */
+  .fmt-square .card.solo { max-width: none; }
   .fmt-square .sz-medium .card:not(.solo) .ph.split { flex-direction: column; }
   .fmt-square .cover { padding-top: 40px; }
   .fmt-square .cover-hero { margin-top: 24px; flex-basis: ${470 - cut + 54}px; }
   .fmt-square .cover-foot { margin-top: 22px; }
   .grid4 .card { width: calc(50% - 6px); margin-bottom: 4px; }
   ${frameCss}
+  /* Après frameCss : cadre resserré des moyennes côte à côte (page carrée). */
+  .fmt-square .sheet.photos.sz-medium > .card:not(.solo) { padding: ${SQUARE_CARD_PAD[options.frame]}; }
   /* Case photo sans fond : une photo qui n'a pas les proportions de sa case
      (portrait dans une case horizontale…) se pose au centre, sur le fond de
      la carte ou de la page. Un aplat gris comblait le vide et salissait la
@@ -1193,6 +1221,7 @@ export async function buildAlbumHtml(
     wide: mapIds,
     commentScale: COMMENT_SCALE[options.commentSize],
     perPhotoSize: true,
+    narrow: isSquare(format),
   })
     .map((page, index) => {
       const no = index + 1;

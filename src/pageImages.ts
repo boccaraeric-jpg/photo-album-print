@@ -1667,6 +1667,7 @@ export async function buildAlbumImages(
         wide: mapIds,
         commentScale: COMMENT_SCALE[eff.commentSize],
         perPhotoSize: true,
+        narrow: isSquare(effectiveFormat(eff)),
       });
   let numbered = 0;
   for (let i = 0; i < pages.length; i++) {

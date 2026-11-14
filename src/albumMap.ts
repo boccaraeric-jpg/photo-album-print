@@ -737,10 +737,11 @@ export const MAP_SHARE = 0.4;
 export const MAP_GAP = 6;
 /**
  * Part de la **hauteur** donnée à la carte quand elle se pose **sous** la photo
- * (page carrée, moyennes côte à côte). Un peu plus que `MAP_SHARE` : une bande
- * trop mince ne montrait qu'un ruban de carte, sans repère pour situer le lieu.
+ * (page carrée, moyennes côte à côte). Assez pour lire les noms autour du
+ * repère (une bande trop mince ne montrait qu'un ruban de carte), sans prendre
+ * la place de la photo : à 44 % la carte dominait (retour testeur).
  */
-export const MAP_SHARE_BELOW = 0.44;
+export const MAP_SHARE_BELOW = 0.35;
 /** Médaillon de carte posé sur une photo pleine page (points A4). */
 export const FULL_MAP = { w: 168, h: 112, margin: 18, border: 4 };
 
