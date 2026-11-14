@@ -12,6 +12,14 @@ function cap(s: string): string {
 }
 
 /**
+ * Usage français : le premier du mois s'écrit « 1er » (« vendredi 1er août »).
+ * Ne touche que le quantième suivi d'un nom de mois, jamais « 01/08/2025 ».
+ */
+function frenchFirst(text: string, lang: Lang): string {
+  return lang === 'fr' ? text.replace(/(^|\s)1 (?=[a-zéû])/, '$11er ') : text;
+}
+
+/**
  * Formate un timestamp selon le format choisi :
  * - `dayMonth` → « 8 juillet » (sans l'année)
  * - `short` → « 08/07/2026 »
@@ -31,9 +39,9 @@ export function formatPhotoDate(
     if (lang === 'en') {
       return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     }
-    const hh = String(d.getHours()).padStart(2, '0');
+    // « 9 h 41 » : heure sans zéro initial, espaces autour du « h ».
     const mm = String(d.getMinutes()).padStart(2, '0');
-    return `${hh}h${mm}`;
+    return `${d.getHours()} h ${mm}`;
   };
   const at = lang === 'en' ? 'at' : 'à';
   switch (format) {
@@ -41,7 +49,7 @@ export function formatPhotoDate(
       return '';
     case 'dayMonth':
       // « 8 juillet » / « July 8 » : la date la plus légère, sans l'année.
-      return d.toLocaleDateString(tag, { day: 'numeric', month: 'long' });
+      return frenchFirst(d.toLocaleDateString(tag, { day: 'numeric', month: 'long' }), lang);
     case 'short':
       return d.toLocaleDateString(tag, {
         day: '2-digit',
@@ -58,23 +66,30 @@ export function formatPhotoDate(
     }
     case 'long':
       return cap(
-        d.toLocaleDateString(tag, {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric',
-        }),
+        frenchFirst(
+          d.toLocaleDateString(tag, {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          }),
+          lang,
+        ),
       );
     case 'full': {
       const day = cap(
-        d.toLocaleDateString(tag, {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric',
-        }),
+        frenchFirst(
+          d.toLocaleDateString(tag, {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          }),
+          lang,
+        ),
       );
       return `${day} ${at} ${time()}`;
+
     }
   }
 }

@@ -613,6 +613,18 @@ export function ExportModal({
                   value={options.proCoverPhoto}
                   onChange={(proCoverPhoto) => setOptions((o) => ({ ...o, proCoverPhoto }))}
                 />
+                <SwitchRow
+                  label={L.export.proSummaryLabel}
+                  hint={L.export.proSummaryHint}
+                  value={options.proSummary}
+                  onChange={(proSummary) => setOptions((o) => ({ ...o, proSummary }))}
+                />
+                <SwitchRow
+                  label={L.export.proCoordsLabel}
+                  hint={L.export.proCoordsHint}
+                  value={options.proCoords}
+                  onChange={(proCoords) => setOptions((o) => ({ ...o, proCoords }))}
+                />
               </>
             )}
             {!isPro && (
@@ -735,6 +747,36 @@ export function ExportModal({
                   value={options.proTextBold}
                   onChange={(proTextBold) => setOptions((o) => ({ ...o, proTextBold }))}
                 />
+                {/* Mentions de la page de garde : vides, elles n'apparaissent pas. */}
+                <Text style={styles.label}>{L.export.proAuthorLabel}</Text>
+                <TextInput
+                  style={styles.titleInput}
+                  value={options.proAuthor}
+                  onChangeText={(t) =>
+                    setOptions((o) => ({ ...o, proAuthor: t.replace(/\n/g, ' ') }))
+                  }
+                  placeholderTextColor={C.faint}
+                  maxLength={60}
+                  autoCorrect={false}
+                  autoCapitalize="words"
+                  accessibilityLabel={L.export.proAuthorLabel}
+                />
+                <Text style={styles.note}>{L.export.proAuthorHint}</Text>
+                <Text style={styles.label}>{L.export.proReferenceLabel}</Text>
+                <TextInput
+                  style={styles.titleInput}
+                  value={options.proReference}
+                  onChangeText={(t) =>
+                    setOptions((o) => ({ ...o, proReference: t.replace(/\n/g, ' ') }))
+                  }
+                  placeholderTextColor={C.faint}
+                  maxLength={40}
+                  autoCorrect={false}
+                  autoCapitalize="characters"
+                  accessibilityLabel={L.export.proReferenceLabel}
+                />
+                <Text style={styles.note}>{L.export.proReferenceHint}</Text>
+
               </>
             )}
 

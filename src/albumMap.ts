@@ -748,6 +748,8 @@ export const MAP_SHARE_BELOW = 0.35;
  * entre ce minimum et la part d'usage (`MAP_SHARE`, `MAP_SHARE_BELOW`).
  */
 export const MAP_SHARE_MIN = 0.34;
+/** Largeur maximale d'une carte à côté de sa photo, rapportée à celle de la photo. */
+export const MAP_VS_PHOTO = 0.85;
 /** Même minimum pour la carte posée sous la photo (bande plus basse sous un portrait). */
 export const MAP_SHARE_BELOW_MIN = 0.28;
 
@@ -770,7 +772,10 @@ export function splitBeside(
   const room = w - gap;
   if (!(aspect > 0)) return { photoW: room * (1 - MAP_SHARE), mapW: room * MAP_SHARE, h };
   const photoW = Math.min(h * aspect, room * (1 - MAP_SHARE_MIN));
-  return { photoW, mapW: Math.min(room - photoW, room * MAP_SHARE), h: photoW / aspect };
+  // La carte ne dépasse jamais la photo en largeur : à côté d'un portrait elle
+  // prenait le dessus sur l'image (retour testeur).
+  const mapW = Math.min(room - photoW, room * MAP_SHARE, photoW * MAP_VS_PHOTO);
+  return { photoW, mapW, h: photoW / aspect };
 }
 
 /**

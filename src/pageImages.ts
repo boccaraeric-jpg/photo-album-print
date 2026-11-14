@@ -12,7 +12,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import type { ExportOptions, Photo, ProPhotoSize } from './types';
 import { formatPhotoDate, photoDate, reportDateFormat } from './dateFormat';
 import { dict, localeTag, type Lang } from './i18n';
-import { metaLine, properPlace } from './placeName';
+import { formatCoords, metaLine, properPlace } from './placeName';
 import {
   pageBackground,
   paginateEntries,
@@ -21,9 +21,11 @@ import {
   paginateProEntries,
   PRO_LAYOUT,
   proFrameH,
+  proLargeFrameH,
   PRO_SMALL_DT,
+  PRO_SUMMARY,
 } from './paginate';
-import { albumFileBase, formatRange } from './pdf';
+import { albumFileBase, formatRange, proHeadTexts, proSummaryRows } from './pdf';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
 import { parseRich, type RichRun } from './richText';
@@ -873,9 +875,20 @@ async function renderCover(
     const titleH = titleLines * lineHeightFor(titleSize);
     const photoH = img ? 320 * k : 0;
     const factsSize = 13 * k;
+    // Mentions sous la photo (comme `.facts` du PDF) : date d'établissement,
+    // puis auteur, référence, période et nombre de photos.
+    const author = (options.proAuthor ?? '').trim();
+    const reference = (options.proReference ?? '').trim();
+    const period = photos.length ? formatRange(photos, lang) : '';
+    const facts = [
+      author ? `${D.author} : ${author}` : '',
+      reference ? `${D.reference} : ${reference}` : '',
+      period ? `${D.period} : ${period}` : '',
+      `${D.photoCountLabel} : ${photos.length}`,
+    ].filter(Boolean);
     const total =
       lineHeightFor(kickerSize) + 14 * k + titleH + 18 * k + 2 * k + 28 * k +
-      (img ? photoH + 28 * k : 0) + 2 * lineHeightFor(factsSize);
+      (img ? photoH + 28 * k : 0) + (1 + facts.length) * lineHeightFor(factsSize);
     let ty = Math.max(64 * k, (H - 76 * k + 64 * k - total) / 2);
     ty +=
       drawText(canvas, D.reportKicker, x0, ty, textW, {
@@ -921,12 +934,14 @@ async function renderCover(
       align: TextAlign.Center,
       maxLines: 1,
     });
-    drawText(canvas, `${D.photoCountLabel} : ${photos.length}`, x0, ty, textW, {
-      color: '#6b7280',
-      size: factsSize,
-      align: TextAlign.Center,
-      maxLines: 1,
-    });
+    for (const fact of facts) {
+      ty += drawText(canvas, fact, x0, ty, textW, {
+        color: '#6b7280',
+        size: factsSize,
+        align: TextAlign.Center,
+        maxLines: 1,
+      });
+    }
     return encodeSurface(surface, fileTitle, 0);
   }
 
@@ -975,7 +990,8 @@ async function renderCover(
         picks.length,
         seedOf(picks.map((p) => p.id)),
         layoutHeight(options),
-        SCATTER_TITLE.top + layoutTitle.height + 14,
+        // Page carrée : un peu plus d'air entre le titre et les premières photos.
+        SCATTER_TITLE.top + layoutTitle.height + (isSquare(effectiveFormat(options)) ? 24 : 14),
       );
       // Ordre d'empilement : la photo étoilée en dernier, donc au-dessus.
       const order = slots.map((_, i) => i).sort((a, b) => slots[a].z - slots[b].z);
@@ -1054,6 +1070,8 @@ function renderTextPage(
   credit = false,
   /** Rapport pro : compteur « page 2/4 » du pied de page. */
   pageLabel = String(pageNo),
+  /** Rapport pro : en-tête courant. */
+  head?: ProHead,
 ): PagePayload | null {
   const H = imageHeight(options);
   const surface = Skia.Surface.Make(W, H);
@@ -1066,6 +1084,8 @@ function renderTextPage(
   const bg = Skia.Paint();
   bg.setColor(Skia.Color(options.background));
   canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
+
+  if (head) drawProHeader(canvas, head);
 
   // Centrage vertical du bloc de texte dans la page : on mesure d'abord sa
   // hauteur (mêmes règles que drawText), puis on choisit le y de départ.
@@ -1342,6 +1362,99 @@ function drawProFooter(canvas: SkCanvas, H: number, label: string): void {
   });
 }
 
+/** En-tête courant d'une page du rapport pro (textes de `proHeadTexts`). */
+interface ProHead {
+  left: string;
+  right: string;
+}
+
+/**
+ * En-tête courant du rapport pro (pendant de `.head` du PDF) : titre et
+ * référence à gauche, nature et date du rapport à droite, filet dessous.
+ */
+function drawProHeader(canvas: SkCanvas, head: ProHead): void {
+  const k = W / COVER_W;
+  const x = 56 * k;
+  const w = W - 112 * k;
+  const size = 8.5 * k;
+  const y = 14 * k;
+  drawText(canvas, head.left, x, y, w * 0.5, { color: '#6b7280', size, maxLines: 1 });
+  drawText(canvas, head.right, x + w * 0.4, y, w * 0.6, {
+    color: '#6b7280',
+    size,
+    align: TextAlign.Right,
+    maxLines: 1,
+  });
+  const rule = Skia.Paint();
+  rule.setColor(Skia.Color('#e5e7eb'));
+  canvas.drawRect(Skia.XYWHRect(x, y + lineHeightFor(size) + 5 * k, w, 1 * k), rule);
+}
+
+/**
+ * Table récapitulative du rapport pro (pendant de `.pro-summary` du PDF) :
+ * mêmes lignes (`proSummaryRows`), mêmes mesures (`PRO_SUMMARY`).
+ */
+function renderProSummary(
+  rows: string[][],
+  options: ExportOptions,
+  title: string,
+  index: number,
+  lang: Lang,
+  head: ProHead,
+): PagePayload | null {
+  const D = dict(lang).doc;
+  const H = imageHeight(options);
+  const surface = Skia.Surface.Make(W, H);
+  if (!surface) return null;
+  const canvas = surface.getCanvas();
+  const k = W / COVER_W;
+  const S = PRO_SUMMARY;
+  const bg = Skia.Paint();
+  bg.setColor(Skia.Color('#ffffff'));
+  canvas.drawRect(Skia.XYWHRect(0, 0, W, H), bg);
+  drawProHeader(canvas, head);
+
+  const x = 56 * k;
+  const w = W - 112 * k;
+  let y = S.top * k;
+  y +=
+    drawText(canvas, D.summaryTitle, x, y, w, {
+      color: '#111827',
+      size: S.titleSize * k,
+      bold: true,
+      maxLines: 1,
+    }) +
+    S.titleGap * k;
+  const rowH = S.rowH * k;
+  const gap = 6 * k;
+  const line = (cells: string[], size: number, color: string, ruleColor: string) => {
+    let cx = x;
+    cells.forEach((cell, i) => {
+      const cw = S.cols[i] * w;
+      const last = i === cells.length - 1;
+      drawText(canvas, cell, cx, y + (rowH - lineHeightFor(size)) / 2, last ? cw : cw - gap, {
+        color,
+        size,
+        maxLines: 1,
+        align: last ? TextAlign.Right : TextAlign.Left,
+      });
+      cx += cw;
+    });
+    y += rowH;
+    const rule = Skia.Paint();
+    rule.setColor(Skia.Color(ruleColor));
+    canvas.drawRect(Skia.XYWHRect(x, y - 1 * k, w, 1 * k), rule);
+  };
+  line(
+    [D.summaryNo, D.date, D.place, D.summaryPage].map((t) => t.toUpperCase()),
+    S.headSize * k,
+    '#6b7280',
+    '#111827',
+  );
+  for (const cells of rows) line(cells, S.size * k, '#14181f', '#f1f2f4');
+  return encodeSurface(surface, title, 0, `00-recap-${index + 1}`);
+}
+
 /**
  * Page de fiches du rapport pro (Skia), pendant de `.pro-page` du PDF : mêmes
  * pages (`paginateProEntries`), mêmes mesures (`PRO_LAYOUT`, `proFrameH`) —
@@ -1358,6 +1471,7 @@ async function renderProPage(
   credit: boolean,
   /** Nombre de pages du rapport (compteur « page 2/4 »). */
   pageTotal: number,
+  head: ProHead,
 ): Promise<PagePayload | null> {
   const D = dict(lang).doc;
   const H = imageHeight(options);
@@ -1385,8 +1499,11 @@ async function renderProPage(
   const dtW = (size === 'small' ? PRO_SMALL_DT : 96) * labelScale * k;
   const ink = '#14181f';
   const grey = '#6b7280';
-  const plate =
-    options.frame === 'polaroid' ? '#ffffff' : options.frame === 'none' ? null : '#f8f9fa';
+  // Jamais d'aplat derrière la photo (un portrait y sortait flanqué de deux
+  // bandes grises) : seul le polaroïd garde son support blanc.
+  const plate = options.frame === 'polaroid' ? '#ffffff' : null;
+  const photoRadius = options.frame === 'card' ? 6 * k : 0;
+  const metaRows = (options.showPlace ? 1 : 0) + (options.dateFormat === 'none' ? 0 : 1);
   const strokeColor =
     options.frame === 'border' ? '#d7dbe0' : options.frame === 'polaroid' ? '#e5e7eb' : null;
   const inset = options.frame === 'polaroid' ? 14 * k : 0;
@@ -1401,9 +1518,20 @@ async function renderProPage(
         ? TextAlign.Right
         : TextAlign.Left;
 
+  // Grande fiche : la vignette remplit la page (`proLargeFrameH`), sans
+  // dépasser ce que la photo occupe à pleine largeur.
+  const frameOf = (i: number): number => {
+    if (size !== 'large') return frameH;
+    const maxH = proLargeFrameH(group[i], scale, metaRows, options.proCoords) * k;
+    const img = images[i];
+    if (!img || !img.width()) return maxH;
+    return Math.min(maxH, ((colW - 2 * inset) * img.height()) / img.width() + 2 * inset);
+  };
+
   /** Dessine une fiche en (x, y) ; renvoie sa hauteur. */
   const drawEntry = (i: number, x: number, y: number): number => {
     const photo = group[i];
+    const frameH = frameOf(i);
     let ty = y;
     ty +=
       drawText(canvas, D.photoNo(startNumber + i + 1), x, ty, colW, {
@@ -1419,7 +1547,15 @@ async function renderProPage(
       back.setColor(Skia.Color(plate));
       canvas.drawRRect(rrect(x, ty, colW, frameH, 6 * k), back);
     }
-    drawContainImage(canvas, images[i], x + inset, ty + inset, colW - 2 * inset, frameH - 2 * inset);
+    drawContainImage(
+      canvas,
+      images[i],
+      x + inset,
+      ty + inset,
+      colW - 2 * inset,
+      frameH - 2 * inset,
+      photoRadius,
+    );
     if (strokeColor) {
       const border = Skia.Paint();
       border.setAntiAlias(true);
@@ -1447,7 +1583,12 @@ async function renderProPage(
       ty += Math.max(h, lineHeightFor(labelSize)) + 2 * pad;
       canvas.drawRect(Skia.XYWHRect(x, ty - 1 * k, colW, 1 * k), rule);
     };
-    if (options.showPlace) row(D.place, properPlace(photo.place ?? '') || '—', false);
+    // Une ligne sans valeur n'est pas posée (comme dans le PDF).
+    if (options.showPlace) {
+      const gps = options.proCoords && photo.coords ? formatCoords(photo.coords, lang) : '';
+      const place = [properPlace(photo.place ?? ''), gps].filter(Boolean).join(' · ');
+      if (place) row(D.place, place, false);
+    }
     if (options.dateFormat !== 'none') {
       row(
         D.date,
@@ -1456,7 +1597,7 @@ async function renderProPage(
         dateAlign,
       );
     }
-    row(D.description, photo.comment.trim() || '—', true);
+    if (photo.comment.trim()) row(D.description, photo.comment.trim(), true);
     return ty - y;
   };
 
@@ -1476,6 +1617,7 @@ async function renderProPage(
     });
   }
 
+  drawProHeader(canvas, head);
   if (credit) drawProCredit(canvas, H);
   drawProFooter(canvas, H, D.pageOf(pageNo, pageTotal));
   return encodeSurface(surface, title, pageNo);
@@ -1525,6 +1667,8 @@ function renderEndPage(
   options: ExportOptions,
   title: string,
   lang: Lang,
+  /** Titre de l'album, rappelé sous l'ornement (comme `.end h2` du PDF). */
+  shownTitle = '',
 ): PagePayload | null {
   const H = imageHeight(options);
   const surface = Skia.Surface.Make(W, H);
@@ -1561,9 +1705,25 @@ function renderEndPage(
   accent.setColor(Skia.Color(dark ? '#e3a455' : '#b45309'));
   canvas.drawPath(star, accent);
 
+  let textY = cy + 18 * k;
+  const heading = (spec.uppercaseTitle ? shownTitle.toUpperCase() : shownTitle)
+    .replace(/\s*\n\s*/g, ' ')
+    .trim();
+  if (heading) {
+    textY +=
+      drawText(canvas, heading, PAD, textY + 6 * k, W - 2 * PAD, {
+        color: dark ? '#f3efe7' : '#1f1d1a',
+        size: 26 * k,
+        bold: true,
+        align: TextAlign.Center,
+        maxLines: 2,
+        fam: spec.title,
+      }) +
+      10 * k;
+  }
   const range = photos.length ? formatRange(photos, lang) : '';
   if (range) {
-    drawText(canvas, range, PAD, cy + 18 * k, W - 2 * PAD, {
+    drawText(canvas, range, PAD, textY, W - 2 * PAD, {
       color: mutedInk(options.background),
       size: 13 * spec.dateScale * k,
       align: TextAlign.Center,
@@ -1681,6 +1841,7 @@ export async function buildAlbumImages(
         PRO_TEXT_SCALE[eff.proTextSize ?? 'normal'],
         (eff.showPlace ? 1 : 0) + (eff.dateFormat === 'none' ? 0 : 1),
         eff.proPhotoSize,
+        eff.proCoords,
       )
     : paginateEntries(pageSource, eff.photoSize, {
         wide: mapIds,
@@ -1688,6 +1849,24 @@ export async function buildAlbumImages(
         perPhotoSize: true,
         narrow: isSquare(effectiveFormat(eff)),
       });
+  // Rapport pro : en-tête courant de chaque page, et table récapitulative
+  // juste après la page de garde (comme `buildProDocument`).
+  const head: ProHead | undefined = pro ? proHeadTexts(title, eff, lang) : undefined;
+  if (pro && head && eff.proSummary) {
+    const rows = proSummaryRows(pages, eff.showPlace, lang);
+    for (let i = 0; i < rows.length; i += PRO_SUMMARY.perPage) {
+      await push(
+        renderProSummary(
+          rows.slice(i, i + PRO_SUMMARY.perPage),
+          eff,
+          title,
+          i / PRO_SUMMARY.perPage,
+          lang,
+          head,
+        ),
+      );
+    }
+  }
   let numbered = 0;
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
@@ -1705,11 +1884,12 @@ export async function buildAlbumImages(
           i + 1,
           credit,
           pro ? dict(lang).doc.pageOf(i + 1, pages.length) : undefined,
+          head,
         ),
       );
       continue;
     }
-    if (pro) {
+    if (pro && head) {
       await push(
         await renderProPage(
           page.items,
@@ -1721,8 +1901,10 @@ export async function buildAlbumImages(
           lang,
           credit,
           pages.length,
+          head,
         ),
       );
+
       numbered += page.items.length;
       continue;
     }
@@ -1749,7 +1931,8 @@ export async function buildAlbumImages(
   }
 
   // Page de fin, comme le PDF (le rapport pro n'en a pas).
-  if (!pro) await push(renderEndPage(photoEntries, eff, title, lang));
+  if (!pro) await push(renderEndPage(photoEntries, eff, title, lang, coverTitle ?? title));
+
 
   return uris;
 }

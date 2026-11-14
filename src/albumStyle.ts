@@ -112,7 +112,7 @@ export const COMMENT_SCALE: Record<CommentSize, number> = {
 /** Commentaire sur cadre blanc (ou fond clair) : encre quasi noire. */
 export const CAPTION_INK = '#14120f';
 /** Ligne « lieu · date » : 8,5 pt, foncée (c'était 6,5 pt beige, illisible). */
-export const META_SIZE = 8.5;
+export const META_SIZE = 9.5;
 export const META_INK = '#4d473e';
 export const META_INK_DARK = '#e0dbd0';
 

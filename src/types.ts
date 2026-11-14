@@ -143,7 +143,16 @@ export interface ExportOptions {
    * étoile ★ dans le dossier, sinon la première.
    */
   proCoverPhoto: boolean;
+  /** Rapport professionnel : coordonnées GPS à la suite du lieu (défaut non). */
+  proCoords: boolean;
+  /** Rapport professionnel : table récapitulative des photos après la page de garde. */
+  proSummary: boolean;
+  /** Rapport professionnel : auteur ou société, sur la page de garde (vide = absent). */
+  proAuthor: string;
+  /** Rapport professionnel : référence du dossier, page de garde et en-têtes. */
+  proReference: string;
 }
+
 
 /** Critère de tri de la liste des dossiers (écran d'accueil). */
 export type AlbumSort = 'recent' | 'name' | 'size';

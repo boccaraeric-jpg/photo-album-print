@@ -391,6 +391,13 @@ d'entrée** (ils pilotent aussi les libellés) :
   fixe d'origine (feuille de style). En **photo seule** et en **carré côte à côte**, la bande image
   ne garde que la hauteur utile (`zoneNeed`, `--ph` de la page) ; PDF seulement, Skia garde ses cases.
   Les moyennes sont enveloppées dans `.pair` (carré : deux cartes de **même hauteur**, `stretch`).
+  **Cartes empilées qui épousent la photo** (`stackLayout`, `pdf.ts` — moyennes hors carré, photo
+  seule, grande ; PDF seulement) : chaque bande image reçoit la hauteur dont sa photo a besoin, le
+  reste revient à la voisine (une moyenne peut dépasser sa hauteur visée de `STACK_GROW`), et la
+  carte se resserre en largeur sur la photo (`HUG_MIN` au moins) tant que la légende n'y prend pas
+  une ligne de plus. `--ph` et `width` sont alors posés **sur la carte**, plus sur la feuille. La
+  carte de lieu ne dépasse jamais `MAP_VS_PHOTO` × la largeur de la photo (`splitBeside`, deux
+  moteurs). La bande de `commentVAlign` ne vaut que s'il y a un commentaire (`.caption.meta-only`).
   **16 × 16 (carré, `square`)** : hauteur 594, gabarits **propres** et non un simple retranchement —
   `SQUARE_PH` (pdf.ts), moyennes **côte à côte** (`.fmt-square` sur `body` ; Skia `gridFor(..., square)`
   = 2 colonnes × 1 rangée), carte d'une moyenne **sous** la photo (`mapBelow`, sauf photo seule
@@ -443,7 +450,18 @@ d'entrée** (ils pilotent aussi les libellés) :
   réduites d'autant (`proFrameH`), intitulés grandissant moitié moins.
 - **Position d'une page de texte** (`Photo.textVAlign` haut/milieu/bas, réglée dans l'aperçu, les deux
   styles) : défaut milieu en Loisir, haut en pro. `.tv-*` des deux gabarits, `startY` de `renderTextPage`.
+- **Rapport pro, tenue « expertise »** (deux moteurs) : **en-tête courant** de chaque page
+  (`proHeadTexts` : titre · référence, nature et date ; `.head` / `drawProHeader`), **table
+  récapitulative** après la page de garde (`proSummary`, défaut oui — `proSummaryRows`,
+  `PRO_SUMMARY`, `renderProSummary`, non comptée dans « page n/N »), **coordonnées GPS** à la suite
+  du lieu (`proCoords`, défaut **non** — `formatCoords`), **auteur** et **référence** saisis dans
+  Mise en page › Textes (`proAuthor`, `proReference`, bornés par `plainLine`, toujours échappés).
+  Une ligne sans valeur (lieu, description) n'est plus posée ; plus d'aplat gris derrière la photo ;
+  une **grande** fiche remplit sa page (`proLargeFrameH`, 14 pt de sûreté, sans dépasser la photo à
+  pleine largeur). `proEntryHeight(..., coords)` compte la ligne « Lieu » qui passe à la ligne.
+  Dates : « 1er » en français (`frenchFirst`), heure « 9 h 41 ».
 - **Page de garde du rapport pro** : composition centrée (sur-titre « Rapport photographique », titre,
+
   filet, **photo étoilée ★** sinon la 1ʳᵉ — `ExportOptions.proCoverPhoto`, défaut oui —, mentions),
   dans les deux moteurs (`.cover` de `buildProDocument`, branche `pro` de `renderCover`).
   **Date « Détaillée » avec l'heure en pro** : `reportDateFormat` (`dateFormat.ts`, long → full).

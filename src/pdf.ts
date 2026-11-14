@@ -21,11 +21,14 @@ import {
   PRO_LAYOUT,
   proFrameH,
   PRO_SMALL_DT,
+  type AlbumPage,
+  PRO_SUMMARY,
+  proLargeFrameH,
 } from './paginate';
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
 import { richToHtml, stripMarks } from './richText';
-import { metaLine, properPlace } from './placeName';
+import { formatCoords, metaLine, properPlace } from './placeName';
 import {
   buildMapModel,
   buildMiniMapModel,
@@ -159,7 +162,24 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   proTextBold: false,
   proPhotoSize: 'medium',
   proCoverPhoto: true,
+  proCoords: false,
+  proSummary: true,
+  proAuthor: '',
+  proReference: '',
 };
+
+/**
+ * Mention libre du rapport (auteur, référence) : une ligne, sans caractère de
+ * contrôle, longueur bornée. Toujours échappée à l'affichage, jamais posée dans
+ * une feuille de style.
+ */
+function plainLine(value: unknown, max: number): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .trim()
+    .slice(0, max);
+}
 
 /** Garde la valeur si elle fait partie des choix connus, sinon le défaut. */
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
@@ -213,6 +233,11 @@ export function sanitizeExportOptions(raw: unknown): ExportOptions {
     proTextBold: typeof o.proTextBold === 'boolean' ? o.proTextBold : d.proTextBold,
     proPhotoSize: oneOf(o.proPhotoSize, ['small', 'medium', 'large'] as const, d.proPhotoSize),
     proCoverPhoto: typeof o.proCoverPhoto === 'boolean' ? o.proCoverPhoto : d.proCoverPhoto,
+    proCoords: typeof o.proCoords === 'boolean' ? o.proCoords : d.proCoords,
+    proSummary: typeof o.proSummary === 'boolean' ? o.proSummary : d.proSummary,
+    proAuthor: plainLine(o.proAuthor, 60),
+    proReference: plainLine(o.proReference, 40),
+
   };
 }
 
@@ -328,6 +353,8 @@ function figureHtml(
   variant: '' | 'solo' | 'large',
   ctx: PageCtx,
   zone?: Zone,
+  /** Style en ligne de la carte (hauteur de sa bande image, largeur). */
+  cardStyle = '',
 ): string {
   const { lang } = ctx;
   const { photo, src, map } = item;
@@ -337,7 +364,7 @@ function figureHtml(
     : `<span class="missing">${dict(lang).doc.imageUnavailable}</span>`;
   const caption =
     comment || meta
-      ? `<figcaption class="caption">
+      ? `<figcaption class="caption${comment ? '' : ' meta-only'}">
           ${comment ? richToHtml(comment, escapeHtml) : ''}
           ${meta ? `<span class="date">${escapeHtml(meta)}</span>` : ''}
         </figcaption>`
@@ -371,7 +398,7 @@ function figureHtml(
     ? `<a class="edit" href="${editHref(photo.id, ctx.pageIds)}">${ph}${caption}</a>`
     : `${ph}${caption}`;
   return `
-    <figure class="card ${variant}${map ? ' wide' : ''}" id="e-${escapeHtml(photo.id)}">
+    <figure class="card ${variant}${map ? ' wide' : ''}" id="e-${escapeHtml(photo.id)}"${cardStyle ? ` style="${cardStyle}"` : ''}>
       ${body}
     </figure>`;
 }
@@ -399,17 +426,31 @@ function pageHtml(
     h: fit ?? target,
     below: sideBySide,
   }));
-  // Photo seule, ou moyennes côte à côte (carré) : la bande ne garde que la
-  // hauteur dont les photos de la page ont besoin, la carte épouse sa photo et
-  // se recentre sur la page — plus de blanc au-dessus et au-dessous d'une photo
-  // horizontale (retour testeur). Les rangées empilées gardent leur hauteur.
+  // Moyennes côte à côte (carré) : la bande ne garde que la hauteur dont les
+  // photos de la page ont besoin, les deux cartes restant de même hauteur.
   let zoneH = fit ?? target;
-  if (variant === 'solo' || sideBySide) {
+  if (sideBySide) {
     const needs = group.map((it, i) => zoneNeed(it, zones[i]));
     if (needs.every((n) => n > 0)) zoneH = Math.min(zoneH, Math.ceil(Math.max(...needs)));
   }
+  // Cartes empilées (moyennes hors carré, photo seule, grande) : chaque carte
+  // épouse sa photo, en hauteur comme en largeur (`stackLayout`).
+  const stack =
+    sideBySide || (variant === '' && size === 'small')
+      ? null
+      : stackLayout(group, size, variant, ctx);
   const figures = group
-    .map((item, i) => figureHtml(item, variant, pageCtx, zones[i]))
+    .map((item, i) =>
+      stack
+        ? figureHtml(
+            item,
+            variant,
+            pageCtx,
+            { ...zones[i], h: stack[i].h },
+            `--ph: ${stack[i].h}px; width: ${px(stack[i].w)};`,
+          )
+        : figureHtml(item, variant, pageCtx, zones[i]),
+    )
     .join('');
   // En taille « petite », les photos s'organisent en grille 2 colonnes — même
   // seule sur sa page, une petite photo garde sa case. Moyennes : en paire
@@ -423,7 +464,7 @@ function pageHtml(
   const paint = paintAttrs(pageBackground(group.map((it) => it.photo)), ctx.frame);
   const styles = [
     paint.style ? paint.style.slice(8, -1) : '',
-    zoneH !== target ? `--ph: ${zoneH}px;` : '',
+    !stack && zoneH !== target ? `--ph: ${zoneH}px;` : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -554,7 +595,7 @@ const SQUARE_PH: Record<PhotoSize | 'solo', number> = {
   full: 430, // non utilisé (la pleine page a son propre gabarit)
   // Photo seule sur sa page (long commentaire) : nettement plus grande que
   // côte à côte — c'est la raison d'être de cette page.
-  solo: 400,
+  solo: 450,
 };
 
 /**
@@ -568,7 +609,7 @@ const PH_HEIGHTS: Record<PhotoSize | 'solo', number> = {
   medium: 300,
   large: 570,
   full: 570, // non utilisé (la pleine page a son propre gabarit)
-  solo: 440,
+  solo: 620,
 };
 
 /**
@@ -675,7 +716,7 @@ function cardWidth(
 ): number {
   const square = isSquare(format);
   if (variant === 'solo') {
-    return square ? PAGE_WIDTH - 2 * SQUARE_SIDE : Math.min(460, SHEET_INNER);
+    return square ? PAGE_WIDTH - 2 * SQUARE_SIDE : SHEET_INNER;
   }
   if (variant === '' && size === 'small' && !hasMap) return (SHEET_INNER - 12) / 2;
   if (variant === '' && size === 'medium' && square) {
@@ -683,6 +724,123 @@ function cardWidth(
   }
   return SHEET_INNER;
 }
+/**
+ * Lignes estimées de la légende d'une photo dans une carte de largeur `cardW` :
+ * commentaire, puis ligne « lieu · date ».
+ */
+function captionLines(
+  item: Item,
+  cardW: number,
+  size: PhotoSize,
+  sideBySide: boolean,
+  ctx: PageCtx,
+): { comment: number; meta: number } {
+  const { options } = ctx;
+  const box = photoBox(size, options);
+  const spec = TYPE_SPECS[options.typeface];
+  const padH = framePad(options.frame, sideBySide)[1];
+  const { comment, meta } = captionParts(item.photo, ctx);
+  const width = cardW - padH - 8;
+  return {
+    comment: comment
+      ? estimateLines(
+          stripMarks(comment),
+          box.captionSize,
+          spec.caption,
+          spec.captionBold || comment.includes('**'),
+          width,
+        )
+      : 0,
+    meta: meta
+      ? estimateLines(meta, META_SIZE * spec.dateScale, spec.date, spec.captionBold, width)
+      : 0,
+  };
+}
+
+/** Hauteur d'une carte hors photo : marges du cadre + légende (estimée). */
+function cardExtra(
+  item: Item,
+  cardW: number,
+  size: PhotoSize,
+  sideBySide: boolean,
+  ctx: PageCtx,
+): number {
+  const { options } = ctx;
+  const box = photoBox(size, options);
+  const spec = TYPE_SPECS[options.typeface];
+  const padV = framePad(options.frame, sideBySide)[0];
+  const lines = captionLines(item, cardW, size, sideBySide, ctx);
+  if (!lines.comment && !lines.meta) return padV;
+  const metaH = 4 + META_SIZE * spec.dateScale * 1.3;
+  const text = lines.comment * box.captionSize * spec.lineHeight + (lines.meta ? metaH : 0);
+  // La bande de position du commentaire ne vaut que s'il y a un commentaire :
+  // sous une photo qui n'a que sa date, elle laissait un vide (retour testeur).
+  return padV + 10 + Math.max(lines.comment ? box.band : 0, text);
+}
+
+/** Une moyenne empilée peut dépasser sa hauteur visée de ce facteur. */
+const STACK_GROW = 1.3;
+/** Largeur minimale d'une carte qui épouse sa photo (place de la légende). */
+const HUG_MIN = 300;
+
+/**
+ * Cartes **empilées** d'une page (moyennes hors carré, photo seule, grande) :
+ * hauteur de la bande image et largeur de chaque carte.
+ *
+ * - Hauteur : chaque photo reçoit ce dont elle a besoin (`zoneNeed`), dans la
+ *   limite de la place que laissent les légendes ; ce qu'un paysage accompagné
+ *   de sa carte n'utilise pas revient au portrait voisin. Plus de bande vide
+ *   au-dessus et au-dessous d'une photo, plus de portrait réduit à une vignette.
+ * - Largeur : la carte se resserre sur la photo (et sa carte de lieu) tant que
+ *   la légende n'y prend pas une ligne de plus — un portrait ne flotte plus
+ *   dans un cadre blanc de toute la largeur de la page (retour testeur).
+ *
+ * Rend `null` si les proportions d'une photo sont inconnues : gabarit fixe.
+ */
+function stackLayout(
+  group: Item[],
+  size: PhotoSize,
+  variant: '' | 'solo' | 'large',
+  ctx: PageCtx,
+): { h: number; w: number }[] | null {
+  if (group.some((it) => !it.aspect)) return null;
+  const { options } = ctx;
+  const format = effectiveFormat(options);
+  const box = photoBox(size, options);
+  const target = variant === 'large' ? box.large : variant === 'solo' ? box.solo : box.ph;
+  const cap = variant === '' ? Math.round(target * STACK_GROW) : target;
+  const padH = framePad(options.frame, false)[1];
+  const full = group.map((it) => cardWidth(variant, size, format, !!it.map));
+  const fixed = group.map((it, i) => cardExtra(it, full[i], size, false, ctx));
+  const room = pageHeight(format) - 72 - 10;
+  let left = room - 16 * (group.length - 1) - fixed.reduce((a, b) => a + b, 0);
+  const needs = group.map((it, i) => zoneNeed(it, { w: full[i] - padH, h: cap, below: false }));
+  // Partage : les photos les moins hautes d'abord, le reste aux autres.
+  const heights = needs.map(() => 0);
+  const order = needs.map((_, i) => i).sort((a, b) => needs[a] - needs[b]);
+  order.forEach((i, k) => {
+    const h = Math.max(MIN_PHOTO_H, Math.floor(Math.min(needs[i], left / (order.length - k))));
+    heights[i] = h;
+    left -= h;
+  });
+  return group.map((it, i) => {
+    const h = heights[i];
+    const zw = full[i] - padH;
+    const aspect = it.aspect!;
+    let blockW = Math.min(zw, h * aspect);
+    if (it.map) {
+      const s = splitBeside(zw, h, aspect, MAP_GAP);
+      blockW = s.photoW + MAP_GAP + s.mapW;
+    }
+    const hug = Math.max(HUG_MIN, Math.ceil(blockW) + padH);
+    if (hug >= full[i]) return { h, w: full[i] };
+    const wide = captionLines(it, full[i], size, false, ctx);
+    const tight = captionLines(it, hug, size, false, ctx);
+    const fits = tight.comment === wide.comment && tight.meta <= 1;
+    return { h, w: fits ? hug : full[i] };
+  });
+}
+
 /** Plus petite hauteur de photo consentie à une légende très longue. */
 const MIN_PHOTO_H = 90;
 
@@ -702,26 +860,12 @@ function fitPhotoHeight(
   const { options } = ctx;
   const box = photoBox(size, options);
   const target = variant === 'large' ? box.large : variant === 'solo' ? box.solo : box.ph;
-  const spec = TYPE_SPECS[options.typeface];
   const format = effectiveFormat(options);
   const grid = variant === '' && size === 'small';
   const sideBySide = variant === '' && size === 'medium' && isSquare(format);
-  // Côte à côte en page carrée : cadre resserré (`SQUARE_CARD_PAD`).
-  const [padV, padH] = framePad(options.frame, sideBySide);
-  const metaH = 4 + META_SIZE * spec.dateScale * 1.3;
-
-  // Hauteur d'une carte hors photo : marges du cadre + légende.
-  const fixed = group.map((it) => {
-    const cardW = cardWidth(variant, size, format, !!it.map);
-    const { comment, meta } = captionParts(it.photo, ctx);
-    if (!comment && !meta) return padV;
-    const bold = spec.captionBold || comment.includes('**');
-    const lines = comment
-      ? estimateLines(stripMarks(comment), box.captionSize, spec.caption, bold, cardW - padH - 8)
-      : 0;
-    const text = lines * box.captionSize * spec.lineHeight + (meta ? metaH : 0);
-    return padV + 10 + Math.max(box.band, text);
-  });
+  const fixed = group.map((it) =>
+    cardExtra(it, cardWidth(variant, size, format, !!it.map), size, sideBySide, ctx),
+  );
 
   // Rangées de la page : hauteur fixe de chacune, écarts entre elles.
   let rows: number[];
@@ -789,7 +933,8 @@ function sizeCss(size: PhotoSize, options: ExportOptions): string {
       ? `${z} .caption {
     min-height: ${band}px; display: flex; flex-direction: column;
     justify-content: ${vAlign === 'middle' ? 'center' : 'flex-end'};
-  }`
+  }
+  ${z} .caption.meta-only { min-height: 0; }`
       : ''
   }`;
 }
@@ -877,8 +1022,9 @@ function buildStyles(options: ExportOptions): string {
   .sheet.painted { height: ${pageH}px; overflow: hidden; background: var(--bg); color: var(--ink); }
   .footer {
     display: flex; justify-content: center; align-items: center;
-    margin: 6px 4px 0; font-size: 10px; letter-spacing: 2.5px;
-    text-transform: uppercase; color: var(--muted);
+    margin: 6px 4px 0; font-size: 11px; letter-spacing: 0.5px;
+    font-family: ${fam(spec.date)}; font-weight: ${regular(spec.date)};
+    color: var(--muted);
   }
   /* Aperçu : chaque photo est un lien interne (comclic-edit://) que l'app
      intercepte — aucun script dans la page. Absent du PDF. */
@@ -949,6 +1095,8 @@ function buildStyles(options: ExportOptions): string {
     display: flex; flex-direction: column; justify-content: center;
   }
   .sheet.photos > .card:last-of-type, .pair > .card:last-of-type { margin-bottom: 0; }
+  /* Carte resserrée sur sa photo (largeur en ligne, cf. stackLayout) : centrée. */
+  .sheet.photos > .card, .pair > .card { margin-left: auto; margin-right: auto; max-width: 100%; }
   .sheet.photos .footer { position: absolute; left: 0; right: 0; bottom: 22px; margin: 0; }
   .card.solo, .card.large { margin-left: auto; margin-right: auto; width: 100%; }
   /* Grille des petites : une rangée incomplète se centre aussi. */
@@ -992,7 +1140,6 @@ function buildStyles(options: ExportOptions): string {
     width: auto; height: auto; max-width: 100%; max-height: 100%;
     display: block; border-radius: inherit;
   }
-  .card.solo { max-width: 460px; }
   .card.solo .ph img { object-fit: contain; }
   .card.large .ph img { object-fit: contain; }
   .missing { color: var(--muted); font-style: italic; font-size: 13px; }
@@ -1245,7 +1392,8 @@ export async function buildAlbumHtml(
       picks.length,
       seedOf(picks.map((p) => p.id)),
       pageH,
-      SCATTER_TITLE.top + head.height + 14,
+      // Page carrée : un peu plus d'air entre le titre et les premières photos.
+      SCATTER_TITLE.top + head.height + (isSquare(format) ? 24 : 14),
     );
     const polas = picks
       .map((p, i) => {
@@ -1359,7 +1507,10 @@ export async function buildAlbumHtml(
         ${pages}
         <section class="sheet end">
           <p class="orn">✦</p>
+          <!-- coverTitle : déjà passé par escapeHtml (cf. sa déclaration). -->
+          <h2>${coverTitle}</h2>
           <p>${escapeHtml(subtitle)}</p>
+
           <p class="credit">${creditHtml()}</p>
         </section>
       </body>
@@ -1496,6 +1647,50 @@ function proScale(options: ExportOptions): number {
   return PRO_TEXT_SCALE[options.proTextSize ?? 'normal'];
 }
 
+/**
+ * Lignes de la table récapitulative du rapport pro : n°, date et heure, lieu,
+ * page — communes au PDF et aux images.
+ */
+export function proSummaryRows(pages: AlbumPage[], showPlace: boolean, lang: Lang): string[][] {
+  const rows: string[][] = [];
+  pages.forEach((page, i) => {
+    if (page.type === 'text') return;
+    for (const p of page.items) {
+      rows.push([
+        String(rows.length + 1),
+        formatPhotoDate(photoDate(p), 'shortTime', lang),
+        (showPlace ? properPlace(p.place ?? '') : '') || '—',
+        String(i + 1),
+      ]);
+    }
+  });
+  return rows;
+}
+
+/** En-tête courant d'une page du rapport pro : titre et référence, nature et date. */
+export function proHeadTexts(
+  title: string,
+  options: ExportOptions,
+  lang: Lang,
+): { left: string; right: string; today: string } {
+  const D = dict(lang).doc;
+  const today = new Date().toLocaleDateString(localeTag(lang), {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  return {
+    left: [title.replace(/\s*\n\s*/g, ' '), (options.proReference ?? '').trim()]
+      .filter(Boolean)
+      .join(' · '),
+    right: `${D.reportShort} · ${D.establishedOn.toLowerCase()} ${today}`,
+    today,
+  };
+}
+
+/** Largeur utile d'une fiche pro pleine largeur (595 moins les marges de 56). */
+const PRO_COL_W = PAGE_FORMATS.a4.print.width - 112;
+
 /** Lignes fixes d'une fiche pro (lieu, date) selon les réglages. */
 function proRows(options: ExportOptions): number {
   return (options.showPlace ? 1 : 0) + (options.dateFormat === 'none' ? 0 : 1);
@@ -1510,6 +1705,10 @@ function proEntryHtml(
   interactive = false,
   /** Taille de la fiche (celle de sa page). */
   size: ProPhotoSize = 'medium',
+  /** Hauteur de vignette propre à la fiche (grande : remplit la page). */
+  frameH?: number,
+  /** Coordonnées GPS à la suite du lieu. */
+  coords = false,
 ): string {
   const { photo, src } = item;
   const D = dict(lang).doc;
@@ -1519,18 +1718,21 @@ function proEntryHtml(
       ? ''
       : formatPhotoDate(photoDate(photo), dateFormat, lang) || '—';
   // Comme la date, « Lieu » disparaît en entier quand l'option est décochée.
-  const place = showPlace ? properPlace(photo.place ?? '') || '—' : '';
-  const desc = photo.comment.trim() || '—';
+  // Une ligne sans valeur n'est pas posée : « Lieu — » et « Description — »
+  // n'apprenaient rien et alourdissaient la fiche (retour testeur).
+  const gps = showPlace && coords && photo.coords ? formatCoords(photo.coords, lang) : '';
+  const place = showPlace ? [properPlace(photo.place ?? ''), gps].filter(Boolean).join(' · ') : '';
+  const desc = photo.comment.trim();
   const img = src
     ? `<img src="${src}" />`
     : `<span class="missing">${D.imageUnavailable}</span>`;
   const body = `
       <div class="num">${D.photoNo(number)}</div>
-      <div class="frame">${img}</div>
+      <div class="frame"${frameH ? ` style="height: ${frameH}px;"` : ''}>${img}</div>
       <dl class="meta">
         ${place ? proMeta(D.place, place) : ''}
         ${date ? proMeta(D.date, date, 'date') : ''}
-        ${proMeta(D.description, desc, '', true)}
+        ${desc ? proMeta(D.description, desc, '', true) : ''}
       </dl>`;
   return `
     <article class="entry sz-${size}" id="e-${escapeHtml(photo.id)}">
@@ -1542,11 +1744,18 @@ function proEntryHtml(
  * Page de texte seule du rapport : sa propre page, texte en haut par défaut
  * (présentation « document »), au milieu ou en bas selon `textVAlign`.
  */
-function proTextPageHtml(item: Photo, pageLabel: string, interactive: boolean, last: string): string {
+function proTextPageHtml(
+  item: Photo,
+  pageLabel: string,
+  interactive: boolean,
+  last: string,
+  head = '',
+): string {
   const text = escapeHtml(item.comment.trim()).replace(/\n/g, '<br/>');
   const body = `<div class="pro-text-body">${text}</div>`;
   return `
     <section class="sheet pro-text tv-${item.textVAlign ?? 'top'}" id="e-${escapeHtml(item.id)}">
+      ${head}
       ${interactive ? `<a class="edit" href="${editHref(item.id)}">${body}</a>` : body}
       ${last}
       <p class="footer">${pageLabel}</p>
@@ -1586,9 +1795,26 @@ function buildProDocument(
     scale,
     proRows(options),
     options.proPhotoSize,
+    options.proCoords,
   );
   const byId = new Map(items.map((it) => [it.photo.id, it]));
   const credit = `<p class="credit">${creditHtml()}</p>`;
+  const D = dict(lang).doc;
+  // En-tête courant : une page sortie du rapport reste identifiable (titre,
+  // référence du dossier, date d'établissement).
+  const reference = options.proReference.trim();
+  const author = options.proAuthor.trim();
+  const headTexts = proHeadTexts(title, options, lang);
+  const today = headTexts.today;
+  const head = `<p class="head"><span>${escapeHtml(headTexts.left)}</span><span>${escapeHtml(headTexts.right)}</span></p>`;
+  const rows = proRows(options);
+  // Grande fiche : la vignette remplit la page, sans dépasser ce que la photo
+  // occupe à pleine largeur (pas de vide au-dessus d'un paysage).
+  const largeFrameH = (p: Photo): number => {
+    const maxH = proLargeFrameH(p, scale, rows, options.proCoords);
+    const aspect = byId.get(p.id)?.aspect;
+    return aspect ? Math.min(maxH, Math.ceil(PRO_COL_W / aspect)) : maxH;
+  };
   // Les photos sont numérotées dans l'ordre ; la mention de l'app se pose en
   // pied de la dernière page.
   let photoNo = 0;
@@ -1597,7 +1823,7 @@ function buildProDocument(
       // Compteur « page 2/4 » en bas à droite (la page de garde n'est pas comptée).
       const no = escapeHtml(dict(lang).doc.pageOf(i + 1, pages.length));
       const last = i === pages.length - 1 ? credit : '';
-      if (page.type === 'text') return proTextPageHtml(page.item, no, interactive, last);
+      if (page.type === 'text') return proTextPageHtml(page.item, no, interactive, last, head);
       const entries = page.items
         .map((p) =>
           proEntryHtml(
@@ -1608,28 +1834,51 @@ function buildProDocument(
             lang,
             interactive,
             page.size as ProPhotoSize,
+            page.size === 'large' ? largeFrameH(p) : undefined,
+            options.proCoords,
           ),
         )
         .join('');
       return `
     <section class="sheet pro-page sz-${page.size}">
+      ${head}
       ${entries}
       ${last}
       <p class="footer">${no}</p>
     </section>`;
     })
     .join('');
-  const today = new Date().toLocaleDateString(localeTag(lang), {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+
+  // Table récapitulative (après la page de garde) : n°, date, lieu et page de
+  // chaque photo, `PRO_SUMMARY.perPage` lignes par page.
+  const S = PRO_SUMMARY;
+  const summaryRows = proSummaryRows(pages, showPlace, lang).map(
+    (cells) => `<tr>${cells.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`,
+  );
+
+  let summary = '';
+  if (options.proSummary) {
+    for (let i = 0; i < summaryRows.length; i += S.perPage) {
+      summary += `
+    <section class="sheet pro-summary">
+      ${head}
+      <h2>${escapeHtml(D.summaryTitle)}</h2>
+      <table class="sum">
+        <thead><tr><th>${escapeHtml(D.summaryNo)}</th><th>${escapeHtml(D.date)}</th><th>${escapeHtml(D.place)}</th><th>${escapeHtml(D.summaryPage)}</th></tr></thead>
+        <tbody>${summaryRows.slice(i, i + S.perPage).join('')}</tbody>
+      </table>
+    </section>`;
+    }
+  }
+  const photoEntries = items.filter((it) => it.photo.kind !== 'text').map((it) => it.photo);
+  const period = photoEntries.length ? formatRange(photoEntries, lang) : '';
 
   // Encadrement des photos : seule la caisse change, la hauteur de la vignette
-  // ne dépend que de la taille (et du corps du texte).
+  // ne dépend que de la taille (et du corps du texte). Jamais d'aplat derrière
+  // la photo : un portrait y sortait flanqué de deux bandes grises.
   const frameCss = {
-    card: 'background: #f8f9fa; border: 0; border-radius: 6px;',
-    border: 'background: #f8f9fa; border: 1px solid #d7dbe0; border-radius: 4px;',
+    card: 'background: transparent; border: 0; border-radius: 6px;',
+    border: 'background: transparent; border: 1px solid #d7dbe0; border-radius: 4px;',
     polaroid:
       'background: #ffffff; border: 1px solid #e5e7eb; border-radius: 2px; padding: 14px 14px 20px;',
     none: 'background: transparent; border: 0; border-radius: 0;',
@@ -1675,6 +1924,25 @@ function buildProDocument(
     }
     .cover .facts { margin: 0; font-size: 13px; color: #14181f; line-height: 1.7; }
     .cover .facts span { color: #6b7280; }
+    /* En-tête courant des pages : titre et référence, nature et date du rapport. */
+    .head { position: absolute; left: 56px; right: 56px; top: 14px; margin: 0;
+      display: flex; justify-content: space-between; gap: 16px;
+      padding-bottom: 5px; border-bottom: 1px solid #e5e7eb;
+      font-size: 8.5px; letter-spacing: 0.6px; color: #6b7280; text-align: left; }
+    .head span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .head span:last-child { flex: none; }
+    /* Table récapitulative. */
+    .pro-summary { height: ${L.pageH}px; padding: ${S.top}px 56px ${L.padBottom}px; }
+    .pro-summary h2 { margin: 0 0 ${S.titleGap}px; font-size: ${S.titleSize}px; font-weight: 700;
+      color: #111827; line-height: 1.2; }
+    .sum { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: ${S.size}px; }
+    .sum th { text-align: left; font-size: ${S.headSize}px; letter-spacing: 1px; font-weight: 500;
+      text-transform: uppercase; color: #6b7280; height: ${S.rowH}px; padding: 0 6px 0 0;
+      border-bottom: 1px solid #111827; }
+    .sum td { height: ${S.rowH}px; padding: 0 6px 0 0; border-bottom: 1px solid #f1f2f4;
+      color: #14181f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    ${S.cols.map((c, i) => `.sum th:nth-child(${i + 1}) { width: ${c * 100}%; }`).join(' ')}
+    .sum th:last-child, .sum td:last-child { text-align: right; padding-right: 0; }
     /* Page de fiches : depuis le haut. Les petites se posent deux par ligne
        (inline-block) ; lignes centrées, pour qu'une petite seule ne reste pas
        calée à gauche. */
@@ -1689,7 +1957,8 @@ function buildProDocument(
     .sz-small .frame { height: ${proFrameH('small', scale)}px; }
     .sz-medium .frame { height: ${proFrameH('medium', scale)}px; }
     .sz-large .frame { height: ${proFrameH('large', scale)}px; }
-    .frame img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+    .frame img { max-width: 100%; max-height: 100%; object-fit: contain; display: block;
+      border-radius: ${options.frame === 'card' ? 6 : 0}px; }
     .missing { color: #9ca3af; font-style: italic; }
     .meta { margin: ${L.metaTop}px 0 0; }
     .meta .row { display: flex; gap: 12px; padding: 5px 0; border-bottom: 1px solid #f1f2f4; }
@@ -1726,7 +1995,15 @@ function buildProDocument(
         : ''
     }`;
 
-  const D = dict(lang).doc;
+  const facts = [
+    `${escapeHtml(D.establishedOn)} ${escapeHtml(today)}`,
+    author ? `<span>${escapeHtml(D.author)} :</span> ${escapeHtml(author)}` : '',
+    reference ? `<span>${escapeHtml(D.reference)} :</span> ${escapeHtml(reference)}` : '',
+    period ? `<span>${escapeHtml(D.period)} :</span> ${escapeHtml(period)}` : '',
+    `<span>${escapeHtml(D.photoCountLabel)} : ${photoTotal}</span>`,
+  ]
+    .filter(Boolean)
+    .join('<br/>');
   return `<!DOCTYPE html>
     <html lang="${lang}">
       <head>
@@ -1741,10 +2018,11 @@ function buildProDocument(
           <h1>${escapeHtml(title)}</h1>
           <div class="rule"></div>
           ${coverItem ? `<div class="cover-photo"><img src="${coverItem.src}" /></div>` : ''}
-          <p class="facts">${escapeHtml(D.establishedOn)} ${escapeHtml(today)}<br/>
-            <span>${escapeHtml(D.photoCountLabel)} : ${photoTotal}</span></p>
+          <p class="facts">${facts}</p>
         </section>
+        ${summary}
         ${sheets}
+
       </body>
     </html>`;
 }

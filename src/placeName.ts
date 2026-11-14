@@ -21,7 +21,9 @@ const PARTICLES = new Set([
 ]);
 
 /** Suite de lettres (accents compris), sans `\p{…}` — non pris en charge partout par Hermes. */
-const WORD = /[A-Za-zÀ-ÖØ-öø-ÿŒœŠšŽžŸ]+/g;
+// Latin étendu compris (U+0100 – U+024F, U+1E00 – U+1EFF) : sans lui « Mellieħa »
+// était coupé à son « ħ » et ressortait « MellieħA ».
+const WORD = /[A-Za-zÀ-ÖØ-öø-ÿĀ-ɏḀ-ỿ]+/g;
 
 /**
  * Nom de lieu avec ses majuscules : première lettre de chaque mot en capitale,
@@ -48,7 +50,20 @@ export function properPlace(place: string): string {
  * (style de l'album). En anglais la date garde ses majuscules — les jours et
  * les mois y sont des noms propres.
  */
+/**
+ * Coordonnées GPS lisibles : « 32,7607° N, 16,9595° O » (décimale et points
+ * cardinaux de la langue). Quatre décimales ≈ 10 m.
+ */
+export function formatCoords(coords: { lat: number; lon: number }, lang: Lang): string {
+  const part = (v: number, pos: string, neg: string) => {
+    const n = Math.abs(v).toFixed(4);
+    return `${lang === 'fr' ? n.replace('.', ',') : n}° ${v >= 0 ? pos : neg}`;
+  };
+  return `${part(coords.lat, 'N', 'S')}, ${part(coords.lon, 'E', lang === 'fr' ? 'O' : 'W')}`;
+}
+
 export function metaLine(place: string | undefined, date: string, lang: Lang): string {
+
   const shownDate = lang === 'en' ? date : date.toLowerCase();
   return [place ? properPlace(place) : '', shownDate].filter(Boolean).join(' · ');
 }
