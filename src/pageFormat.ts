@@ -83,6 +83,10 @@ const PRINT_SAFETY = 0.998;
  *   la page à sa vraie taille.
  * - Ailleurs (Android, contrôle sous Chrome) : la page est composée à sa
  *   largeur réelle, le zoom est le simple rapport des largeurs.
+ *
+ * L'**A4 est concerné comme les autres** sous iOS (zoom ≈ 1,246 et non 1) :
+ * mesuré le 14/11/2026, sa page était composée sur 743 px, les feuilles de
+ * 842 px de haut n'en couvraient que les 4/5 et tout sortait à 80 %.
  */
 export function printZoom(format: PageFormat, ios: boolean): number {
   const { zoom, print } = PAGE_FORMATS[format];

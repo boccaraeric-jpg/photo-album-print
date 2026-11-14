@@ -380,8 +380,17 @@ d'entrée** (ils pilotent aussi les libellés) :
   (`floor(1,25 × largeur) / 595`, × 0,998 de sûreté contre la page blanche) ; Android garde le rapport
   simple. **Chrome ne reproduit pas ce comportement** : pour contrôler sur PC, générer le HTML en
   variante iOS et remplacer `@page { size }` par `566px 566px` (16 × 16) — l'ancien code y redonne
-  bien le défaut. ⚠️ L'**A4** (album et rapport pro) n'a pas ce zoom (`zoom === 1` ⇒ rien) : il subit
-  très probablement la même réduction à 80 %, **à mesurer sur un PDF A4 réel avant d'y toucher**.
+  bien le défaut (A4 : `743px 1052px` ; 16 × 21 : `566px 744px`). L'**A4** (album **et rapport pro**)
+  reçoit le même zoom sous iOS (≈ 1,246, `printScale('a4')` dans `buildProDocument`) : mesuré le
+  14/11/2026, ses feuilles ne couvraient que les 4/5 de la hauteur, couverture décalée, textes à 80 %.
+  Correctif vérifié en simulation Chrome seulement — à recontrôler sur un PDF A4 sorti d'un iPhone.
+  **Photo + carte accordées** (`splitBeside` / `splitBelow`, `albumMap.ts`, communs aux deux
+  moteurs) : dès que les proportions de la photo sont connues (`Item.aspect`, lu sur le JPEG produit
+  par `readPrintImage` ; Skia les a d'office), photo et carte ont la **même hauteur** côte à côte et
+  le bloc se centre — carte entre `MAP_SHARE_MIN` et `MAP_SHARE`. Proportions inconnues : partage
+  fixe d'origine (feuille de style). En **photo seule** et en **carré côte à côte**, la bande image
+  ne garde que la hauteur utile (`zoneNeed`, `--ph` de la page) ; PDF seulement, Skia garde ses cases.
+  Les moyennes sont enveloppées dans `.pair` (carré : deux cartes de **même hauteur**, `stretch`).
   **16 × 16 (carré, `square`)** : hauteur 594, gabarits **propres** et non un simple retranchement —
   `SQUARE_PH` (pdf.ts), moyennes **côte à côte** (`.fmt-square` sur `body` ; Skia `gridFor(..., square)`
   = 2 colonnes × 1 rangée), carte d'une moyenne **sous** la photo (`mapBelow`, sauf photo seule

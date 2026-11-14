@@ -94,7 +94,15 @@ function getPixelSize(uri: string): Promise<{ width: number; height: number }> {
 // Les data URI d'un même fichier reviennent identiques (aperçu re-rendu, puis
 // PDF) : on mémorise le base64 déjà calculé pour ne pas recompresser à chaque
 // fois. Cache borné : au-delà, on vide (les albums sont petits, la mémoire prime).
-const printCache = new Map<string, string>();
+const printCache = new Map<string, PrintImage>();
+
+/** Image prête à intégrer : base64 JPEG et dimensions du JPEG produit. */
+export interface PrintImage {
+  base64: string;
+  /** Pixels de l'image telle qu'elle sera affichée (orientation appliquée) ; 0 si inconnus. */
+  width: number;
+  height: number;
+}
 
 /**
  * Lit une image et la retourne **redimensionnée + recompressée** en base64 JPEG,
@@ -114,7 +122,21 @@ export async function readPrintBase64(
   maxEdge = 1600,
   quality = 0.72,
 ): Promise<string> {
-  const key = `${uri}|${maxEdge}|${quality}`;
+  return (await readPrintImage(uri, maxEdge, quality)).base64;
+}
+
+/**
+ * Comme `readPrintBase64`, avec les dimensions du JPEG produit : la mise en
+ * page s'en sert pour accorder photo et carte (`splitBeside` / `splitBelow`).
+ * Dimensions lues sur le résultat du manipulateur, pas sur le fichier source —
+ * c'est l'image réellement posée dans la page, orientation EXIF appliquée.
+ */
+export async function readPrintImage(
+  uri: string,
+  maxEdge = 1600,
+  quality = 0.72,
+): Promise<PrintImage> {
+  const key =`${uri}|${maxEdge}|${quality}`;
   const cached = printCache.get(key);
   if (cached !== undefined) return cached;
 
@@ -139,11 +161,15 @@ export async function readPrintBase64(
     format: ImageManipulator.SaveFormat.JPEG,
     base64: true,
   });
-  const b64 = res.base64 ?? '';
+  const image: PrintImage = {
+    base64: res.base64 ?? '',
+    width: res.width || 0,
+    height: res.height || 0,
+  };
 
   if (printCache.size > 60) printCache.clear();
-  printCache.set(key, b64);
-  return b64;
+  printCache.set(key, image);
+  return image;
 }
 
 /**

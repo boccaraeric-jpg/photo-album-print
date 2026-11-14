@@ -742,6 +742,55 @@ export const MAP_GAP = 6;
  * la place de la photo : à 44 % la carte dominait (retour testeur).
  */
 export const MAP_SHARE_BELOW = 0.35;
+/**
+ * Part **minimale** laissée à la carte quand les proportions de la photo sont
+ * connues : la photo prend la place dont elle a besoin, la carte le reste,
+ * entre ce minimum et la part d'usage (`MAP_SHARE`, `MAP_SHARE_BELOW`).
+ */
+export const MAP_SHARE_MIN = 0.34;
+/** Même minimum pour la carte posée sous la photo (bande plus basse sous un portrait). */
+export const MAP_SHARE_BELOW_MIN = 0.28;
+
+/**
+ * Photo et carte **côte à côte** dans une zone `w × h` : largeurs et hauteur
+ * commune, le bloc se centrant dans la zone. `aspect` = largeur / hauteur de
+ * la photo ; inconnu (0), partage fixe d'origine sur toute la hauteur.
+ *
+ * La photo et la carte ont la **même hauteur** : avec le partage fixe, une
+ * photo horizontale flottait à mi-hauteur d'une carte bien plus haute qu'elle,
+ * et un portrait se perdait au milieu de sa colonne, loin de sa carte (retour
+ * testeur). Commun aux deux moteurs.
+ */
+export function splitBeside(
+  w: number,
+  h: number,
+  aspect: number,
+  gap: number,
+): { photoW: number; mapW: number; h: number } {
+  const room = w - gap;
+  if (!(aspect > 0)) return { photoW: room * (1 - MAP_SHARE), mapW: room * MAP_SHARE, h };
+  const photoW = Math.min(h * aspect, room * (1 - MAP_SHARE_MIN));
+  return { photoW, mapW: Math.min(room - photoW, room * MAP_SHARE), h: photoW / aspect };
+}
+
+/**
+ * Carte **sous** la photo dans une zone `w × h` (page carrée, moyennes côte à
+ * côte) : hauteurs de la photo et de la carte, le bloc se centrant dans la
+ * zone. Une photo horizontale ne prend que sa hauteur réelle (plus de blanc
+ * entre elle et la carte) ; un portrait monte jusqu'à ne laisser à la carte
+ * que `MAP_SHARE_BELOW_MIN` — à 35 % il sortait bien plus petit que la photo voisine.
+ */
+export function splitBelow(
+  w: number,
+  h: number,
+  aspect: number,
+  gap: number,
+): { photoH: number; mapH: number } {
+  const room = h - gap;
+  if (!(aspect > 0)) return { photoH: room * (1 - MAP_SHARE_BELOW), mapH: room * MAP_SHARE_BELOW };
+  const photoH = Math.min(w / aspect, room * (1 - MAP_SHARE_BELOW_MIN));
+  return { photoH, mapH: Math.min(room - photoH, room * MAP_SHARE_BELOW) };
+}
 /** Médaillon de carte posé sur une photo pleine page (points A4). */
 export const FULL_MAP = { w: 168, h: 112, margin: 18, border: 4 };
 

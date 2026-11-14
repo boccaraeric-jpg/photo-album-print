@@ -9,7 +9,7 @@ import type {
   PhotoSize,
   ProPhotoSize,
 } from './types';
-import { readPrintBase64 } from './photoFiles';
+import { readPrintBase64, readPrintImage } from './photoFiles';
 import { fileDateStamp, formatPhotoDate, photoDate, reportDateFormat } from './dateFormat';
 import { dict, localeTag, SUPPORTED, type Lang } from './i18n';
 import {
@@ -33,6 +33,8 @@ import {
   MAP_GAP,
   MAP_SHARE,
   MAP_SHARE_BELOW,
+  splitBelow,
+  splitBeside,
   mapPhotoIds,
   MINI_H,
   MINI_W,
@@ -252,6 +254,34 @@ interface Item {
   src: string;
   /** Carte à côté de la photo (HTML prêt à poser), vide sinon. */
   map?: string;
+  /** Largeur / hauteur de l'image posée ; absent si inconnu. */
+  aspect?: number;
+}
+
+/**
+ * Bande image d'une photo dans sa page : dimensions de la zone, et placement
+ * de la carte (sous la photo en page carrée côte à côte, à côté sinon).
+ */
+interface Zone {
+  w: number;
+  h: number;
+  below: boolean;
+}
+
+const px = (v: number) => `${Math.round(v * 10) / 10}px`;
+
+/**
+ * Hauteur que la bande image d'une photo occupe réellement dans sa zone ; 0 si
+ * les proportions de la photo sont inconnues.
+ */
+function zoneNeed(item: Item, zone: Zone): number {
+  if (!item.aspect) return 0;
+  if (!item.map) return Math.min(zone.h, zone.w / item.aspect);
+  if (zone.below) {
+    const s = splitBelow(zone.w, zone.h, item.aspect, MAP_GAP);
+    return s.photoH + MAP_GAP + s.mapH;
+  }
+  return splitBeside(zone.w, zone.h, item.aspect, MAP_GAP).h;
 }
 
 /** Options de rendu d'une page photo (familial). */
@@ -293,7 +323,12 @@ function captionParts(photo: Photo, ctx: PageCtx): { comment: string; meta: stri
   return { comment: photo.comment.trim(), meta: metaLine(place, date, ctx.lang) };
 }
 
-function figureHtml(item: Item, variant: '' | 'solo' | 'large', ctx: PageCtx): string {
+function figureHtml(
+  item: Item,
+  variant: '' | 'solo' | 'large',
+  ctx: PageCtx,
+  zone?: Zone,
+): string {
   const { lang } = ctx;
   const { photo, src, map } = item;
   const { comment, meta } = captionParts(photo, ctx);
@@ -308,8 +343,29 @@ function figureHtml(item: Item, variant: '' | 'solo' | 'large', ctx: PageCtx): s
         </figcaption>`
       : '';
   // Carte du lieu : partage la bande de la photo (photo à gauche, carte à droite).
+  // Proportions connues : photo et carte dimensionnées l'une sur l'autre
+  // (`splitBelow` / `splitBeside`, communs à Skia), le bloc centré dans la
+  // bande. Sinon, partage fixe de la feuille de style.
+  let split = ['', '', ''];
+  if (map && zone && item.aspect) {
+    if (zone.below) {
+      const s = splitBelow(zone.w, zone.h, item.aspect, MAP_GAP);
+      split = [
+        '',
+        ` style="flex: none; width: 100%; height: ${px(s.photoH)};"`,
+        ` style="flex: none; width: 100%; height: ${px(s.mapH)};"`,
+      ];
+    } else {
+      const s = splitBeside(zone.w, zone.h, item.aspect, MAP_GAP);
+      split = [
+        ' style="align-items: center;"',
+        ` style="flex: none; width: ${px(s.photoW)}; height: ${px(s.h)};"`,
+        ` style="flex: none; width: ${px(s.mapW)}; height: ${px(s.h)};"`,
+      ];
+    }
+  }
   const ph = map
-    ? `<div class="ph split"><div class="ph-photo">${img}</div><div class="ph-map">${map}</div></div>`
+    ? `<div class="ph split"${split[0]}><div class="ph-photo"${split[1]}>${img}</div><div class="ph-map"${split[2]}>${map}</div></div>`
     : `<div class="ph">${img}</div>`;
   const body = ctx.interactive
     ? `<a class="edit" href="${editHref(photo.id, ctx.pageIds)}">${ph}${caption}</a>`
@@ -332,16 +388,43 @@ function pageHtml(
   // (agrandie) seulement si la pagination l'a voulu (cf. `AlbumPage.solo`).
   const variant = perPage === 1 ? 'large' : solo ? 'solo' : '';
   const pageCtx = { ...ctx, pageIds: group.map((it) => it.photo.id) };
+  // Légendes longues : la photo cède la place (jamais de contenu hors page).
+  const box = photoBox(size, ctx.options);
+  const target = variant === 'large' ? box.large : variant === 'solo' ? box.solo : box.ph;
+  const fit = fitPhotoHeight(group, size, variant, ctx);
+  const format = effectiveFormat(ctx.options);
+  const sideBySide = variant === '' && size === 'medium' && isSquare(format);
+  const zones = group.map((it): Zone => ({
+    w: cardWidth(variant, size, format, !!it.map) - framePad(ctx.options.frame, sideBySide)[1],
+    h: fit ?? target,
+    below: sideBySide,
+  }));
+  // Photo seule, ou moyennes côte à côte (carré) : la bande ne garde que la
+  // hauteur dont les photos de la page ont besoin, la carte épouse sa photo et
+  // se recentre sur la page — plus de blanc au-dessus et au-dessous d'une photo
+  // horizontale (retour testeur). Les rangées empilées gardent leur hauteur.
+  let zoneH = fit ?? target;
+  if (variant === 'solo' || sideBySide) {
+    const needs = group.map((it, i) => zoneNeed(it, zones[i]));
+    if (needs.every((n) => n > 0)) zoneH = Math.min(zoneH, Math.ceil(Math.max(...needs)));
+  }
   const figures = group
-    .map((item) => figureHtml(item, variant, pageCtx))
+    .map((item, i) => figureHtml(item, variant, pageCtx, zones[i]))
     .join('');
   // En taille « petite », les photos s'organisent en grille 2 colonnes — même
-  // seule sur sa page, une petite photo garde sa case.
-  const body = perPage === 4 && !solo ? `<div class="grid4">${figures}</div>` : figures;
+  // seule sur sa page, une petite photo garde sa case. Moyennes : en paire
+  // (empilées, ou côte à côte et de même hauteur en page carrée).
+  const body =
+    perPage === 4 && !solo
+      ? `<div class="grid4">${figures}</div>`
+      : perPage === 2 && !solo
+        ? `<div class="pair">${figures}</div>`
+        : figures;
   const paint = paintAttrs(pageBackground(group.map((it) => it.photo)), ctx.frame);
-  // Légendes longues : la photo cède la place (jamais de contenu hors page).
-  const fit = fitPhotoHeight(group, size, variant, ctx);
-  const styles = [paint.style ? paint.style.slice(8, -1) : '', fit ? `--ph: ${fit}px;` : '']
+  const styles = [
+    paint.style ? paint.style.slice(8, -1) : '',
+    zoneH !== target ? `--ph: ${zoneH}px;` : '',
+  ]
     .filter(Boolean)
     .join(' ');
   return `
@@ -576,6 +659,30 @@ const SQUARE_CARD_PAD: Record<ExportOptions['frame'], string> = {
 
 /** Largeur utile d'une page photo (595 moins les marges de `.sheet`). */
 const SHEET_INNER = PAGE_WIDTH - 2 * 28;
+
+/** Marges d'une carte (verticales, horizontales), resserrées côte à côte en carré. */
+function framePad(frame: ExportOptions['frame'], sideBySide: boolean): number[] {
+  const trim = sideBySide && frame !== 'none' ? 2 * SQUARE_TRIM : 0;
+  return FRAME_PAD[frame].map((v) => v - trim);
+}
+
+/** Largeur de la carte d'une photo selon son gabarit (cf. feuille de style). */
+function cardWidth(
+  variant: '' | 'solo' | 'large',
+  size: PhotoSize,
+  format: PageFormat,
+  hasMap: boolean,
+): number {
+  const square = isSquare(format);
+  if (variant === 'solo') {
+    return square ? PAGE_WIDTH - 2 * SQUARE_SIDE : Math.min(460, SHEET_INNER);
+  }
+  if (variant === '' && size === 'small' && !hasMap) return (SHEET_INNER - 12) / 2;
+  if (variant === '' && size === 'medium' && square) {
+    return (PAGE_WIDTH - 2 * SQUARE_SIDE - SQUARE_GAP) / 2;
+  }
+  return SHEET_INNER;
+}
 /** Plus petite hauteur de photo consentie à une légende très longue. */
 const MIN_PHOTO_H = 90;
 
@@ -600,22 +707,12 @@ function fitPhotoHeight(
   const grid = variant === '' && size === 'small';
   const sideBySide = variant === '' && size === 'medium' && isSquare(format);
   // Côte à côte en page carrée : cadre resserré (`SQUARE_CARD_PAD`).
-  const trim = sideBySide && options.frame !== 'none' ? 2 * SQUARE_TRIM : 0;
-  const [padV, padH] = FRAME_PAD[options.frame].map((v) => v - trim);
+  const [padV, padH] = framePad(options.frame, sideBySide);
   const metaH = 4 + META_SIZE * spec.dateScale * 1.3;
 
   // Hauteur d'une carte hors photo : marges du cadre + légende.
   const fixed = group.map((it) => {
-    const cardW =
-      variant === 'solo'
-        ? isSquare(format)
-          ? PAGE_WIDTH - 2 * SQUARE_SIDE
-          : Math.min(460, SHEET_INNER)
-        : grid && !it.map
-          ? (SHEET_INNER - 12) / 2
-          : sideBySide
-            ? (PAGE_WIDTH - 2 * SQUARE_SIDE - SQUARE_GAP) / 2
-            : SHEET_INNER;
+    const cardW = cardWidth(variant, size, format, !!it.map);
     const { comment, meta } = captionParts(it.photo, ctx);
     if (!comment && !meta) return padV;
     const bold = spec.captionBold || comment.includes('**');
@@ -851,7 +948,7 @@ function buildStyles(options: ExportOptions): string {
     padding: 24px 28px 48px;
     display: flex; flex-direction: column; justify-content: center;
   }
-  .sheet.photos > .card:last-of-type { margin-bottom: 0; }
+  .sheet.photos > .card:last-of-type, .pair > .card:last-of-type { margin-bottom: 0; }
   .sheet.photos .footer { position: absolute; left: 0; right: 0; bottom: 22px; margin: 0; }
   .card.solo, .card.large { margin-left: auto; margin-right: auto; width: 100%; }
   /* Grille des petites : une rangée incomplète se centre aussi. */
@@ -861,13 +958,17 @@ function buildStyles(options: ExportOptions): string {
      photo (une colonne n'a pas la largeur de les mettre côte à côte), couverture
      classique resserrée. Mêmes cases que Skia (gridFor, carte dessous). --- */
   .fmt-square .sheet.photos.sz-medium {
-    flex-direction: row; align-items: center; justify-content: center; gap: ${SQUARE_GAP}px;
     padding-left: ${SQUARE_SIDE}px; padding-right: ${SQUARE_SIDE}px;
   }
-  .fmt-square .sheet.photos.sz-medium > .card {
+  /* Les deux cartes d'une page ont la même hauteur (stretch) : avec un
+     commentaire d'un seul côté, elles sortaient décalées en haut et en bas. */
+  .fmt-square .sz-medium .pair {
+    display: flex; flex-direction: row; align-items: stretch; justify-content: center;
+    gap: ${SQUARE_GAP}px;
+  }
+  .fmt-square .sz-medium .pair > .card {
     flex: 0 1 calc(50% - ${SQUARE_GAP / 2}px); margin-bottom: 0;
   }
-  .fmt-square .sheet.photos.sz-medium > .card.solo { flex-basis: 100%; }
   /* Photo seule : toute la largeur de la page (pas le plafond de 460 de l'A4). */
   .fmt-square .card.solo { max-width: none; }
   .fmt-square .sz-medium .card:not(.solo) .ph.split { flex-direction: column; }
@@ -877,7 +978,7 @@ function buildStyles(options: ExportOptions): string {
   .grid4 .card { width: calc(50% - 6px); margin-bottom: 4px; }
   ${frameCss}
   /* Après frameCss : cadre resserré des moyennes côte à côte (page carrée). */
-  .fmt-square .sheet.photos.sz-medium > .card:not(.solo) { padding: ${SQUARE_CARD_PAD[options.frame]}; }
+  .fmt-square .sz-medium .pair > .card { padding: ${SQUARE_CARD_PAD[options.frame]}; }
   /* Case photo sans fond : une photo qui n'a pas les proportions de sa case
      (portrait dans une case horizontale…) se pose au centre, sur le fond de
      la carte ou de la page. Un aplat gris comblait le vide et salissait la
@@ -978,7 +1079,10 @@ function buildStyles(options: ExportOptions): string {
 
   /* --- Carte à côté d'une photo (MAP_SHARE / MAP_GAP / FULL_MAP d'albumMap.ts) --- */
   .grid4 .card.wide { width: 100%; }
-  .ph.split { display: flex; gap: ${MAP_GAP}px; background: transparent; align-items: stretch; }
+  .ph.split {
+    display: flex; gap: ${MAP_GAP}px; background: transparent;
+    align-items: stretch; justify-content: center;
+  }
   .ph-photo {
     flex: ${1 - MAP_SHARE} 1 0; min-width: 0; height: 100%; overflow: hidden;
     display: flex; align-items: center; justify-content: center;
@@ -1057,8 +1161,9 @@ export async function buildAlbumHtml(
     photos.map(async (photo) => {
       if (photo.kind === 'text' || !photo.uri) return { photo, src: '' };
       try {
-        const b64 = await readPrintBase64(photo.uri, maxEdge, quality);
-        return { photo, src: `data:image/jpeg;base64,${b64}` };
+        const image = await readPrintImage(photo.uri, maxEdge, quality);
+        const aspect = image.width > 0 && image.height > 0 ? image.width / image.height : undefined;
+        return { photo, src: `data:image/jpeg;base64,${image.base64}`, aspect };
       } catch {
         return { photo, src: '' };
       }
@@ -1262,13 +1367,16 @@ export async function buildAlbumHtml(
 }
 
 /**
- * PDF d'un format plus petit que l'A4 : la page mise en page sur 595 unités de
- * large est réduite à sa largeur réelle (16 cm = 453,5 pt). Rien en A4. Jamais
- * dans l'aperçu, qui montre les pages à l'échelle de l'écran.
+ * Mise à l'échelle du PDF : la page mise en page sur 595 unités de large sort à
+ * sa largeur réelle (16 cm = 453,5 pt ; A4 = 595 pt). Sous iOS **tous** les
+ * formats en ont besoin, A4 et rapport pro compris (`printZoom`) ; ailleurs,
+ * rien en A4. Jamais dans l'aperçu, qui montre les pages à l'échelle de l'écran.
  */
 function printScale(format: PageFormat): string {
   const { zoom, print } = PAGE_FORMATS[format];
-  if (zoom === 1) return '';
+  const ios = Platform.OS === 'ios';
+  // A4 hors iOS : la page est composée à sa largeur, rien à corriger.
+  if (zoom === 1 && !ios) return '';
   // iOS compose la page sur 1,25 fois sa largeur avant de la réduire : le zoom
   // en tient compte (`printZoom`), sinon l'album sortait à 80 %, calé en haut
   // à gauche. `min-width` : si la page était composée plus étroite que prévu,
@@ -1276,7 +1384,7 @@ function printScale(format: PageFormat): string {
   // contenu coupé à droite.
   return `
   @page { size: ${print.width.toFixed(2)}pt ${print.height.toFixed(2)}pt; margin: 0; }
-  html { zoom: ${printZoom(format, Platform.OS === 'ios').toFixed(5)}; }
+  html { zoom: ${printZoom(format, ios).toFixed(5)}; }
   body { min-width: ${PAGE_WIDTH}px; }`;
 }
 
@@ -1625,7 +1733,7 @@ function buildProDocument(
         <meta charset="utf-8" />
         ${CSP_META}
         <meta name="viewport" content="width=${interactive ? PAGE_WIDTH + 2 * DESK_GAP : PAGE_WIDTH}, initial-scale=1" />
-        <style>${styles}</style>
+        <style>${styles}${interactive ? '' : printScale('a4')}</style>
       </head>
       <body${interactive ? ' class="desk"' : ''}>
         <section class="sheet cover">

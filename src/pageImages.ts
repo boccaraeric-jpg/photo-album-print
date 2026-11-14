@@ -33,8 +33,8 @@ import {
   buildMiniMapModel,
   FULL_MAP,
   MAP_GAP,
-  MAP_SHARE,
-  MAP_SHARE_BELOW,
+  splitBelow,
+  splitBeside,
   mapPhotoIds,
   MINI_H,
   MINI_W,
@@ -712,10 +712,24 @@ async function renderPhotoPage(
     const gap = MAP_GAP * (W / COVER_W);
     // Carte sous la photo en carré côte à côte (colonne étroite), à droite sinon.
     const mapBelow = hasMap && square && perPage === 2 && cols === 2;
-    const mapW = hasMap && !mapBelow ? (imgW - gap) * MAP_SHARE : 0;
-    const photoW = hasMap && !mapBelow ? imgW - gap - mapW : imgW;
-    const mapH = mapBelow ? (imgH - gap) * MAP_SHARE_BELOW : 0;
-    const photoH = mapBelow ? imgH - gap - mapH : imgH;
+    // Photo et carte accordées aux proportions de la photo (`splitBelow` /
+    // `splitBeside`, mêmes règles que le PDF), le bloc centré dans la case.
+    const shot = images[i];
+    const aspect = shot && shot.height() > 0 ? shot.width() / shot.height() : 0;
+    let photoRect: Rect = { x: imgX, y: imgY, w: imgW, h: imgH };
+    let mapRect: Rect | null = null;
+    if (mapBelow) {
+      const s = splitBelow(imgW, imgH, aspect, gap);
+      const top = imgY + (imgH - s.photoH - gap - s.mapH) / 2;
+      photoRect = { x: imgX, y: top, w: imgW, h: s.photoH };
+      mapRect = { x: imgX, y: top + s.photoH + gap, w: imgW, h: s.mapH };
+    } else if (hasMap) {
+      const s = splitBeside(imgW, imgH, aspect, gap);
+      const left = imgX + (imgW - s.photoW - gap - s.mapW) / 2;
+      const top = imgY + (imgH - s.h) / 2;
+      photoRect = { x: left, y: top, w: s.photoW, h: s.h };
+      mapRect = { x: left + s.photoW + gap, y: top, w: s.mapW, h: s.h };
+    }
     // Coins arrondis de la photo et de sa carte : ceux de l'encadrement, ou
     // le coin presque droit du liseré (`PHOTO_RADIUS`, `LISERET`, comme le PDF).
     const radius = (options.liseret ? LISERET.radius : PHOTO_RADIUS[options.frame]) * k;
@@ -735,15 +749,20 @@ async function renderPhotoPage(
       edge.setColor(Skia.Color(dark ? '#5a5348' : '#b9ac93'));
       canvas.drawRRect(rrect(rect.x - 6, rect.y - 6, rect.w + 12, rect.h + 12, 4), edge);
     };
-    if (hasMap) {
-      const mapRect = mapBelow
-        ? { x: imgX, y: imgY + photoH + gap, w: imgW, h: mapH }
-        : { x: imgX + photoW + gap, y: imgY, w: mapW, h: imgH };
+    if (mapRect) {
       drawMiniMap(canvas, photo, mapImages[i], mapRect.x, mapRect.y, mapRect.w, mapRect.h, radius);
       if (options.liseret) drawLiseret(mapRect);
     }
     // « contain » : photo entière, non rognée (comme le PDF).
-    const drawn = drawContainImage(canvas, images[i], imgX, imgY, photoW, photoH, radius);
+    const drawn = drawContainImage(
+      canvas,
+      shot,
+      photoRect.x,
+      photoRect.y,
+      photoRect.w,
+      photoRect.h,
+      radius,
+    );
     if (options.liseret && drawn) drawLiseret(drawn);
 
     // Légende (commentaire tronqué + date · lieu) sous la photo.
