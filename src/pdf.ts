@@ -355,6 +355,8 @@ function figureHtml(
   zone?: Zone,
   /** Style en ligne de la carte (hauteur de sa bande image, largeur). */
   cardStyle = '',
+  /** Légende centrée sous la photo (carte sans cadre plus large que la photo). */
+  capCenter = false,
 ): string {
   const { lang } = ctx;
   const { photo, src, map } = item;
@@ -398,7 +400,7 @@ function figureHtml(
     ? `<a class="edit" href="${editHref(photo.id, ctx.pageIds)}">${ph}${caption}</a>`
     : `${ph}${caption}`;
   return `
-    <figure class="card ${variant}${map ? ' wide' : ''}" id="e-${escapeHtml(photo.id)}"${cardStyle ? ` style="${cardStyle}"` : ''}>
+    <figure class="card ${variant}${map ? ' wide' : ''}${capCenter ? ' cap-center' : ''}" id="e-${escapeHtml(photo.id)}"${cardStyle ? ` style="${cardStyle}"` : ''}>
       ${body}
     </figure>`;
 }
@@ -429,9 +431,16 @@ function pageHtml(
   // Moyennes côte à côte (carré) : la bande ne garde que la hauteur dont les
   // photos de la page ont besoin, les deux cartes restant de même hauteur.
   let zoneH = fit ?? target;
+  // Sans cadre, la hauteur commune des deux cartes ne se voit pas : chaque
+  // bande prend la hauteur de sa propre photo, la légende reste collée dessous
+  // (elle flottait loin sous un paysage voisin d'un portrait — retour testeur).
+  let ownH: number[] | null = null;
   if (sideBySide) {
     const needs = group.map((it, i) => zoneNeed(it, zones[i]));
-    if (needs.every((n) => n > 0)) zoneH = Math.min(zoneH, Math.ceil(Math.max(...needs)));
+    if (needs.every((n) => n > 0)) {
+      zoneH = Math.min(zoneH, Math.ceil(Math.max(...needs)));
+      if (ctx.options.frame === 'none') ownH = needs.map((n) => Math.min(zoneH, Math.ceil(n)));
+    }
   }
   // Cartes empilées (moyennes hors carré, photo seule, grande) : chaque carte
   // épouse sa photo, en hauteur comme en largeur (`stackLayout`).
@@ -448,8 +457,12 @@ function pageHtml(
             pageCtx,
             { ...zones[i], h: stack[i].h },
             `--ph: ${stack[i].h}px; width: ${px(stack[i].w)};`,
+            stack[i].center,
           )
-        : figureHtml(item, variant, pageCtx, zones[i]),
+        : ownH
+          ? figureHtml(item, variant, pageCtx, { ...zones[i], h: ownH[i] }, `--ph: ${ownH[i]}px;`)
+          : figureHtml(item, variant, pageCtx, zones[i]),
+
     )
     .join('');
   // En taille « petite », les photos s'organisent en grille 2 colonnes — même
@@ -802,7 +815,7 @@ function stackLayout(
   size: PhotoSize,
   variant: '' | 'solo' | 'large',
   ctx: PageCtx,
-): { h: number; w: number }[] | null {
+): { h: number; w: number; center: boolean }[] | null {
   if (group.some((it) => !it.aspect)) return null;
   const { options } = ctx;
   const format = effectiveFormat(options);
@@ -832,12 +845,21 @@ function stackLayout(
       const s = splitBeside(zw, h, aspect, MAP_GAP);
       blockW = s.photoW + MAP_GAP + s.mapW;
     }
-    const hug = Math.max(HUG_MIN, Math.ceil(blockW) + padH);
-    if (hug >= full[i]) return { h, w: full[i] };
+    const exact = Math.ceil(blockW) + padH;
+    const hug = Math.max(HUG_MIN, exact);
+    if (hug >= full[i]) return { h, w: full[i], center: false };
     const wide = captionLines(it, full[i], size, false, ctx);
-    const tight = captionLines(it, hug, size, false, ctx);
-    const fits = tight.comment === wide.comment && tight.meta <= 1;
-    return { h, w: fits ? hug : full[i] };
+    const fitsIn = (w: number) => {
+      const tight = captionLines(it, w, size, false, ctx);
+      return tight.comment === wide.comment && tight.meta <= 1;
+    };
+    // Sans cadre, rien ne matérialise la carte : la légende s'aligne sur le
+    // bord de la photo quand elle y tient, et se centre sous elle sinon —
+    // elle partait du bord gauche de la page, loin de sa photo (retour testeur).
+    const bare = options.frame === 'none';
+    if (bare && fitsIn(exact)) return { h, w: exact, center: false };
+    if (fitsIn(hug)) return { h, w: hug, center: bare };
+    return { h, w: full[i], center: bare };
   });
 }
 
@@ -1022,10 +1044,11 @@ function buildStyles(options: ExportOptions): string {
   .sheet.painted { height: ${pageH}px; overflow: hidden; background: var(--bg); color: var(--ink); }
   .footer {
     display: flex; justify-content: center; align-items: center;
-    margin: 6px 4px 0; font-size: 11px; letter-spacing: 0.5px;
+    margin: 6px 4px 0; font-size: 11px; letter-spacing: 0.5px; opacity: 0.75;
     font-family: ${fam(spec.date)}; font-weight: ${regular(spec.date)};
-    color: var(--muted);
+    color: var(--ink);
   }
+  .card.cap-center .caption, .card.cap-center .caption .date { text-align: center; }
   /* Aperçu : chaque photo est un lien interne (comclic-edit://) que l'app
      intercepte — aucun script dans la page. Absent du PDF. */
   a.edit { display: block; color: inherit; text-decoration: none; }
@@ -1091,7 +1114,8 @@ function buildStyles(options: ExportOptions): string {
      contenu ne glisse sur la page suivante (cf. tailles de sizeCss). */
   .sheet.photos {
     height: ${pageH}px; overflow: hidden; position: relative;
-    padding: 24px 28px 48px;
+    padding: 36px 28px 36px;
+
     display: flex; flex-direction: column; justify-content: center;
   }
   .sheet.photos > .card:last-of-type, .pair > .card:last-of-type { margin-bottom: 0; }
@@ -1796,6 +1820,7 @@ function buildProDocument(
     proRows(options),
     options.proPhotoSize,
     options.proCoords,
+    options.proTextBold,
   );
   const byId = new Map(items.map((it) => [it.photo.id, it]));
   const credit = `<p class="credit">${creditHtml()}</p>`;
@@ -1811,7 +1836,7 @@ function buildProDocument(
   // Grande fiche : la vignette remplit la page, sans dépasser ce que la photo
   // occupe à pleine largeur (pas de vide au-dessus d'un paysage).
   const largeFrameH = (p: Photo): number => {
-    const maxH = proLargeFrameH(p, scale, rows, options.proCoords);
+    const maxH = proLargeFrameH(p, scale, rows, options.proCoords, options.proTextBold);
     const aspect = byId.get(p.id)?.aspect;
     return aspect ? Math.min(maxH, Math.ceil(PRO_COL_W / aspect)) : maxH;
   };

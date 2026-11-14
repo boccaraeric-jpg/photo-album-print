@@ -197,10 +197,11 @@ export function proLargeFrameH(
   scale: number,
   rows: number,
   coords = false,
+  bold = false,
 ): number {
   const L = PRO_LAYOUT;
   const base = proFrameH('large', scale);
-  const rest = proEntryHeight(photo, 'large', scale, rows, coords) - base;
+  const rest = proEntryHeight(photo, 'large', scale, rows, coords, bold) - base;
   const room = L.pageH - L.padTop - L.padBottom;
   // 14 pt de sûreté : la hauteur du texte est estimée, la page ne doit pas déborder.
   return Math.max(base, Math.min(PRO_LARGE_MAX, Math.floor(room - rest - 14)));
@@ -237,9 +238,17 @@ export function proEntryHeight(
   rows: number,
   /** Coordonnées GPS à la suite du lieu : la ligne « Lieu » peut passer à la ligne. */
   coords = false,
+  /** Texte en gras (`proTextBold`) : caractères plus larges, moins par ligne. */
+  bold = false,
 ): number {
   const L = PRO_LAYOUT;
-  const perLine = Math.max(8, Math.floor((size === 'small' ? L.charsHalf : L.charsFull) / scale));
+  // Gras 800 : environ 12 % de caractères en moins par ligne. Sans cela une
+  // description comptée sur 2 lignes en prenait 3 et la page débordait sur une
+  // page blanche (vu sur un PDF d'iPhone, 14/11/2026).
+  const perLine = Math.max(
+    8,
+    Math.floor(((size === 'small' ? L.charsHalf : L.charsFull) * (bold ? 0.88 : 1)) / scale),
+  );
   // Lignes en plus de la ligne « Lieu » quand le lieu et ses coordonnées ne
   // tiennent pas sur une ligne (deux déjà comptées en demi-largeur).
   const placeLen = (photo.place ?? '').trim().length + (coords && photo.coords ? 26 : 0);
@@ -248,7 +257,8 @@ export function proEntryHeight(
   const text = stripMarks(photo.comment).trim() || '—';
   const lines = text
     .split('\n')
-    .reduce((n, para) => n + Math.max(1, Math.ceil(para.length / perLine)), 0);
+    // 8 % de marge pour les coupures entre les mots.
+    .reduce((n, para) => n + Math.max(1, Math.ceil((para.length * 1.08) / perLine)), 0);
   return (
     L.head * scale +
     proFrameH(size, scale) +
@@ -275,6 +285,8 @@ export function paginateProEntries(
   reportSize: ProPhotoSize = 'medium',
   /** Coordonnées GPS à la suite du lieu (`ExportOptions.proCoords`). */
   coords = false,
+  /** Texte en gras (`ExportOptions.proTextBold`). */
+  bold = false,
 ): AlbumPage[] {
   const L = PRO_LAYOUT;
   const room = L.pageH - L.padTop - L.padBottom;
@@ -283,11 +295,14 @@ export function paginateProEntries(
   let size: ProPhotoSize = 'medium';
   const height = (g: Photo[], sz: ProPhotoSize) => {
     if (sz !== 'small') {
-      return g.reduce((h, p) => h + proEntryHeight(p, sz, scale, rows, coords), 0);
+      return g.reduce((h, p) => h + proEntryHeight(p, sz, scale, rows, coords, bold), 0);
     }
     let h = 0;
     for (let i = 0; i < g.length; i += 2) {
-      h += Math.max(...g.slice(i, i + 2).map((p) => proEntryHeight(p, sz, scale, rows, coords)));
+      h += Math.max(
+        ...g.slice(i, i + 2).map((p) => proEntryHeight(p, sz, scale, rows, coords, bold)),
+      );
+
 
     }
     return h;

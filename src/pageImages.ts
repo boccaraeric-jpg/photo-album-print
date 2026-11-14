@@ -1522,7 +1522,7 @@ async function renderProPage(
   // dépasser ce que la photo occupe à pleine largeur.
   const frameOf = (i: number): number => {
     if (size !== 'large') return frameH;
-    const maxH = proLargeFrameH(group[i], scale, metaRows, options.proCoords) * k;
+    const maxH = proLargeFrameH(group[i], scale, metaRows, options.proCoords, bold) * k;
     const img = images[i];
     if (!img || !img.width()) return maxH;
     return Math.min(maxH, ((colW - 2 * inset) * img.height()) / img.width() + 2 * inset);
@@ -1842,6 +1842,7 @@ export async function buildAlbumImages(
         (eff.showPlace ? 1 : 0) + (eff.dateFormat === 'none' ? 0 : 1),
         eff.proPhotoSize,
         eff.proCoords,
+        eff.proTextBold,
       )
     : paginateEntries(pageSource, eff.photoSize, {
         wide: mapIds,
