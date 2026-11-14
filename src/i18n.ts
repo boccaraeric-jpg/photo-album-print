@@ -508,6 +508,8 @@ Les dossiers seront AJOUTÉS à ceux déjà présents : rien n'est remplacé. Un
   },
   doc: {
     imageUnavailable: 'Image indisponible',
+    /** Compteur en pied des pages du rapport pro : « page 2/4 ». */
+    pageOf: (n: number, total: number) => `page ${n}/${total}`,
     photoNo: (n: number) => `Photo n° ${n}`,
     place: 'Lieu',
     date: 'Date',
@@ -991,6 +993,7 @@ Folders will be ADDED to the ones already there: nothing is replaced. A name alr
   },
   doc: {
     imageUnavailable: 'Image unavailable',
+    pageOf: (n: number, total: number) => `page ${n}/${total}`,
     photoNo: (n: number) => `Photo no. ${n}`,
     place: 'Location',
     date: 'Date',

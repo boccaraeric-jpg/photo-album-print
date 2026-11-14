@@ -1,5 +1,6 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import type {
   ExportOptions,
@@ -24,12 +25,14 @@ import {
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
 import { richToHtml, stripMarks } from './richText';
+import { metaLine, properPlace } from './placeName';
 import {
   buildMapModel,
   buildMiniMapModel,
   FULL_MAP,
   MAP_GAP,
   MAP_SHARE,
+  MAP_SHARE_BELOW,
   mapPhotoIds,
   MINI_H,
   MINI_W,
@@ -79,6 +82,7 @@ import {
   isSquare,
   PAGE_FORMATS,
   pageHeight,
+  printZoom,
 } from './pageFormat';
 
 /** Polices embarquées en base64 par famille (graisse normale + grasse), pour un
@@ -285,7 +289,8 @@ function paintAttrs(bg: string | undefined, frame: ExportOptions['frame']): {
 function captionParts(photo: Photo, ctx: PageCtx): { comment: string; meta: string } {
   const place = ctx.showPlace ? photo.place?.trim() : undefined;
   const date = formatPhotoDate(photoDate(photo), ctx.dateFormat, ctx.lang);
-  return { comment: photo.comment.trim(), meta: [place, date].filter(Boolean).join(' · ') };
+  // Lieu en nom propre, date en minuscules (`metaLine`, commun à Skia).
+  return { comment: photo.comment.trim(), meta: metaLine(place, date, ctx.lang) };
 }
 
 function figureHtml(item: Item, variant: '' | 'solo' | 'large', ctx: PageCtx): string {
@@ -643,6 +648,23 @@ function sizeCss(size: PhotoSize, options: ExportOptions): string {
   ${z} .card.large .ph { height: var(--ph, ${large}px); }
   ${z} .caption { font-size: ${captionSize}px; }
   ${
+    size === 'medium'
+      ? `/* Page carrée : carte SOUS la photo. Hauteurs explicites, calculées sur
+     celle de la case — jamais de partage en flex ni de % : en colonne, la
+     photo (min-height: auto) gardait toute la hauteur et la carte s'écrasait
+     en un filet blanc sous les portraits (son seul liseré), en un ruban sous
+     les paysages. */
+  .fmt-square ${z} .card:not(.solo) .ph.split .ph-photo {
+    flex: none; width: 100%;
+    height: calc((var(--ph, ${ph}px) - ${MAP_GAP}px) * ${1 - MAP_SHARE_BELOW});
+  }
+  .fmt-square ${z} .card:not(.solo) .ph.split .ph-map {
+    flex: none; width: 100%;
+    height: calc((var(--ph, ${ph}px) - ${MAP_GAP}px) * ${MAP_SHARE_BELOW});
+  }`
+      : ''
+  }
+  ${
     band
       ? `${z} .caption {
     min-height: ${band}px; display: flex; flex-direction: column;
@@ -823,8 +845,6 @@ function buildStyles(options: ExportOptions): string {
   }
   .fmt-square .sheet.photos.sz-medium > .card.solo { flex-basis: 100%; }
   .fmt-square .sz-medium .card:not(.solo) .ph.split { flex-direction: column; }
-  .fmt-square .sz-medium .card:not(.solo) .ph.split .ph-photo { flex: ${1 - MAP_SHARE} 1 0; width: 100%; }
-  .fmt-square .sz-medium .card:not(.solo) .ph.split .ph-map { flex: ${MAP_SHARE} 1 0; width: 100%; }
   .fmt-square .cover { padding-top: 40px; }
   .fmt-square .cover-hero { margin-top: 24px; flex-basis: ${470 - cut + 54}px; }
   .fmt-square .cover-foot { margin-top: 22px; }
@@ -863,7 +883,7 @@ function buildStyles(options: ExportOptions): string {
     display: block; margin-top: 4px; font-size: ${Math.round(META_SIZE * spec.dateScale * 10) / 10}px;
     line-height: 1.3; text-align: ${options.dateAlign ?? 'left'};
     font-family: ${fam(spec.date)};
-    letter-spacing: ${spec.date === 'script' ? 0.2 : 0.6}px; text-transform: lowercase;
+    letter-spacing: ${spec.date === 'script' ? 0.2 : 0.6}px;
     font-weight: ${spec.captionBold ? bold(spec.date) : regular(spec.date)};
     color: var(--meta-ink);
   }
@@ -1194,10 +1214,8 @@ export async function buildAlbumHtml(
              à l'échelle de l'écran ; ignoré par expo-print (dimensions fournies).
              En aperçu, la largeur ajoute les marges du plan de travail.
              PDF d'un format réduit (16 × 21, 16 × 16) : largeur de la page
-             réelle. À 595, iOS mettait en page la feuille réduite par le zoom de
-             printScale sur 781 unités : la couverture montée, posée en absolu
-             sur 595, partait à gauche (les pages photo, en largeurs relatives,
-             restaient centrées). -->
+             réelle. Sans effet sur l'échelle du PDF sous iOS, qui compose la
+             page sur 1,25 fois sa largeur quoi qu'il arrive (cf. printZoom). -->
         <meta name="viewport" content="width=${interactive ? PAGE_WIDTH + 2 * DESK_GAP : Math.round(PAGE_FORMATS[format].print.width * 100) / 100}, initial-scale=1" />
         <style>${buildStyles(options)}${interactive ? deskCss(pageH) : printScale(format)}</style>
       </head>
@@ -1222,9 +1240,15 @@ export async function buildAlbumHtml(
 function printScale(format: PageFormat): string {
   const { zoom, print } = PAGE_FORMATS[format];
   if (zoom === 1) return '';
+  // iOS compose la page sur 1,25 fois sa largeur avant de la réduire : le zoom
+  // en tient compte (`printZoom`), sinon l'album sortait à 80 %, calé en haut
+  // à gauche. `min-width` : si la page était composée plus étroite que prévu,
+  // le contenu déborderait et iOS le réduirait à la largeur — jamais de
+  // contenu coupé à droite.
   return `
   @page { size: ${print.width.toFixed(2)}pt ${print.height.toFixed(2)}pt; margin: 0; }
-  html { zoom: ${zoom.toFixed(5)}; }`;
+  html { zoom: ${printZoom(format, Platform.OS === 'ios').toFixed(5)}; }
+  body { min-width: ${PAGE_WIDTH}px; }`;
 }
 
 /**
@@ -1358,7 +1382,7 @@ function proEntryHtml(
       ? ''
       : formatPhotoDate(photoDate(photo), dateFormat, lang) || '—';
   // Comme la date, « Lieu » disparaît en entier quand l'option est décochée.
-  const place = showPlace ? photo.place?.trim() || '—' : '';
+  const place = showPlace ? properPlace(photo.place ?? '') || '—' : '';
   const desc = photo.comment.trim() || '—';
   const img = src
     ? `<img src="${src}" />`
@@ -1381,14 +1405,14 @@ function proEntryHtml(
  * Page de texte seule du rapport : sa propre page, texte en haut par défaut
  * (présentation « document »), au milieu ou en bas selon `textVAlign`.
  */
-function proTextPageHtml(item: Photo, pageNo: number, interactive: boolean, last: string): string {
+function proTextPageHtml(item: Photo, pageLabel: string, interactive: boolean, last: string): string {
   const text = escapeHtml(item.comment.trim()).replace(/\n/g, '<br/>');
   const body = `<div class="pro-text-body">${text}</div>`;
   return `
     <section class="sheet pro-text tv-${item.textVAlign ?? 'top'}" id="e-${escapeHtml(item.id)}">
       ${interactive ? `<a class="edit" href="${editHref(item.id)}">${body}</a>` : body}
       ${last}
-      <p class="footer">${pageNo}</p>
+      <p class="footer">${pageLabel}</p>
     </section>`;
 }
 
@@ -1433,7 +1457,8 @@ function buildProDocument(
   let photoNo = 0;
   const sheets = pages
     .map((page, i) => {
-      const no = i + 1;
+      // Compteur « page 2/4 » en bas à droite (la page de garde n'est pas comptée).
+      const no = escapeHtml(dict(lang).doc.pageOf(i + 1, pages.length));
       const last = i === pages.length - 1 ? credit : '';
       if (page.type === 'text') return proTextPageHtml(page.item, no, interactive, last);
       const entries = page.items
@@ -1548,8 +1573,9 @@ function buildProDocument(
     .pro-text-body { text-align: ${textAlign}; white-space: pre-wrap;
       font-size: ${px(20 * scale)}; line-height: 1.7; color: #14181f;
       font-weight: ${options.proTextBold ? 800 : 500}; }
-    .footer { position: absolute; left: 0; right: 0; bottom: 22px; margin: 0;
-      text-align: center; font-size: 10px; letter-spacing: 2px; color: #9ca3af; }
+    /* Compteur de pages « page 2/4 », en bas à droite (marge des fiches). */
+    .footer { position: absolute; left: 46px; right: 46px; bottom: 22px; margin: 0;
+      text-align: right; font-size: 10px; letter-spacing: 1px; color: #6b7280; }
     /* Mention de l'app en pied de la dernière page, au-dessus du numéro. */
     .credit { position: absolute; left: 0; right: 0; bottom: 44px; margin: 0;
       font-size: 12px; letter-spacing: 0.6px; color: #6b7280; }

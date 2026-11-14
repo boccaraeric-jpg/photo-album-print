@@ -12,6 +12,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import type { ExportOptions, Photo, ProPhotoSize } from './types';
 import { formatPhotoDate, photoDate, reportDateFormat } from './dateFormat';
 import { dict, localeTag, type Lang } from './i18n';
+import { metaLine, properPlace } from './placeName';
 import {
   pageBackground,
   paginateEntries,
@@ -33,6 +34,7 @@ import {
   FULL_MAP,
   MAP_GAP,
   MAP_SHARE,
+  MAP_SHARE_BELOW,
   mapPhotoIds,
   MINI_H,
   MINI_W,
@@ -673,7 +675,8 @@ async function renderPhotoPage(
     const comment = photo.comment.trim();
     const place = options.showPlace ? photo.place?.trim() : undefined;
     const date = formatPhotoDate(photoDate(photo), options.dateFormat, lang);
-    const meta = [place, date].filter(Boolean).join(' · ');
+    // Lieu en nom propre, date en minuscules (`metaLine`, comme le PDF).
+    const meta = metaLine(place, date, lang);
     // La légende agrandie (manuscrite) prend sa place sur la photo, pas sur
     // l'espace entre les cartes : sinon la 2ᵉ ligne débordait sur le pied de page.
     const spec = TYPE_SPECS[options.typeface];
@@ -711,7 +714,7 @@ async function renderPhotoPage(
     const mapBelow = hasMap && square && perPage === 2 && cols === 2;
     const mapW = hasMap && !mapBelow ? (imgW - gap) * MAP_SHARE : 0;
     const photoW = hasMap && !mapBelow ? imgW - gap - mapW : imgW;
-    const mapH = mapBelow ? (imgH - gap) * MAP_SHARE : 0;
+    const mapH = mapBelow ? (imgH - gap) * MAP_SHARE_BELOW : 0;
     const photoH = mapBelow ? imgH - gap - mapH : imgH;
     // Coins arrondis de la photo et de sa carte : ceux de l'encadrement, ou
     // le coin presque droit du liseré (`PHOTO_RADIUS`, `LISERET`, comme le PDF).
@@ -782,7 +785,7 @@ async function renderPhotoPage(
       ty += 6;
     }
     if (meta) {
-      drawText(canvas, meta.toLowerCase(), imgX, ty, imgW, {
+      drawText(canvas, meta, imgX, ty, imgW, {
         color: metaColor,
         size: metaSize,
         maxLines: 1,
@@ -1030,6 +1033,8 @@ function renderTextPage(
   pageNo: number,
   /** Dernière page du rapport pro : porte la mention de l'app. */
   credit = false,
+  /** Rapport pro : compteur « page 2/4 » du pied de page. */
+  pageLabel = String(pageNo),
 ): PagePayload | null {
   const H = imageHeight(options);
   const surface = Skia.Surface.Make(W, H);
@@ -1082,7 +1087,7 @@ function renderTextPage(
   });
   if (isPro) {
     if (credit) drawProCredit(canvas, H);
-    drawProFooter(canvas, H, pageNo);
+    drawProFooter(canvas, H, pageLabel);
     return encodeSurface(surface, title, pageNo);
   }
   drawText(canvas, String(pageNo), PAD, H - PAD - 24, W - 2 * PAD, {
@@ -1304,13 +1309,16 @@ function drawProCredit(canvas: SkCanvas, H: number): void {
   drawCredit(canvas, H - 44 * k - lineHeightFor(12 * k), 12 * k, '#6b7280', 'sans');
 }
 
-/** Numéro de page du rapport pro (pendant de `.footer` du PDF). */
-function drawProFooter(canvas: SkCanvas, H: number, pageNo: number): void {
+/**
+ * Compteur de pages du rapport pro, « page 2/4 », en bas à droite dans la
+ * marge des fiches (pendant de `.footer` du PDF).
+ */
+function drawProFooter(canvas: SkCanvas, H: number, label: string): void {
   const k = W / COVER_W;
-  drawText(canvas, String(pageNo), PAD, H - 22 * k - lineHeightFor(10 * k), W - 2 * PAD, {
-    color: '#9ca3af',
+  drawText(canvas, label, 46 * k, H - 22 * k - lineHeightFor(10 * k), W - 2 * 46 * k, {
+    color: '#6b7280',
     size: 10 * k,
-    align: TextAlign.Center,
+    align: TextAlign.Right,
     maxLines: 1,
   });
 }
@@ -1329,6 +1337,8 @@ async function renderProPage(
   startNumber: number,
   lang: Lang,
   credit: boolean,
+  /** Nombre de pages du rapport (compteur « page 2/4 »). */
+  pageTotal: number,
 ): Promise<PagePayload | null> {
   const D = dict(lang).doc;
   const H = imageHeight(options);
@@ -1418,7 +1428,7 @@ async function renderProPage(
       ty += Math.max(h, lineHeightFor(labelSize)) + 2 * pad;
       canvas.drawRect(Skia.XYWHRect(x, ty - 1 * k, colW, 1 * k), rule);
     };
-    if (options.showPlace) row(D.place, photo.place?.trim() || '—', false);
+    if (options.showPlace) row(D.place, properPlace(photo.place ?? '') || '—', false);
     if (options.dateFormat !== 'none') {
       row(
         D.date,
@@ -1448,7 +1458,7 @@ async function renderProPage(
   }
 
   if (credit) drawProCredit(canvas, H);
-  drawProFooter(canvas, H, pageNo);
+  drawProFooter(canvas, H, D.pageOf(pageNo, pageTotal));
   return encodeSurface(surface, title, pageNo);
 }
 
@@ -1667,7 +1677,16 @@ export async function buildAlbumImages(
     const pageOpts = bg ? { ...eff, background: bg } : eff;
     const credit = pro && i === pages.length - 1;
     if (page.type === 'text') {
-      await push(renderTextPage(page.item, pageOpts, title, i + 1, credit));
+      await push(
+        renderTextPage(
+          page.item,
+          pageOpts,
+          title,
+          i + 1,
+          credit,
+          pro ? dict(lang).doc.pageOf(i + 1, pages.length) : undefined,
+        ),
+      );
       continue;
     }
     if (pro) {
@@ -1681,6 +1700,7 @@ export async function buildAlbumImages(
           numbered,
           lang,
           credit,
+          pages.length,
         ),
       );
       numbered += page.items.length;

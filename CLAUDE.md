@@ -256,8 +256,11 @@ d'entrée** (ils pilotent aussi les libellés) :
   `textAlign` = alignement des **pages de texte**, honoré en pro **et** familial ; en familial il
   aligne **aussi le commentaire** sous chaque photo — `.caption` / `align` de `renderPhotoPage` —,
   la date gardant `dateAlign`. Le polaroïd ne force plus le centrage). Le **`style`**
-  (`family`/`pro`) vient des boutons du bas. La date sous chaque photo est rendue en **minuscules**,
-  taille réduite.
+  (`family`/`pro`) vient des boutons du bas. La **date** sous chaque photo est rendue en minuscules
+  (sauf en anglais), taille réduite ; le **lieu** garde ses majuscules et les reçoit s'il a été tapé
+  sans : `metaLine` / `properPlace` (`src/placeName.ts`, communs aux deux moteurs, pro compris).
+  Jamais de `text-transform: lowercase` ni de `toLowerCase()` sur la ligne entière : « porto moniz,
+  portugal » (retour testeur).
 - **`commentVAlign`** (`top`/`middle`/`bottom`) place le commentaire dans la bande qui lui est
   réservée sous la photo — **familial uniquement** (le gabarit pro dispose sa fiche en flux, une
   expertise ne doit jamais voir sa description tronquée ; la pleine page a son propre bandeau
@@ -367,14 +370,23 @@ d'entrée** (ils pilotent aussi les libellés) :
   ensuite **réduit** à sa vraie taille (`printScale` : `html { zoom }` + `@page`, et `print` passé à
   `expo-print`) — 16 × 21 cm = 453,5 × 595,3 pt ; 780 et non 781, sinon une fraction de point déborde
   en page blanche. Images Skia : 1240 px de large, `imageH` de haut. Contrôlé sous Chrome (taille et
-  nombre de pages). ⚠️ Le `<meta viewport>` du PDF doit valoir la **largeur réelle** de la page
-  (453,54 en 16 cm), pas 595 : iOS l'honore à l'impression, et à 595 la feuille zoomée se mettait en
-  page sur 781 unités — couverture montée (absolue sur 595) décalée à gauche, pages réduites à 76 %
-  (vécu sur un 16 × 16 imprimé, 12/11/2026 ; correctif à confirmer sur appareil).
+  nombre de pages).
+  ⛔ **iOS compose toute page à imprimer sur 1,25 × la largeur du papier** (partie entière), puis la
+  réduit pour la faire tenir (réglage d'usine de WebKit, indépendant du `<meta viewport>`). Mesuré sur
+  un PDF 16 × 16 sorti d'un iPhone (14/11/2026) : page de 453,54 pt composée sur 566 px, donc album
+  rendu à **80 %**, calé en haut à gauche — couverture montée décalée, fond d'une page peinte arrêté
+  aux 4/5. `printZoom(format, ios)` (`pageFormat.ts`) pose le zoom en conséquence
+  (`floor(1,25 × largeur) / 595`, × 0,998 de sûreté contre la page blanche) ; Android garde le rapport
+  simple. **Chrome ne reproduit pas ce comportement** : pour contrôler sur PC, générer le HTML en
+  variante iOS et remplacer `@page { size }` par `566px 566px` (16 × 16) — l'ancien code y redonne
+  bien le défaut. ⚠️ L'**A4** (album et rapport pro) n'a pas ce zoom (`zoom === 1` ⇒ rien) : il subit
+  très probablement la même réduction à 80 %, **à mesurer sur un PDF A4 réel avant d'y toucher**.
   **16 × 16 (carré, `square`)** : hauteur 594, gabarits **propres** et non un simple retranchement —
   `SQUARE_PH` (pdf.ts), moyennes **côte à côte** (`.fmt-square` sur `body` ; Skia `gridFor(..., square)`
   = 2 colonnes × 1 rangée), carte d'une moyenne **sous** la photo (`mapBelow`, sauf photo seule
-  agrandie), couverture classique resserrée, pêle-mêle moins réduit en largeur (`sx`), écart grille →
+  agrandie ; `MAP_SHARE_BELOW` = 44 % de la hauteur, en **hauteurs explicites** `calc()` dans `sizeCss`
+  — en flex colonne la photo gardait toute la hauteur et la carte s'écrasait en filet blanc sous un
+  portrait, en ruban sous un paysage), couverture classique resserrée, pêle-mêle moins réduit en largeur (`sx`), écart grille →
   titre réduit, légende de la page « Nos lieux » sur 3 colonnes (`cols` d'`albumMap.ts`).
 - **Hauteur des photos (PDF)** : `PH_HEIGHTS` / `SQUARE_PH` (`pdf.ts`) sont des hauteurs **visées**
   (petite 240, moyenne 300, grande 570 en A4 — agrandies, retour testeur « petite vraiment petite »).
@@ -412,7 +424,8 @@ d'entrée** (ils pilotent aussi les libellés) :
   description) — une page ne mélange pas deux tailles, une grande a sa page. Le PDF (`.sheet.pro-page`,
   `min-height` A4 : une estimation fausse allonge la feuille au lieu de tronquer une description) et les
   images (`renderProPage`, mêmes mesures, description entière) suivent **les mêmes pages**. Aperçu pro
-  en feuilles sur plan de travail, numéros de page, mention de l'app en pied de la dernière.
+  en feuilles sur plan de travail, **compteur « page 2/4 » en bas à droite** de chaque page (`doc.pageOf`,
+  `.footer` / `drawProFooter` ; la page de garde n'est pas comptée), mention de l'app en pied de la dernière.
   **Taille du texte pro** : `ExportOptions.proTextSize` (normal par défaut, `PRO_TEXT_SCALE` 1 / 1,25 / 1,5,
   paliers plus francs que le Loisir), **`proTextBold`** (valeurs et pages de texte en 800), vignettes
   réduites d'autant (`proFrameH`), intitulés grandissant moitié moins.
