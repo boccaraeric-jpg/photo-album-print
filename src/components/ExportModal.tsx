@@ -781,7 +781,9 @@ export function ExportModal({
                   placeholderTextColor={C.faint}
                   maxLength={40}
                   autoCorrect={false}
-                  autoCapitalize="characters"
+                  // Saisie libre : une référence mêle majuscules et minuscules
+                  // (« Dossier x007 ») ; le clavier forcé en capitales gênait.
+                  autoCapitalize="none"
                   accessibilityLabel={L.export.proReferenceLabel}
                 />
                 <Text style={styles.note}>{L.export.proReferenceHint}</Text>

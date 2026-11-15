@@ -10,7 +10,7 @@ import type {
   ProPhotoSize,
 } from './types';
 import { readPrintBase64, readPrintImage } from './photoFiles';
-import { fileDateStamp, formatPhotoDate, photoDate, reportDateFormat } from './dateFormat';
+import { fileDateStamp, formatPhotoDate, photoDate, reportDateFormat, summaryDate } from './dateFormat';
 import { dict, localeTag, SUPPORTED, type Lang } from './i18n';
 import {
   pageBackground,
@@ -28,6 +28,7 @@ import {
 import { MONTSERRAT_500, MONTSERRAT_800 } from './montserratFonts';
 import { CAVEAT_400, CAVEAT_700, LORA_400, LORA_700 } from './albumFonts';
 import { richToHtml, stripMarks } from './richText';
+import { fixElisions } from './typography';
 import { formatCoords, metaLine, properPlace } from './placeName';
 import {
   buildMapModel,
@@ -37,6 +38,7 @@ import {
   MAP_SHARE,
   MAP_SHARE_BELOW,
   splitBelow,
+  belowMapArt,
   splitBeside,
   mapPhotoIds,
   MINI_H,
@@ -381,10 +383,13 @@ function figureHtml(
   if (map && zone && item.aspect) {
     if (zone.below) {
       const s = splitBelow(zone.w, zone.h, item.aspect, MAP_GAP);
+      const art = belowMapArt(s.mapW, s.mapH);
       split = [
         '',
         ` style="flex: none; width: 100%; height: ${px(s.photoH)};"`,
-        ` style="flex: none; width: 100%; height: ${px(s.mapH)};"`,
+        // Carte alignée sur la photo, fond rogné autour du repère plutôt que
+        // réduit jusqu'à l'illisible (`belowMapArt`).
+        ` data-z="1" style="flex: none; align-self: center; width: ${px(s.mapW)}; height: ${px(s.mapH)}; --mz-w: ${px(art.w)}; --mz-h: ${px(art.h)}; --mz-x: ${px(-art.w / 2)}; --mz-y: ${px(-art.h / 2)};"`,
       ];
     } else {
       const s = splitBeside(zone.w, zone.h, item.aspect, MAP_GAP);
@@ -441,7 +446,14 @@ function pageHtml(
     const needs = group.map((it, i) => zoneNeed(it, zones[i]));
     if (needs.every((n) => n > 0)) {
       zoneH = Math.min(zoneH, Math.ceil(Math.max(...needs)));
-      if (ctx.options.frame === 'none') ownH = needs.map((n) => Math.min(zoneH, Math.ceil(n)));
+      if (ctx.options.frame === 'none') {
+        // Hauteurs voisines (moins de 10 % d'écart) : bande commune, les deux
+        // légendes partent de la même ligne au lieu d'un décalage de quelques
+        // points qui passait pour un défaut d'alignement.
+        const top = Math.max(...needs);
+        const close = Math.min(...needs) >= top * 0.9;
+        ownH = needs.map((n) => Math.min(zoneH, Math.ceil(close ? top : n)));
+      }
     }
   }
   // Cartes empilées (moyennes hors carré, photo seule, grande) : chaque carte
@@ -1273,6 +1285,11 @@ function buildStyles(options: ExportOptions): string {
     max-width: none; max-height: none; object-fit: cover;
     border: 0; border-radius: 0; box-shadow: none;
   }
+  /* Carte sous la photo : fond à taille imposée, centré sur le repère. */
+  .card .ph .ph-map[data-z] img.mapimg, .ph-map[data-z] svg.mm {
+    left: 50%; top: 50%; width: var(--mz-w); height: var(--mz-h);
+    margin: var(--mz-y) 0 0 var(--mz-x);
+  }
   .mpin { position: absolute; left: 50%; top: 50%; margin: -30px 0 0 -12px; }
   .full-map {
     position: absolute; right: ${FULL_MAP.margin}px; bottom: ${FULL_MAP.margin}px;
@@ -1323,6 +1340,9 @@ export async function buildAlbumHtml(
   // document (cf. `sanitizeExportOptions`).
   options = sanitizeExportOptions(options);
   if (!SUPPORTED.includes(lang)) lang = 'fr';
+  // Apostrophes d'élision rétablies à l'affichage (« d un » → « d’un »),
+  // commentaires et pages de texte ; le texte enregistré n'est pas touché.
+  photos = photos.map((p) => (p.comment ? { ...p, comment: fixElisions(p.comment, lang) } : p));
   // Budget adaptatif : plus il y a de photos, plus on réduit chacune pour que le
   // PDF final reste transmissible (cible ~10 Mo). À 1600 px / q0.72 une photo
   // pèse ~0,3 Mo, donc ~3 Mo pour 9 photos (contre ~190 Mo en original brut).
@@ -1684,7 +1704,7 @@ export function proSummaryRows(pages: AlbumPage[], showPlace: boolean, lang: Lan
     for (const p of page.items) {
       rows.push([
         String(rows.length + 1),
-        formatPhotoDate(photoDate(p), 'shortTime', lang),
+        summaryDate(photoDate(p), lang),
         (showPlace ? properPlace(p.place ?? '', lang) : '') || '—',
         String(i + 1),
       ]);
@@ -1847,11 +1867,13 @@ function buildProDocument(
   // Les photos sont numérotées dans l'ordre ; la mention de l'app se pose en
   // pied de la dernière page.
   let photoNo = 0;
+  const summaryLast = options.proSummary && options.proSummaryEnd;
   const sheets = pages
     .map((page, i) => {
       // Compteur « page 2/4 » en bas à droite (la page de garde n'est pas comptée).
       const no = escapeHtml(dict(lang).doc.pageOf(i + 1, pages.length));
-      const last = i === pages.length - 1 ? credit : '';
+      // Mention de l'app sur la vraie dernière page : la table, si elle clôt le rapport.
+      const last = i === pages.length - 1 && !summaryLast ? credit : '';
       if (page.type === 'text') return proTextPageHtml(page.item, no, interactive, last, head);
       const entries = page.items
         .map((p) =>
@@ -1897,6 +1919,7 @@ function buildProDocument(
         <thead><tr><th>${escapeHtml(D.summaryNo)}</th><th>${escapeHtml(D.date)}</th><th>${escapeHtml(D.place)}</th><th>${escapeHtml(D.summaryPage)}</th></tr></thead>
         <tbody>${summaryRows.slice(i, i + S.perPage).join('')}</tbody>
       </table>
+      ${summaryLast && i + S.perPage >= summaryRows.length ? credit : ''}
     </section>`;
     }
   }

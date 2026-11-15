@@ -50,6 +50,7 @@ const fr = {
     ok: 'OK',
     duplicate: 'Dupliquer',
     later: 'Plus tard',
+    help: 'Aide',
   },
   welcome: {
     kicker: 'Commentez vos photos, sauvegardez ou partagez-les',
@@ -218,7 +219,7 @@ const fr = {
     hint: 'Tirez les coins ou les bords · glissez ou pincez la photo',
     reset: 'Réinitialiser',
     rotate: 'Pivoter',
-    apply: 'Appliquer',
+    apply: 'Valider',
     failed: 'Le recadrage a échoué.',
   },
   preview: {
@@ -556,6 +557,7 @@ const en: Dict = {
     ok: 'OK',
     duplicate: 'Duplicate',
     later: 'Later',
+    help: 'Help',
   },
   welcome: {
     kicker: 'Comment on your photos, save them or share them',
@@ -723,7 +725,7 @@ const en: Dict = {
     hint: 'Drag the corners or edges · move or pinch the photo',
     reset: 'Reset',
     rotate: 'Rotate',
-    apply: 'Apply',
+    apply: 'Done',
     failed: 'Cropping failed.',
   },
   preview: {

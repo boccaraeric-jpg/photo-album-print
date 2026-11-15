@@ -113,6 +113,7 @@ import { PreviewModal, type EntryPatch } from './src/components/PreviewModal';
 import { CameraModal } from './src/components/CameraModal';
 import { PhotoViewerModal } from './src/components/PhotoViewerModal';
 import { CropModal } from './src/components/CropModal';
+import { HelpButton, HelpModal } from './src/components/HelpModal';
 import { WelcomeScreen } from './src/components/WelcomeScreen';
 
 // Ordre des puces de tri de l'accueil (libellés dans `L.home.sorts`).
@@ -1007,6 +1008,7 @@ function HomeScreen({
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<Album | null>(null);
   const [query, setQuery] = useState('');
+  const [helpOpen, setHelpOpen] = useState(false);
   const [sort, setSort] = useState<AlbumSort>('recent');
 
   // Le tri est retrouvé au lancement suivant (le texte cherché, lui, ne l'est pas).
@@ -1111,7 +1113,12 @@ function HomeScreen({
           ))}
           </View>
         </View>
-        <Text style={styles.homeTitle}>{L.home.title}</Text>
+        {/* Titre + bouton d'aide « ? » : le mode d'emploi de l'app. */}
+        <View style={styles.titleRow}>
+          <Text style={[styles.homeTitle, styles.titleFlex]}>{L.home.title}</Text>
+          <HelpButton onPress={() => setHelpOpen(true)} />
+        </View>
+        <HelpModal visible={helpOpen} initial="start" onClose={() => setHelpOpen(false)} />
         <Text style={styles.count}>
           {searching
             ? L.home.foundCount(visibleAlbums.length)
@@ -1405,6 +1412,7 @@ onBack,
 
   // Mode « Déplacer » : l'entrée choisie ira là où l'on touche « Placer ici ».
   const [movingId, setMovingId] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const movingIndex = movingId ? orderedPhotos.findIndex((p) => p.id === movingId) : -1;
   const movingEntry = movingIndex >= 0 ? orderedPhotos[movingIndex] : null;
   /** Place l'entrée en mouvement devant la position `slot` (0 = en tête, n = à la fin). */
@@ -2101,8 +2109,9 @@ onBack,
         </View>
         {/* Nom du dossier : un retour à la ligne est permis (2 lignes au plus),
             il est gardé dans la liste et sur la couverture. */}
+        <View style={styles.titleRow}>
         <TextInput
-          style={styles.titleInput}
+          style={[styles.titleInput, styles.titleFlex]}
           value={album.name}
           onChangeText={(t) => onRename(limitLines(t, 2))}
           placeholder={L.nameModal.folderPlaceholder}
@@ -2113,6 +2122,9 @@ onBack,
           spellCheck
           autoCapitalize="sentences"
         />
+          <HelpButton onPress={() => setHelpOpen(true)} />
+        </View>
+        <HelpModal visible={helpOpen} initial="add" onClose={() => setHelpOpen(false)} />
         <Text style={styles.count}>{L.album.photoCount(photos.length)}</Text>
         <View style={styles.topActions}>
           <Pressable
@@ -2534,6 +2546,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   homeHeader: { paddingBottom: 8 },
+  // Titre d'écran et bouton d'aide sur la même ligne (le bouton reste calé en
+  // haut quand le nom du dossier passe sur deux lignes).
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  titleFlex: { flex: 1 },
   homeTopRow: {
     flexDirection: 'row',
     alignItems: 'center',

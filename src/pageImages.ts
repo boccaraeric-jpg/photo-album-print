@@ -11,6 +11,7 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import type { ExportOptions, Photo, ProPhotoSize } from './types';
 import { formatPhotoDate, photoDate, reportDateFormat } from './dateFormat';
+import { fixElisions } from './typography';
 import { dict, localeTag, type Lang } from './i18n';
 import { formatCoords, metaLine, properPlace } from './placeName';
 import {
@@ -36,6 +37,7 @@ import {
   FULL_MAP,
   MAP_GAP,
   splitBelow,
+  belowMapArt,
   splitBeside,
   mapPhotoIds,
   MINI_H,
@@ -724,7 +726,7 @@ async function renderPhotoPage(
       const s = splitBelow(imgW, imgH, aspect, gap);
       const top = imgY + (imgH - s.photoH - gap - s.mapH) / 2;
       photoRect = { x: imgX, y: top, w: imgW, h: s.photoH };
-      mapRect = { x: imgX, y: top + s.photoH + gap, w: imgW, h: s.mapH };
+      mapRect = { x: imgX + (imgW - s.mapW) / 2, y: top + s.photoH + gap, w: s.mapW, h: s.mapH };
     } else if (hasMap) {
       const s = splitBeside(imgW, imgH, aspect, gap);
       const left = imgX + (imgW - s.photoW - gap - s.mapW) / 2;
@@ -752,7 +754,17 @@ async function renderPhotoPage(
       canvas.drawRRect(rrect(rect.x - 6, rect.y - 6, rect.w + 12, rect.h + 12, 4), edge);
     };
     if (mapRect) {
-      drawMiniMap(canvas, photo, mapImages[i], mapRect.x, mapRect.y, mapRect.w, mapRect.h, radius);
+      drawMiniMap(
+        canvas,
+        photo,
+        mapImages[i],
+        mapRect.x,
+        mapRect.y,
+        mapRect.w,
+        mapRect.h,
+        radius,
+        mapBelow,
+      );
       if (options.liseret) drawLiseret(mapRect);
     }
     // « contain » : photo entière, non rognée (comme le PDF).
@@ -1297,16 +1309,20 @@ function drawMiniMap(
   h: number,
   /** Arrondi des coins (px) : celui de la photo voisine. */
   radius = 0,
+  /** Carte sous la photo : fond rogné plutôt que trop réduit (`belowMapArt`). */
+  below = false,
 ): void {
   const c = photoCoords(photo);
   if (!c) return;
   canvas.save();
   if (radius > 0) canvas.clipRRect(rrect(x, y, w, h, radius), ClipOp.Intersect, true);
   else canvas.clipRect(Skia.XYWHRect(x, y, w, h), ClipOp.Intersect, true);
+  const art = below ? belowMapArt(w, h, W / COVER_W) : null;
   if (image) {
-    drawCoverImage(canvas, image, x, y, w, h, 0);
+    if (art) drawCoverImage(canvas, image, x + (w - art.w) / 2, y + (h - art.h) / 2, art.w, art.h, 0);
+    else drawCoverImage(canvas, image, x, y, w, h, 0);
   } else {
-    const s = Math.max(w / MINI_W, h / MINI_H);
+    const s = art ? art.w / MINI_W : Math.max(w / MINI_W, h / MINI_H);
     canvas.translate(x + (w - MINI_W * s) / 2, y + (h - MINI_H * s) / 2);
     canvas.scale(s, s);
     drawMapItems(canvas, buildMiniMapModel(c.lat, c.lon).items);
@@ -1404,6 +1420,8 @@ function renderProSummary(
   head: ProHead,
   /** Table en fin de rapport : le fichier se range après les fiches. */
   atEnd = false,
+  /** Dernière page du rapport : elle porte la mention de l'app. */
+  credit = false,
 ): PagePayload | null {
   const D = dict(lang).doc;
   const H = imageHeight(options);
@@ -1455,6 +1473,7 @@ function renderProSummary(
     '#111827',
   );
   for (const cells of rows) line(cells, S.size * k, '#14181f', '#f1f2f4');
+  if (credit) drawProCredit(canvas, H);
   return encodeSurface(surface, title, 0, `${atEnd ? 'zz' : '00'}-recap-${index + 1}`);
 }
 
@@ -1788,6 +1807,9 @@ export async function buildAlbumImages(
   };
 
   const pro = options.style === 'pro';
+  // Apostrophes d'élision rétablies à l'affichage (« d un » → « d’un »),
+  // commentaires et pages de texte ; le texte enregistré n'est pas touché.
+  photos = photos.map((p) => (p.comment ? { ...p, comment: fixElisions(p.comment, lang) } : p));
   // En mode pro : gabarit imposé (fond blanc, 2 photos/page). L'encadrement, le
   // format et la position de la date restent réglables par l'utilisateur.
   // Typographie et couverture restent celles du gabarit pro (Montserrat, page
@@ -1870,6 +1892,7 @@ export async function buildAlbumImages(
           lang,
           head,
           atEnd,
+          atEnd && i + PRO_SUMMARY.perPage >= rows.length,
         ),
       );
     }
@@ -1882,7 +1905,8 @@ export async function buildAlbumImages(
     const bg = pro ? undefined : pageBackground(entries);
     // Fond propre : toutes les couleurs de la page en découlent (cf. `isDark`).
     const pageOpts = bg ? { ...eff, background: bg } : eff;
-    const credit = pro && i === pages.length - 1;
+    // Mention de l'app sur la vraie dernière page : la table, si elle clôt le rapport.
+    const credit = pro && i === pages.length - 1 && !(eff.proSummary && eff.proSummaryEnd);
     if (page.type === 'text') {
       await push(
         renderTextPage(

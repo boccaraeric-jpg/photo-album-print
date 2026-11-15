@@ -351,16 +351,33 @@ export function CropModal({ photo, onSave, onClose }: Props) {
       <StatusBar barStyle="light-content" />
       <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
         <View style={styles.topBar}>
+          {/* Barre de titre à la manière d'iOS et des autres éditeurs de l'app
+              (annotation) : annuler à gauche, valider à droite. La validation
+              était seule en bas à droite, à l'inverse du reste (retour testeur). */}
+          <Pressable
+            onPress={onClose}
+            disabled={applying}
+            hitSlop={12}
+            accessibilityRole="button"
+            style={styles.topSide}
+          >
+            <Text style={styles.topBtn}>{L.common.cancel}</Text>
+          </Pressable>
           <Text style={styles.title}>{L.crop.title}</Text>
           <Pressable
-            onPress={reset}
-            disabled={pristine || busy}
-            hitSlop={10}
-            style={styles.reset}
+            onPress={apply}
+            disabled={applying || busy || !size}
+            hitSlop={12}
+            accessibilityRole="button"
+            style={[styles.topSide, styles.topSideEnd]}
           >
-            <Text style={[styles.resetText, (pristine || busy) && styles.dim]}>
-              {L.crop.reset}
-            </Text>
+            {applying ? (
+              <ActivityIndicator color={C.tan} />
+            ) : (
+              <Text style={[styles.topBtn, styles.topBtnApply, (busy || !size) && styles.dim]}>
+                {L.crop.apply}
+              </Text>
+            )}
           </Pressable>
         </View>
 
@@ -446,7 +463,7 @@ export function CropModal({ photo, onSave, onClose }: Props) {
 
         <Text style={styles.hint}>{L.crop.hint}</Text>
 
-        <View style={styles.tools}>
+        <View style={[styles.tools, { paddingBottom: insets.bottom + 14 }]}>
           <Pressable
             style={styles.tool}
             onPress={rotate}
@@ -457,26 +474,15 @@ export function CropModal({ photo, onSave, onClose }: Props) {
             <MaterialIcons name="rotate-90-degrees-ccw" size={24} color="#fff" />
             <Text style={styles.toolText}>{L.crop.rotate}</Text>
           </Pressable>
-        </View>
-
-        <View style={[styles.actions, { paddingBottom: insets.bottom + 12 }]}>
           <Pressable
-            style={[styles.btn, styles.btnGhost]}
-            onPress={onClose}
-            disabled={applying}
+            style={[styles.tool, (pristine || busy) && styles.dim]}
+            onPress={reset}
+            disabled={pristine || busy}
+            accessibilityLabel={L.crop.reset}
+            hitSlop={6}
           >
-            <Text style={styles.btnGhostText}>{L.common.cancel}</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.btn, styles.btnPrimary, (applying || busy) && styles.dim]}
-            onPress={apply}
-            disabled={applying || busy || !size}
-          >
-            {applying ? (
-              <ActivityIndicator color={C.paper} />
-            ) : (
-              <Text style={styles.btnPrimaryText}>{L.crop.apply}</Text>
-            )}
+            <MaterialIcons name="restart-alt" size={24} color="#fff" />
+            <Text style={styles.toolText}>{L.crop.reset}</Text>
           </Pressable>
         </View>
       </View>
@@ -491,13 +497,16 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    height: 40,
+    height: 44,
   },
   title: { fontFamily: F.monoBold, fontSize: 17, color: '#fff' },
-  reset: { position: 'absolute', right: 20 },
-  resetText: { fontFamily: F.monoBold, fontSize: 14, color: C.tan },
+  // Côtés de même largeur : le titre reste centré quel que soit le libellé.
+  topSide: { flex: 1, height: 44, justifyContent: 'center', alignItems: 'flex-start' },
+  topSideEnd: { alignItems: 'flex-end' },
+  topBtn: { fontFamily: F.mono, fontSize: 16, color: 'rgba(255,255,255,0.85)' },
+  topBtnApply: { fontFamily: F.monoBold, color: '#F2B872' },
   stage: { flex: 1, overflow: 'hidden' },
   shade: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.62)' },
   frame: {
@@ -536,28 +545,10 @@ const styles = StyleSheet.create({
   tools: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 40,
-    paddingTop: 14,
-    paddingBottom: 8,
+    gap: 56,
+    paddingTop: 16,
   },
-  tool: { alignItems: 'center', gap: 4 },
+  tool: { alignItems: 'center', gap: 4, minWidth: 96 },
   toolText: { fontFamily: F.mono, fontSize: 11, color: 'rgba(255,255,255,0.8)' },
-  actions: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingTop: 8 },
-  btn: {
-    flex: 1,
-    height: 52,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnGhost: { backgroundColor: 'rgba(255,255,255,0.14)' },
-  btnGhostText: { fontFamily: F.monoBold, color: '#fff', fontSize: 16 },
-  btnPrimary: { backgroundColor: C.sienna },
-  btnPrimaryText: {
-    fontFamily: F.monoBold,
-    color: C.paper,
-    fontSize: 15,
-    letterSpacing: 1,
-  },
   dim: { opacity: 0.4 },
 });

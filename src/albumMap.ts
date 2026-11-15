@@ -794,11 +794,32 @@ export function splitBelow(
   h: number,
   aspect: number,
   gap: number,
-): { photoH: number; mapH: number } {
+): { photoH: number; mapH: number; mapW: number } {
   const room = h - gap;
-  if (!(aspect > 0)) return { photoH: room * (1 - MAP_SHARE_BELOW), mapH: room * MAP_SHARE_BELOW };
+  if (!(aspect > 0)) {
+    return { photoH: room * (1 - MAP_SHARE_BELOW), mapH: room * MAP_SHARE_BELOW, mapW: w };
+  }
   const photoH = Math.min(w / aspect, room * (1 - MAP_SHARE_BELOW_MIN));
-  return { photoH, mapH: Math.min(room - photoH, room * MAP_SHARE_BELOW) };
+  // Sous un portrait, la carte s'aligne sur la largeur de la photo au lieu de
+  // déborder de chaque côté en ruban (retour testeur), sans descendre sous
+  // `MAP_BELOW_MIN_W` de la colonne.
+  const photoW = Math.min(w, photoH * aspect);
+  const mapW = Math.min(w, Math.max(photoW, w * MAP_BELOW_MIN_W));
+  return { photoH, mapH: Math.min(room - photoH, room * MAP_SHARE_BELOW), mapW };
+}
+/** Largeur minimale d'une carte posée sous sa photo, en part de la colonne. */
+export const MAP_BELOW_MIN_W = 0.62;
+/**
+ * Échelle minimale du fond de carte posé sous une photo (points de page par
+ * point du repère `MINI_W × MINI_H`). Cadrée « cover » dans une bande basse,
+ * la carte sortait réduite au tiers et ses noms devenaient illisibles : en
+ * dessous de ce seuil elle est **rognée** autour du repère plutôt que réduite.
+ */
+export const MAP_BELOW_ZOOM = 0.46;
+/** Taille d'affichage du fond de carte sous une photo, dans une case `w × h`. */
+export function belowMapArt(w: number, h: number, unit = 1): { w: number; h: number } {
+  const s = Math.max(w / MINI_W, h / MINI_H, MAP_BELOW_ZOOM * unit);
+  return { w: MINI_W * s, h: MINI_H * s };
 }
 /** Médaillon de carte posé sur une photo pleine page (points A4). */
 export const FULL_MAP = { w: 168, h: 112, margin: 18, border: 4 };

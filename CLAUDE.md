@@ -468,6 +468,20 @@ d'entrée** (ils pilotent aussi les libellés) :
   géocodeur du système ne répond pas dans une langue choisie) ; un nom absent sort tel quel, un
   homonyme entre les deux langues (« Mexico ») n'est jamais converti. Vaut pour PDF, images, page
   « Nos lieux » (`collectPlaces`) et `contexte.txt`. Toute nouvelle langue demande sa colonne.
+  ⚠️ Les **noms écrits sur les cartes Apple Plans** suivent la langue de l'**iPhone**, pas celle de
+  l'album : `MKMapSnapshotter` n'a aucun réglage de langue. Assumé (un utilisateur anglais a son
+  iPhone en anglais) ; le fichier gardé porte la langue du téléphone (`mapLang`, `mapSnapshot.ts`)
+  pour qu'une carte ne survive pas à un changement de langue du système.
+- **Carte sous la photo (16 × 16)** : `splitBelow` rend aussi `mapW` — sous un portrait la carte
+  s'aligne sur la largeur de la photo (`MAP_BELOW_MIN_W` au moins) — et le fond est **rogné** autour
+  du repère plutôt que réduit sous `MAP_BELOW_ZOOM` (`belowMapArt`, deux moteurs ; PDF : `data-z` et
+  variables `--mz-*` sur `.ph-map`). Paire sans cadre aux hauteurs voisines (< 10 %) : bande commune,
+  légendes sur la même ligne.
+- **Apostrophes d'élision** (`src/typography.ts`, `fixElisions`) : « d un », « C est » rétablis **à
+  l'affichage** dans les deux moteurs (texte français seulement, majuscule isolée reprise en début de
+  phrase uniquement) ; `Photo.comment` n'est pas modifié, `contexte.txt` reste brut.
+- **Rapport pro** : la mention de l'app suit la **vraie dernière page** (la table si `proSummaryEnd`) ;
+  dates de la table en anglais avec le mois en lettres (`summaryDate`) ; référence en saisie libre.
 
 - **Page de garde du rapport pro** : composition centrée (sur-titre « Rapport photographique », titre,
 
@@ -716,6 +730,15 @@ en bas). Toucher le **reste de la carte** garde l'ancien comportement — ouvert
 Le zoom utilise les props natives de `ScrollView` (`minimumZoomScale` / `maximumZoomScale`), donc
 sans `react-native-gesture-handler` ; ⚠️ **iOS uniquement** — sur Android la photo s'affiche en plein
 écran mais ne se pince pas. Les pages de texte n'ouvrent pas la visionneuse.
+
+## Aide intégrée
+Bouton **« ? »** (`HelpButton`) à droite du titre de `HomeScreen` et d'`AlbumScreen` → `HelpModal`
+(`src/components/HelpModal.tsx`) : mode d'emploi en rubriques repliables, une seule ouverte, celle de
+l'écran appelant d'abord (`initial`). Textes dans **`src/helpContent.ts`** (FR + EN, mêmes rubriques
+imposées par le typage — pas dans `i18n.ts` : ce sont des paragraphes). ⚠️ Ils citent les libellés
+des boutons : renommer un bouton ou déplacer une fonction oblige à les relire.
+**Validation en haut à droite** dans les éditeurs plein écran (`CropModal`, `AnnotateModal`) :
+Annuler à gauche, titre, Valider à droite ; les outils (Pivoter, Réinitialiser) restent en bas.
 
 ## Petits modules à connaître
 `src/appVersion.ts` `versionLabel()` — étiquette affichée en bas de `WelcomeScreen` : numéro d'app

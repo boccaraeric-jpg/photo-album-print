@@ -109,3 +109,17 @@ export function fileDateStamp(ts: number = Date.now()): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   return `${dd}-${mm}-${d.getFullYear()}`;
 }
+
+/**
+ * Date d'une ligne de la table récapitulative du rapport pro. En anglais le
+ * mois s'écrit en lettres (« Sep 10, 2026 at 11:09 AM ») : « 09/10/2026 » se
+ * lit 10 septembre aux États-Unis et 9 octobre au Royaume-Uni, ambiguïté
+ * qu'un rapport ne peut pas se permettre. Le français garde « 10/09/2026 ».
+ */
+export function summaryDate(ts: number, lang: Lang = 'fr'): string {
+  if (lang !== 'en') return formatPhotoDate(ts, 'shortTime', lang);
+  const d = new Date(ts);
+  const day = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${day} at ${time}`;
+}
