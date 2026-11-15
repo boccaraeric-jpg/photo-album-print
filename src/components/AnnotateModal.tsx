@@ -158,7 +158,7 @@ export function AnnotateModal({ photo, onSave, onClose }: Props) {
             hitSlop={12}
             accessibilityRole="button"
           >
-            <Text style={[styles.topBtn, styles.topBtnSave]}>{L.common.save}</Text>
+            <Text style={[styles.topBtn, styles.topBtnSave]}>{L.common.validate}</Text>
           </Pressable>
         </View>
 

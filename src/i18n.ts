@@ -51,6 +51,7 @@ const fr = {
     duplicate: 'Dupliquer',
     later: 'Plus tard',
     help: 'Aide',
+    validate: 'Valider',
   },
   welcome: {
     kicker: 'Commentez vos photos, sauvegardez ou partagez-les',
@@ -558,6 +559,7 @@ const en: Dict = {
     duplicate: 'Duplicate',
     later: 'Later',
     help: 'Help',
+    validate: 'Done',
   },
   welcome: {
     kicker: 'Comment on your photos, save them or share them',

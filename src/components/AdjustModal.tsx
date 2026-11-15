@@ -75,7 +75,7 @@ export function AdjustModal({ photo, onSave, onClose }: Props) {
             {saving ? (
               <ActivityIndicator color="#fbbf24" />
             ) : (
-              <Text style={[styles.topBtn, styles.topBtnSave]}>{L.common.ok}</Text>
+              <Text style={[styles.topBtn, styles.topBtnSave]}>{L.common.validate}</Text>
             )}
           </Pressable>
         </View>

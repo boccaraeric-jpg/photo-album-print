@@ -130,7 +130,9 @@ export function HelpButton({ onPress }: { onPress: () => void }) {
       accessibilityRole="button"
       accessibilityLabel={L.common.help}
     >
-      <Ionicons name="help" size={20} color={C.sienna} />
+      {/* « ? » en lettre grasse plutôt qu'en pictogramme fin : le bouton
+          passait inaperçu (retour testeur). */}
+      <Text style={styles.helpMark}>?</Text>
     </Pressable>
   );
 }
@@ -181,12 +183,24 @@ const styles = StyleSheet.create({
   dot: { fontFamily: F.monoBold, fontSize: 15, lineHeight: 22, color: C.sienna },
   bulletText: { flex: 1 },
   helpBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: C.tan,
+    borderWidth: 2,
+    borderColor: C.sienna,
+    // Détaché de la ligne du dessus (sélecteur FR / EN sur l'accueil).
+    marginTop: 8,
+  },
+  helpMark: {
+    fontFamily: F.display,
+    fontSize: 21,
+    lineHeight: 25,
+    color: C.sienna,
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   pressed: { opacity: 0.6 },
 });

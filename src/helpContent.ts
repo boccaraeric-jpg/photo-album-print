@@ -47,7 +47,7 @@ const fr: HelpContent = {
       title: 'Démarrer en 4 étapes',
       body: [
         '• Créez un dossier avec « ＋ Nouveau dossier ».',
-        '• Ajoutez-y des photos : appareil photo ou galerie.',
+        '• Ajoutez-y des photos : appareil photo ou galerie (toutes les photos de votre photothèque).',
         '• Touchez une photo pour écrire ou dicter son commentaire.',
         '• Choisissez « Loisir » ou « Professionnel » en bas de l’écran, réglez la mise en page, vérifiez l’aperçu, puis envoyez.',
       ],
@@ -168,7 +168,7 @@ const en: HelpContent = {
       title: 'Get started in 4 steps',
       body: [
         '• Create a folder with “＋ New folder”.',
-        '• Add photos to it: camera or photo library.',
+        '• Add photos to it: camera or photo gallery (all the photos in your photo library).',
         '• Tap a photo to type or dictate its caption.',
         '• Choose “Leisure” or “Professional” at the bottom of the screen, set the layout, check the preview, then send.',
       ],
