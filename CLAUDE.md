@@ -728,8 +728,9 @@ La vignette de `PhotoCard` fait 76 px : **toucher la vignette** ouvre
 `src/components/PhotoViewerModal.tsx` (plein écran noir, photo `resizeMode="contain"`, commentaire
 en bas). Toucher le **reste de la carte** garde l'ancien comportement — ouverture de `CommentModal`.
 Le zoom utilise les props natives de `ScrollView` (`minimumZoomScale` / `maximumZoomScale`), donc
-sans `react-native-gesture-handler` ; ⚠️ **iOS uniquement** — sur Android la photo s'affiche en plein
-écran mais ne se pince pas. Les pages de texte n'ouvrent pas la visionneuse.
+sans `react-native-gesture-handler`. Ces props sont **iOS uniquement** : **Android** passe par
+`ZoomablePhoto` (même fichier) — pincement, glissé une fois agrandie, double appui — en
+`PanResponder` + `Animated`, sans module natif. Les pages de texte n'ouvrent pas la visionneuse.
 
 ## Aide intégrée
 Bouton **« ? »** (`HelpButton`) à droite du titre de `HomeScreen` et d'`AlbumScreen` → `HelpModal`
