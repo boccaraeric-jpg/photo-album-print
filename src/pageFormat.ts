@@ -58,6 +58,42 @@ export const PAGE_FORMATS: Record<PageFormat, FormatSpec> = {
 
 export const PAGE_FORMAT_KEYS: PageFormat[] = ['a4', '16x21', '16x16'];
 
+/**
+ * Le moteur d'impression d'iOS (WebKit) ne met pas une page en page à sa
+ * largeur : il la compose sur **1,25 fois** la largeur du papier (partie
+ * entière), puis réduit le tout pour la faire tenir. Mesuré sur un PDF 16 × 16
+ * sorti d'un iPhone (14/11/2026) : page de 453,54 pt composée sur 566 px, donc
+ * rendue à 80 % — album calé en haut à gauche, couverture montée décalée, fond
+ * d'une page peinte arrêté aux 4/5 de la hauteur.
+ */
+const IOS_PRINT_LAYOUT = 1.25;
+/**
+ * Marge de sûreté sur le zoom : la hauteur de page est elle aussi arrondie à
+ * l'entier inférieur par iOS ; sans elle, une feuille tombant juste (16 × 21)
+ * débordait d'une fraction d'unité et ajoutait une page blanche.
+ */
+const PRINT_SAFETY = 0.998;
+
+/**
+ * Zoom CSS à poser sur `html` pour qu'une page mise en page sur `PAGE_W`
+ * unités sorte à sa taille réelle dans le PDF.
+ *
+ * - iOS : la largeur de composition vaut `floor(1,25 × largeur réelle)` ; le
+ *   zoom y loge exactement les 595 unités, et la réduction d'iOS ramène ensuite
+ *   la page à sa vraie taille.
+ * - Ailleurs (Android, contrôle sous Chrome) : la page est composée à sa
+ *   largeur réelle, le zoom est le simple rapport des largeurs.
+ *
+ * L'**A4 est concerné comme les autres** sous iOS (zoom ≈ 1,246 et non 1) :
+ * mesuré le 14/11/2026, sa page était composée sur 743 px, les feuilles de
+ * 842 px de haut n'en couvraient que les 4/5 et tout sortait à 80 %.
+ */
+export function printZoom(format: PageFormat, ios: boolean): number {
+  const { zoom, print } = PAGE_FORMATS[format];
+  if (!ios) return zoom;
+  return (Math.floor(print.width * IOS_PRINT_LAYOUT) / PAGE_W) * PRINT_SAFETY;
+}
+
 /** Vrai si l'album est en page carrée (gabarits dédiés). */
 export function isSquare(format: PageFormat): boolean {
   return PAGE_FORMATS[format].square;

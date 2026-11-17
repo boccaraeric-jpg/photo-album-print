@@ -78,6 +78,11 @@ reconnaissance **on-device** (iOS `SFSpeechRecognizer`) dans la langue courante 
 phrases finales figées ; le texte après le curseur est gardé dans `tailRef`). Le curseur est relevé
 à l'**`onPressIn`** du micro (`getInsertPosition` → `caretRef` de `CommentModal`), jamais la
 sélection par défaut `{0,0}` d'un champ non touché — sinon on dicterait en tête.
+**Android** (`androidOnDevice`) : sur l'appareil seulement si le modèle de la langue est installé
+(Android 13+) ; sinon l'app propose de le télécharger (`androidTriggerOfflineModelDownload`), et à
+défaut passe par le **service vocal du système (Google, en ligne)** — choix retenu pour la session,
+remis à zéro après un échec. `requiresOnDeviceRecognition: true` d'office faisait échouer toute
+dictée sur un Android sans modèle. Politique de confidentialité alignée (`docs/privacy.html`).
 **Ponctuation parlée** : `addsPunctuation: false` (iOS mettait un point à chaque pause) et
 `applySpokenPunctuation` (`src/dictation.ts`) convertit « point », « virgule », « point
 d'interrogation », « à la ligne », guillemets… (EN : period, comma…), sans toucher « point de vue »
@@ -221,8 +226,11 @@ d'entrée** (ils pilotent aussi les libellés) :
   `textAlign` = alignement des **pages de texte**, honoré en pro **et** familial ; en familial il
   aligne **aussi le commentaire** sous chaque photo — `.caption` / `align` de `renderPhotoPage` —,
   la date gardant `dateAlign`. Le polaroïd ne force plus le centrage). Le **`style`**
-  (`family`/`pro`) vient des boutons du bas. La date sous chaque photo est rendue en **minuscules**,
-  taille réduite.
+  (`family`/`pro`) vient des boutons du bas. La **date** sous chaque photo est rendue en minuscules
+  (sauf en anglais), taille réduite ; le **lieu** garde ses majuscules et les reçoit s'il a été tapé
+  sans : `metaLine` / `properPlace` (`src/placeName.ts`, communs aux deux moteurs, pro compris).
+  Jamais de `text-transform: lowercase` ni de `toLowerCase()` sur la ligne entière : « porto moniz,
+  portugal » (retour testeur).
 - **`commentVAlign`** (`top`/`middle`/`bottom`) place le commentaire dans la bande qui lui est
   réservée sous la photo — **familial uniquement** (le gabarit pro dispose sa fiche en flux, une
   expertise ne doit jamais voir sa description tronquée ; la pleine page a son propre bandeau
@@ -250,7 +258,8 @@ d'entrée** (ils pilotent aussi les libellés) :
   `commentSize` (normal / **grand par défaut** / très grand, `COMMENT_SCALE`), corps et encres
   partagés dans `albumStyle.ts` (`COMMENT_BASE`, `CAPTION_INK`, `META_*`), Caveat en **bold**
   (`captionBold`). La photo cède la place (`commentShrink`), le seuil de page seule baisse
-  (`isLongComment(photo, scale)`). Skia n'a plus de coupure à 2 lignes : la bande se mesure.
+  (`isLongComment(photo, scale)`), et il est **divisé par deux en 16 × 16** pour les moyennes côte à
+  côte (`narrow` de `paginateEntries`, colonne deux fois plus étroite : 2-3 phrases écrasaient la photo). Skia n'a plus de coupure à 2 lignes : la bande se mesure.
   Les montages **gardent** la photo ★ dans les pages (la règle d'exclusion ne vaut qu'en `classic`).
   En `script`, les pages de texte restent en Lora (Caveat illisible au long cours) ; les **dates**
   (lieu · date, période de la page de fin) suivent la typographie choisie (`spec.date`, Caveat
@@ -332,12 +341,52 @@ d'entrée** (ils pilotent aussi les libellés) :
   ensuite **réduit** à sa vraie taille (`printScale` : `html { zoom }` + `@page`, et `print` passé à
   `expo-print`) — 16 × 21 cm = 453,5 × 595,3 pt ; 780 et non 781, sinon une fraction de point déborde
   en page blanche. Images Skia : 1240 px de large, `imageH` de haut. Contrôlé sous Chrome (taille et
-  nombre de pages) ; ⚠️ le `zoom` à l'impression iOS reste à confirmer sur appareil.
+  nombre de pages).
+  ⛔ **iOS compose toute page à imprimer sur 1,25 × la largeur du papier** (partie entière), puis la
+  réduit pour la faire tenir (réglage d'usine de WebKit, indépendant du `<meta viewport>`). Mesuré sur
+  un PDF 16 × 16 sorti d'un iPhone (14/11/2026) : page de 453,54 pt composée sur 566 px, donc album
+  rendu à **80 %**, calé en haut à gauche — couverture montée décalée, fond d'une page peinte arrêté
+  aux 4/5. `printZoom(format, ios)` (`pageFormat.ts`) pose le zoom en conséquence
+  (`floor(1,25 × largeur) / 595`, × 0,998 de sûreté contre la page blanche) ; Android garde le rapport
+  simple. **Chrome ne reproduit pas ce comportement** : pour contrôler sur PC, générer le HTML en
+  variante iOS et remplacer `@page { size }` par `566px 566px` (16 × 16) — l'ancien code y redonne
+  bien le défaut (A4 : `743px 1052px` ; 16 × 21 : `566px 744px`). L'**A4** (album **et rapport pro**)
+  reçoit le même zoom sous iOS (≈ 1,246, `printScale('a4')` dans `buildProDocument`) : mesuré le
+  14/11/2026, ses feuilles ne couvraient que les 4/5 de la hauteur, couverture décalée, textes à 80 %.
+  Correctif vérifié en simulation Chrome seulement — à recontrôler sur un PDF A4 sorti d'un iPhone.
+  **Photo + carte accordées** (`splitBeside` / `splitBelow`, `albumMap.ts`, communs aux deux
+  moteurs) : dès que les proportions de la photo sont connues (`Item.aspect`, lu sur le JPEG produit
+  par `readPrintImage` ; Skia les a d'office), photo et carte ont la **même hauteur** côte à côte et
+  le bloc se centre — carte entre `MAP_SHARE_MIN` et `MAP_SHARE`. Proportions inconnues : partage
+  fixe d'origine (feuille de style). En **photo seule** et en **carré côte à côte**, la bande image
+  ne garde que la hauteur utile (`zoneNeed`, `--ph` de la page) ; PDF seulement, Skia garde ses cases.
+  Les moyennes sont enveloppées dans `.pair` (carré : deux cartes de **même hauteur**, `stretch`).
+  **Cartes empilées qui épousent la photo** (`stackLayout`, `pdf.ts` — moyennes hors carré, photo
+  seule, grande ; PDF seulement) : chaque bande image reçoit la hauteur dont sa photo a besoin, le
+  reste revient à la voisine (une moyenne peut dépasser sa hauteur visée de `STACK_GROW`), et la
+  carte se resserre en largeur sur la photo (`HUG_MIN` au moins) tant que la légende n'y prend pas
+  une ligne de plus. `--ph` et `width` sont alors posés **sur la carte**, plus sur la feuille. La
+  carte de lieu ne dépasse jamais `MAP_VS_PHOTO` × la largeur de la photo (`splitBeside`, deux
+  moteurs). La bande de `commentVAlign` ne vaut que s'il y a un commentaire (`.caption.meta-only`).
   **16 × 16 (carré, `square`)** : hauteur 594, gabarits **propres** et non un simple retranchement —
   `SQUARE_PH` (pdf.ts), moyennes **côte à côte** (`.fmt-square` sur `body` ; Skia `gridFor(..., square)`
   = 2 colonnes × 1 rangée), carte d'une moyenne **sous** la photo (`mapBelow`, sauf photo seule
-  agrandie), couverture classique resserrée, pêle-mêle moins réduit en largeur (`sx`), écart grille →
+  agrandie ; `MAP_SHARE_BELOW` = 35 % de la hauteur — 44 % dominait la photo, retour testeur —, cadre et marges
+  resserrés côte à côte dans le PDF (`SQUARE_SIDE` / `SQUARE_GAP` / `SQUARE_TRIM`, à reporter dans
+  `fitPhotoHeight`), en **hauteurs explicites** `calc()` dans `sizeCss`
+  — en flex colonne la photo gardait toute la hauteur et la carte s'écrasait en filet blanc sous un
+  portrait, en ruban sous un paysage), couverture classique resserrée, pêle-mêle moins réduit en largeur (`sx`), écart grille →
   titre réduit, légende de la page « Nos lieux » sur 3 colonnes (`cols` d'`albumMap.ts`).
+- **Hauteur des photos (PDF)** : `PH_HEIGHTS` / `SQUARE_PH` (`pdf.ts`) sont des hauteurs **visées**
+  (petite 240, moyenne 300, grande 570 en A4 — agrandies, retour testeur « petite vraiment petite »).
+  `fitPhotoHeight` estime les légendes de chaque page (`estimateLines`) et abaisse la hauteur par
+  `--ph` sur la feuille quand elles ne tiennent pas : ne pas relever une hauteur sans lui, la feuille
+  est de hauteur fixe et couperait. Skia remplit déjà ses cases (rien à régler).
+  **Pleine page = photo entière, jamais rognée** : gabarit `FULL_PAGE` (`albumStyle.ts`, commun aux
+  deux moteurs) — la photo tient dans la page moins une **marge égale** (26) sur les quatre côtés,
+  la légende se pose juste dessous, le bloc se **centre** sur la page (`.full-sheet` en flex, hauteur
+  fixe ; `renderFullPage`). Plus de bandeau de légende réservé en pied : il collait la photo au bord
+  haut (retour testeur). Hauteur de la photo par `--fh` (légende estimée), en px et non en %.
 - **Photos centrées sur la page** (familial) : `.sheet.photos` a la hauteur exacte de la page et
   centre le bloc en flex (seule exception au « pas de flex vertical », sûre parce que la feuille est
   de hauteur fixe et que les tailles de `sizeCss` tiennent dans la page) ; numéro en pied hors flux ;
@@ -364,13 +413,48 @@ d'entrée** (ils pilotent aussi les libellés) :
   description) — une page ne mélange pas deux tailles, une grande a sa page. Le PDF (`.sheet.pro-page`,
   `min-height` A4 : une estimation fausse allonge la feuille au lieu de tronquer une description) et les
   images (`renderProPage`, mêmes mesures, description entière) suivent **les mêmes pages**. Aperçu pro
-  en feuilles sur plan de travail, numéros de page, mention de l'app en pied de la dernière.
+  en feuilles sur plan de travail, **compteur « page 2/4 » en bas à droite** de chaque page (`doc.pageOf`,
+  `.footer` / `drawProFooter` ; la page de garde n'est pas comptée), mention de l'app en pied de la dernière.
   **Taille du texte pro** : `ExportOptions.proTextSize` (normal par défaut, `PRO_TEXT_SCALE` 1 / 1,25 / 1,5,
   paliers plus francs que le Loisir), **`proTextBold`** (valeurs et pages de texte en 800), vignettes
   réduites d'autant (`proFrameH`), intitulés grandissant moitié moins.
 - **Position d'une page de texte** (`Photo.textVAlign` haut/milieu/bas, réglée dans l'aperçu, les deux
   styles) : défaut milieu en Loisir, haut en pro. `.tv-*` des deux gabarits, `startY` de `renderTextPage`.
+- **Rapport pro, tenue « expertise »** (deux moteurs) : **en-tête courant** de chaque page
+  (`proHeadTexts` : titre · référence, nature et date ; `.head` / `drawProHeader`), **table
+  récapitulative** après la page de garde (`proSummary`, défaut oui — `proSummaryRows`,
+  `PRO_SUMMARY`, `renderProSummary`, non comptée dans « page n/N »), **coordonnées GPS** à la suite
+  du lieu (`proCoords`, défaut **non** — `formatCoords`), **auteur** et **référence** saisis dans
+  Mise en page › Textes (`proAuthor`, `proReference`, bornés par `plainLine`, toujours échappés).
+  Une ligne sans valeur (lieu, description) n'est plus posée ; plus d'aplat gris derrière la photo ;
+  une **grande** fiche remplit sa page (`proLargeFrameH`, 14 pt de sûreté, sans dépasser la photo à
+  pleine largeur). `proEntryHeight(..., coords)` compte la ligne « Lieu » qui passe à la ligne.
+  Dates : « 1er » en français (`frenchFirst`), heure « 9 h 41 ». La table peut se ranger **en fin de
+  rapport** (`proSummaryEnd`, interrupteur visible quand la table est active ; images : fichiers
+  `zz-recap-n`).
+- **Lieux dans la langue de l'album** (`src/placeI18n.ts`) : `Photo.place` est un texte figé dans la
+  langue du téléphone au géocodage (« Athènes, Grèce »). À l'affichage seulement, `properPlace(place,
+  lang)` convertit pays et grandes villes par une **table hors ligne** français ↔ anglais (le
+  géocodeur du système ne répond pas dans une langue choisie) ; un nom absent sort tel quel, un
+  homonyme entre les deux langues (« Mexico ») n'est jamais converti. Vaut pour PDF, images, page
+  « Nos lieux » (`collectPlaces`) et `contexte.txt`. Toute nouvelle langue demande sa colonne.
+  ⚠️ Les **noms écrits sur les cartes Apple Plans** suivent la langue de l'**iPhone**, pas celle de
+  l'album : `MKMapSnapshotter` n'a aucun réglage de langue. Assumé (un utilisateur anglais a son
+  iPhone en anglais) ; le fichier gardé porte la langue du téléphone (`mapLang`, `mapSnapshot.ts`)
+  pour qu'une carte ne survive pas à un changement de langue du système.
+- **Carte sous la photo (16 × 16)** : `splitBelow` rend aussi `mapW` — sous un portrait la carte
+  s'aligne sur la largeur de la photo (`MAP_BELOW_MIN_W` au moins) — et le fond est **rogné** autour
+  du repère plutôt que réduit sous `MAP_BELOW_ZOOM` (`belowMapArt`, deux moteurs ; PDF : `data-z` et
+  variables `--mz-*` sur `.ph-map`). Paire sans cadre aux hauteurs voisines (< 10 %) : bande commune,
+  légendes sur la même ligne.
+- **Apostrophes d'élision** (`src/typography.ts`, `fixElisions`) : « d un », « C est » rétablis **à
+  l'affichage** dans les deux moteurs (texte français seulement, majuscule isolée reprise en début de
+  phrase uniquement) ; `Photo.comment` n'est pas modifié, `contexte.txt` reste brut.
+- **Rapport pro** : la mention de l'app suit la **vraie dernière page** (la table si `proSummaryEnd`) ;
+  dates de la table en anglais avec le mois en lettres (`summaryDate`) ; référence en saisie libre.
+
 - **Page de garde du rapport pro** : composition centrée (sur-titre « Rapport photographique », titre,
+
   filet, **photo étoilée ★** sinon la 1ʳᵉ — `ExportOptions.proCoverPhoto`, défaut oui —, mentions),
   dans les deux moteurs (`.cover` de `buildProDocument`, branche `pro` de `renderCover`).
   **Date « Détaillée » avec l'heure en pro** : `reportDateFormat` (`dateFormat.ts`, long → full).
@@ -446,7 +530,9 @@ testeur, on tapait à l'aveugle). À son ouverture (`keyboardWillShow` iOS / `ke
 Android) : photo réduite à 84 pt, poignée masquée, marges du bas resserrées (plus besoin de la marge
 de barre d'accueil), puis `keyboardDidShow` fait défiler jusqu'au **champ touché** (commentaire ou
 lieu, positions relevées par `onLayout`). Ne pas retirer le `KeyboardAvoidingView` : il remonte la
-feuille, ce code remonte le champ dans la feuille.
+feuille, ce code remonte le champ dans la feuille. `behavior="padding"` sur **les deux** plateformes
+(aussi `NameModal`) : le SDK 54 impose le bord à bord sur Android, la fenêtre n'y est plus
+redimensionnée par le clavier — l'ancien `undefined` laissait le champ sous le clavier.
 
 ## Lieu et date de prise de vue
 
@@ -456,6 +542,12 @@ Deux résolutions bâties sur le même schéma — EXIF, puis `expo-media-librar
 `resolveCoords()` pour le GPS (puis, pour une photo prise dans l'app, la **position de l'appareil**)
 et `resolveTakenAt()` pour la date (`creationTime` de la photothèque). Sans ce second repli, une
 photo importée héritait de sa date d'**import** — `photoDate()` retombant sur `createdAt`.
+⚠️ **Android : la photothèque n'est jamais lue** (`Platform.OS !== 'ios'` dans les deux résolutions) :
+`READ_MEDIA_IMAGES` / `VIDEO` / `AUDIO` / `VISUAL_USER_SELECTED` et `ACCESS_MEDIA_LOCATION` sont dans
+`android.blockedPermissions` (`app.json`), car Google Play refuse l'accès à toute la galerie à une app
+à qui le sélecteur de photos suffit. Lieu et date viennent alors de l'EXIF seul (le sélecteur Android
+retire souvent le GPS : saisie manuelle du lieu). L'enregistrement dans la galerie
+(`saveToPhotoLibrary`, écriture seule) ne demande rien à partir d'Android 13.
 `reverseGeocode()` transforme les coordonnées en « Ville, Pays » (permission demandée **seulement
 sur Android**). Repli : saisie manuelle du `Photo.place` dans `CommentModal`.
 
@@ -582,8 +674,18 @@ La vignette de `PhotoCard` fait 76 px : **toucher la vignette** ouvre
 `src/components/PhotoViewerModal.tsx` (plein écran noir, photo `resizeMode="contain"`, commentaire
 en bas). Toucher le **reste de la carte** garde l'ancien comportement — ouverture de `CommentModal`.
 Le zoom utilise les props natives de `ScrollView` (`minimumZoomScale` / `maximumZoomScale`), donc
-sans `react-native-gesture-handler` ; ⚠️ **iOS uniquement** — sur Android la photo s'affiche en plein
-écran mais ne se pince pas. Les pages de texte n'ouvrent pas la visionneuse.
+sans `react-native-gesture-handler`. Ces props sont **iOS uniquement** : **Android** passe par
+`ZoomablePhoto` (même fichier) — pincement, glissé une fois agrandie, double appui — en
+`PanResponder` + `Animated`, sans module natif. Les pages de texte n'ouvrent pas la visionneuse.
+
+## Aide intégrée
+Bouton **« ? »** (`HelpButton`) à droite du titre de `HomeScreen` et d'`AlbumScreen` → `HelpModal`
+(`src/components/HelpModal.tsx`) : mode d'emploi en rubriques repliables, une seule ouverte, celle de
+l'écran appelant d'abord (`initial`). Textes dans **`src/helpContent.ts`** (FR + EN, mêmes rubriques
+imposées par le typage — pas dans `i18n.ts` : ce sont des paragraphes). ⚠️ Ils citent les libellés
+des boutons : renommer un bouton ou déplacer une fonction oblige à les relire.
+**Validation en haut à droite** dans les éditeurs plein écran (`CropModal`, `AnnotateModal`) :
+Annuler à gauche, titre, Valider à droite ; les outils (Pivoter, Réinitialiser) restent en bas.
 
 ## Petits modules à connaître
 `src/appVersion.ts` `versionLabel()` — étiquette affichée en bas de `WelcomeScreen` : numéro d'app

@@ -59,6 +59,10 @@ publier un update, de lancer un build ou de toucher aux fiches des stores.
 ## Android & Google Play
 - Même base de code, même `app.json` : `android.package`, `adaptiveIcon` (4 couches), permissions
   média/micro et `androidIntentFilters` du partage entrant sont déjà en place.
+- **Test sur un téléphone, sans Play Store** : `eas build -p android --profile apk` (profil de
+  `eas.json` = `production` + `distribution: internal` + `buildType: apk`) donne un **APK** à
+  installer depuis le lien EAS (autoriser l'installation d'applications inconnues). Canal
+  `production` : les `eas update --branch production` y arrivent comme sur le build TestFlight.
 - `eas build --platform android --profile production` produit un **`.aab`** (format imposé par
   Google). Le **keystore** est généré et conservé par EAS : le perdre interdit **définitivement**
   toute mise à jour sous `com.boccarasteam.comclic`. Récupérable par

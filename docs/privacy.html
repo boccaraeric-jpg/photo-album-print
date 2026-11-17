@@ -91,8 +91,11 @@
           photos prises dans l'app.</li>
       <li><strong>Localisation</strong> — renseigner le lieu de prise de vue sous une photo.
           Voir la section suivante.</li>
-      <li><strong>Micro et reconnaissance vocale</strong> — dicter un commentaire. La
-          transcription est effectuée <strong>sur l'appareil</strong> par iOS.</li>
+      <li><strong>Micro et reconnaissance vocale</strong> — dicter un commentaire. Sur iPhone,
+          la transcription est effectuée <strong>sur l'appareil</strong> par iOS. Sur Android, elle
+          a lieu sur l'appareil quand la langue de reconnaissance y est installée (l'app propose de
+          la télécharger) ; à défaut, la voix est transcrite par le service vocal du système
+          (Google), comme avec le micro du clavier. L'app ne conserve aucun enregistrement.</li>
     </ul>
     <p>
       Chaque autorisation est facultative : refusée, la fonction correspondante est simplement
@@ -176,8 +179,10 @@
       </p>
       <p>
         The app asks for camera, photo library, location, microphone and speech recognition
-        permissions solely to provide the matching features; each is optional. Speech is
-        transcribed on-device by iOS. Coordinates are sent to the operating system's geocoding
+        permissions solely to provide the matching features; each is optional. On iPhone, speech
+        is transcribed on-device by iOS. On Android, it is transcribed on-device when the
+        recognition language is installed (the app offers to download it); otherwise by the
+        system's voice service (Google), as with the keyboard microphone. No recording is kept. Coordinates are sent to the operating system's geocoding
         service only to turn them into a “City, Country” label, and, if you turn on maps next to
         photos, to the system's map service (Apple Maps) to get the map image, kept on your device.
       </p>

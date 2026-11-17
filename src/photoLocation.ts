@@ -1,5 +1,6 @@
 import * as MediaLibrary from 'expo-media-library';
 import * as Location from 'expo-location';
+import { Platform } from 'react-native';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { extractCoords, extractTakenAt } from './exif';
 
@@ -39,7 +40,10 @@ export async function resolveTakenAt(
   const fromExif = extractTakenAt(asset);
   if (fromExif) return fromExif;
 
-  if (!asset.assetId) return undefined;
+  // Android : pas de lecture de la photothèque (READ_MEDIA_IMAGES bloquée dans
+  // `app.json` : Google Play la refuse à une app à qui le sélecteur de photos
+  // suffit). L'EXIF remis par le sélecteur fait foi.
+  if (!asset.assetId || Platform.OS !== 'ios') return undefined;
   try {
     const perm = await MediaLibrary.getPermissionsAsync();
     if (!perm.granted) {
@@ -95,7 +99,8 @@ export async function resolveCoords(
   const fromExif = extractCoords(asset);
   if (fromExif) return fromExif;
 
-  if (!asset.assetId) return undefined;
+  // Android : photothèque non lue, cf. `resolveTakenAt`.
+  if (!asset.assetId || Platform.OS !== 'ios') return undefined;
   try {
     const perm = await MediaLibrary.getPermissionsAsync();
     if (!perm.granted) {

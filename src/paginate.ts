@@ -54,7 +54,18 @@ export interface PaginateOptions {
   commentScale?: number;
   /** Honorer la taille propre à chaque photo (`Photo.size`) — familial seulement. */
   perPhotoSize?: boolean;
+  /**
+   * Page carrée : les moyennes s'y posent côte à côte, dans une colonne deux
+   * fois plus étroite. Le seuil de page seule y est divisé d'autant
+   * (`NARROW_FACTOR`) : un commentaire de deux ou trois phrases y prenait deux
+   * fois plus de lignes et écrasait la photo (et sa carte) sans jamais
+   * atteindre le seuil prévu pour la pleine largeur.
+   */
+  narrow?: boolean;
 }
+
+/** Colonne étroite (carré, moyennes côte à côte) : le commentaire compte double. */
+const NARROW_FACTOR = 2;
 
 /**
  * Répartit les entrées (photos + pages de texte) en pages. Les pages de texte
@@ -71,7 +82,7 @@ export interface PaginateOptions {
 export function paginateEntries(
   entries: Photo[],
   albumSize: PhotoSize,
-  { wide, commentScale = 1, perPhotoSize = false }: PaginateOptions = {},
+  { wide, commentScale = 1, perPhotoSize = false, narrow = false }: PaginateOptions = {},
 ): AlbumPage[] {
   const pages: AlbumPage[] = [];
   let group: Photo[] = [];
@@ -94,7 +105,8 @@ export function paginateEntries(
     const perPage = PER_PAGE[size];
     if (group.length && size !== groupSize) flush();
     groupSize = size;
-    if (perPage <= 1 || isLongComment(e, commentScale)) {
+    const long = isLongComment(e, commentScale * (narrow && size === 'medium' ? NARROW_FACTOR : 1));
+    if (perPage <= 1 || long) {
       flush();
       pages.push({ type: 'photos', items: [e], size, solo: perPage > 1 });
       continue;
@@ -171,26 +183,89 @@ export function proFrameH(size: ProPhotoSize, scale: number): number {
   return PRO_LAYOUT.frame[size] - Math.round((scale - 1) * give);
 }
 
+/** Plus grande vignette d'une fiche « grande » (points A4). */
+const PRO_LARGE_MAX = 620;
+
+/**
+ * Vignette d'une **grande** fiche : seule sur sa page, elle prend toute la
+ * hauteur que ses lignes de texte laissent (au moins le gabarit, au plus
+ * `PRO_LARGE_MAX`). À hauteur fixe, la moitié basse de la page restait vide
+ * (retour testeur). Commun au PDF et aux images.
+ */
+export function proLargeFrameH(
+  photo: Photo,
+  scale: number,
+  rows: number,
+  coords = false,
+  bold = false,
+): number {
+  const L = PRO_LAYOUT;
+  const base = proFrameH('large', scale);
+  const rest = proEntryHeight(photo, 'large', scale, rows, coords, bold) - base;
+  const room = L.pageH - L.padTop - L.padBottom;
+  // 14 pt de sûreté : la hauteur du texte est estimée, la page ne doit pas déborder.
+  return Math.max(base, Math.min(PRO_LARGE_MAX, Math.floor(room - rest - 14)));
+}
+
+/**
+ * Table récapitulative du rapport pro (points A4) : titre, en-tête de
+ * colonnes, une ligne par photo. Colonnes en fractions de la largeur utile.
+ */
+export const PRO_SUMMARY = {
+  top: 64,
+  titleSize: 18,
+  titleGap: 26,
+  headSize: 9,
+  rowH: 17,
+  size: 10.5,
+  /** N°, date, lieu, page. */
+  cols: [0.08, 0.34, 0.48, 0.1],
+  /** Lignes par page. */
+  perPage: 34,
+};
+
+/** Nombre de pages de la table récapitulative pour `count` photos. */
+export function proSummaryPages(count: number): number {
+  return count > 0 ? Math.ceil(count / PRO_SUMMARY.perPage) : 0;
+}
+
 /** Hauteur estimée d'une fiche pro (points A4). */
+
 export function proEntryHeight(
   photo: Photo,
   size: ProPhotoSize,
   scale: number,
   rows: number,
+  /** Coordonnées GPS à la suite du lieu : la ligne « Lieu » peut passer à la ligne. */
+  coords = false,
+  /** Texte en gras (`proTextBold`) : caractères plus larges, moins par ligne. */
+  bold = false,
 ): number {
   const L = PRO_LAYOUT;
-  const perLine = Math.max(8, Math.floor((size === 'small' ? L.charsHalf : L.charsFull) / scale));
+  // Gras 800 : environ 12 % de caractères en moins par ligne. Sans cela une
+  // description comptée sur 2 lignes en prenait 3 et la page débordait sur une
+  // page blanche (vu sur un PDF d'iPhone, 14/11/2026).
+  const perLine = Math.max(
+    8,
+    Math.floor(((size === 'small' ? L.charsHalf : L.charsFull) * (bold ? 0.88 : 1)) / scale),
+  );
+  // Lignes en plus de la ligne « Lieu » quand le lieu et ses coordonnées ne
+  // tiennent pas sur une ligne (deux déjà comptées en demi-largeur).
+  const placeLen = (photo.place ?? '').trim().length + (coords && photo.coords ? 26 : 0);
+  const placeExtra =
+    rows > 0 ? Math.max(0, Math.ceil(placeLen / perLine) - (size === 'small' ? 2 : 1)) : 0;
   const text = stripMarks(photo.comment).trim() || '—';
   const lines = text
     .split('\n')
-    .reduce((n, para) => n + Math.max(1, Math.ceil(para.length / perLine)), 0);
+    // 8 % de marge pour les coupures entre les mots.
+    .reduce((n, para) => n + Math.max(1, Math.ceil((para.length * 1.08) / perLine)), 0);
   return (
     L.head * scale +
     proFrameH(size, scale) +
     L.metaTop +
     // Demi-largeur : lieu et date passent souvent sur deux lignes.
     rows * L.row * scale * (size === 'small' ? 1.7 : 1) +
-    lines * L.descLine * scale +
+    (lines + placeExtra) * L.descLine * scale +
     10 +
     L.entryGap
   );
@@ -208,6 +283,10 @@ export function paginateProEntries(
   rows: number,
   /** Taille du rapport (mise en page), sauf photo réglée dans l'aperçu. */
   reportSize: ProPhotoSize = 'medium',
+  /** Coordonnées GPS à la suite du lieu (`ExportOptions.proCoords`). */
+  coords = false,
+  /** Texte en gras (`ExportOptions.proTextBold`). */
+  bold = false,
 ): AlbumPage[] {
   const L = PRO_LAYOUT;
   const room = L.pageH - L.padTop - L.padBottom;
@@ -215,10 +294,16 @@ export function paginateProEntries(
   let group: Photo[] = [];
   let size: ProPhotoSize = 'medium';
   const height = (g: Photo[], sz: ProPhotoSize) => {
-    if (sz !== 'small') return g.reduce((h, p) => h + proEntryHeight(p, sz, scale, rows), 0);
+    if (sz !== 'small') {
+      return g.reduce((h, p) => h + proEntryHeight(p, sz, scale, rows, coords, bold), 0);
+    }
     let h = 0;
     for (let i = 0; i < g.length; i += 2) {
-      h += Math.max(...g.slice(i, i + 2).map((p) => proEntryHeight(p, sz, scale, rows)));
+      h += Math.max(
+        ...g.slice(i, i + 2).map((p) => proEntryHeight(p, sz, scale, rows, coords, bold)),
+      );
+
+
     }
     return h;
   };

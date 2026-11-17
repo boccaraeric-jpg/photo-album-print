@@ -112,7 +112,7 @@ export const COMMENT_SCALE: Record<CommentSize, number> = {
 /** Commentaire sur cadre blanc (ou fond clair) : encre quasi noire. */
 export const CAPTION_INK = '#14120f';
 /** Ligne « lieu · date » : 8,5 pt, foncée (c'était 6,5 pt beige, illisible). */
-export const META_SIZE = 8.5;
+export const META_SIZE = 9.5;
 export const META_INK = '#4d473e';
 export const META_INK_DARK = '#e0dbd0';
 
@@ -195,6 +195,24 @@ export function famsUsed(t: Typeface): FontFam[] {
 /* --------------------------------------------------------------------------
  * Largeur des textes (estimation commune aux deux moteurs)
  * ------------------------------------------------------------------------ */
+
+/**
+ * Photo pleine page (points A4), partagé par le PDF et Skia : la photo, entière,
+ * tient dans la page moins une marge égale sur les quatre côtés ; sa légende se
+ * pose juste dessous et le bloc photo + légende se centre sur la page. Sans
+ * marge, une photo plus étroite que la page se collait au bord haut.
+ */
+export const FULL_PAGE = {
+  /** Marge autour du bloc, sur les quatre côtés. */
+  margin: 26,
+  /** Écart entre la photo et sa légende. */
+  capGap: 14,
+  /** Corps de la légende (avant `captionScale` et `COMMENT_SCALE`). */
+  capSize: 14,
+  capLine: 1.4,
+  /** Lignes de légende au plus (15 mots). */
+  capMaxLines: 3,
+};
 
 /** Largeur moyenne d'un caractère (en em), normale et grasse, par famille. */
 export const CHAR_EM: Record<FontFam, [number, number]> = {
@@ -394,6 +412,9 @@ const SCATTER_LAYOUTS: Record<number, [number, number, number][]> = {
   9: [[297, 512, 175], [130, 315, 150], [297, 300, 150], [465, 315, 150], [108, 512, 150], [487, 512, 150], [130, 712, 150], [297, 725, 150], [465, 712, 150]],
 };
 
+/** Marge gardée entre le pêle-mêle et les bords de la page (points). */
+const SCATTER_EDGE = 26;
+
 /** Gabarit du pêle-mêle : l'indice 0 est la photo principale (au centre, au-dessus). */
 export function scatterSlots(
   count: number,
@@ -419,9 +440,19 @@ export function scatterSlots(
     left: extent(([cx, , z]) => cx - (z / 2 + POLAROID.pad) * 1.08, Math.min),
     right: extent(([cx, , z]) => cx + (z / 2 + POLAROID.pad) * 1.08, Math.max),
   };
-  // Zone libre : sous le titre, jusqu'au bas de la page.
-  const zone = { top: Math.max(zoneTop, 0), bottom: pageH - 10, left: 12, right: COVER_W - 12 };
+  // Zone libre : sous le titre, jusqu'au bas de la page. Marges de
+  // `SCATTER_EDGE` : le décalage aléatoire (± 8) s'ajoute à l'emprise, et à
+  // 10 pt du bas la photo la plus basse venait toucher le bord de la page.
+  const zone = {
+    top: Math.max(zoneTop, 0),
+    bottom: pageH - SCATTER_EDGE,
+    left: SCATTER_EDGE,
+    right: COVER_W - SCATTER_EDGE,
+  };
   const mid = COVER_W / 2;
+  // Centre réel du montage : un gabarit n'est pas toujours symétrique, et le
+  // centrer sur l'axe de la page le laissait alors pencher d'un côté.
+  const boxMid = (box.left + box.right) / 2;
   // Le montage se centre dans la place libre sous le titre (marges égales en
   // haut et en bas) ; il ne se réduit que s'il n'y tient pas (titre long, page
   // plus courte). En largeur on réduit moins (la page ne manque pas de
@@ -433,7 +464,7 @@ export function scatterSlots(
   const dy = zone.top + (zoneH - boxH * s) / 2 - box.top * s;
   const [hero, ...others] = raw.map(
     ([cx, cy, size]): [number, number, number] => [
-      mid + (cx - mid) * sx,
+      mid + (cx - boxMid) * sx,
       cy * s + dy,
       Math.round(size * s),
     ],
@@ -463,7 +494,7 @@ export function scatterSlots(
 }
 
 /** Bandeau du titre des couvertures montées (pêle-mêle). */
-export const SCATTER_TITLE = { top: 52, side: 40, size: 40 };
+export const SCATTER_TITLE = { top: 34, side: 40, size: 40 };
 
 /** Forme de la grille cinématique selon le nombre de photos disponibles. */
 function gridShape(n: number): { cols: number; rows: number; count: number; height: number } {

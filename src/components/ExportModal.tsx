@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Image,
+  Keyboard,
   LayoutAnimation,
   Modal,
   Pressable,
@@ -397,6 +398,36 @@ export function ExportModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, initial]);
 
+  // Clavier : il recouvrait le champ touché (auteur, référence, titre), qu'il
+  // fallait remonter au doigt (retour testeur). Le corps reçoit une marge de la
+  // hauteur du clavier, puis défile jusqu'au champ qui a le focus.
+  const scrollRef = useRef<ScrollView>(null);
+  const focusedRef = useRef<number | null>(null);
+  const [keyboardH, setKeyboardH] = useState(0);
+  const revealFocused = () => {
+    const node = focusedRef.current;
+    if (node == null) return;
+    // Marge au-dessus du clavier : la note d'aide sous le champ reste lisible.
+    scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(node, 96, true);
+  };
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardH(e.endCoordinates.height);
+      // Après la mise en page de la marge ajoutée.
+      setTimeout(revealFocused, 60);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardH(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  const onFieldFocus = (e: { nativeEvent: { target: number } }) => {
+    focusedRef.current = e.nativeEvent.target;
+    // Clavier déjà ouvert (passage d'un champ à l'autre) : pas de nouvel événement.
+    if (keyboardH > 0) setTimeout(revealFocused, 60);
+  };
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
@@ -419,8 +450,13 @@ export function ExportModal({
         </View>
 
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            keyboardH > 0 && { paddingBottom: keyboardH },
+          ]}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator
         >
           {/* Rubriques repliables : chacune résume ses choix en une ligne, une
@@ -458,6 +494,7 @@ export function ExportModal({
                 spellCheck
                 autoCapitalize="sentences"
                 textAlign="center"
+                onFocus={onFieldFocus}
                 accessibilityLabel={L.export.coverTitleLabel}
               />
               <Text style={styles.note}>{L.export.coverTitleHint}</Text>
@@ -613,6 +650,27 @@ export function ExportModal({
                   value={options.proCoverPhoto}
                   onChange={(proCoverPhoto) => setOptions((o) => ({ ...o, proCoverPhoto }))}
                 />
+                <SwitchRow
+                  label={L.export.proSummaryLabel}
+                  hint={L.export.proSummaryHint}
+                  value={options.proSummary}
+                  onChange={(proSummary) => setOptions((o) => ({ ...o, proSummary }))}
+                />
+                {options.proSummary && (
+                  <SwitchRow
+                    label={L.export.proSummaryEndLabel}
+                    hint={L.export.proSummaryEndHint}
+                    value={options.proSummaryEnd}
+                    onChange={(proSummaryEnd) => setOptions((o) => ({ ...o, proSummaryEnd }))}
+                  />
+                )}
+
+                <SwitchRow
+                  label={L.export.proCoordsLabel}
+                  hint={L.export.proCoordsHint}
+                  value={options.proCoords}
+                  onChange={(proCoords) => setOptions((o) => ({ ...o, proCoords }))}
+                />
               </>
             )}
             {!isPro && (
@@ -735,6 +793,40 @@ export function ExportModal({
                   value={options.proTextBold}
                   onChange={(proTextBold) => setOptions((o) => ({ ...o, proTextBold }))}
                 />
+                {/* Mentions de la page de garde : vides, elles n'apparaissent pas. */}
+                <Text style={styles.label}>{L.export.proAuthorLabel}</Text>
+                <TextInput
+                  style={styles.titleInput}
+                  value={options.proAuthor}
+                  onChangeText={(t) =>
+                    setOptions((o) => ({ ...o, proAuthor: t.replace(/\n/g, ' ') }))
+                  }
+                  placeholderTextColor={C.faint}
+                  maxLength={60}
+                  autoCorrect={false}
+                  autoCapitalize="words"
+                  onFocus={onFieldFocus}
+                  accessibilityLabel={L.export.proAuthorLabel}
+                />
+                <Text style={styles.note}>{L.export.proAuthorHint}</Text>
+                <Text style={styles.label}>{L.export.proReferenceLabel}</Text>
+                <TextInput
+                  style={styles.titleInput}
+                  value={options.proReference}
+                  onChangeText={(t) =>
+                    setOptions((o) => ({ ...o, proReference: t.replace(/\n/g, ' ') }))
+                  }
+                  placeholderTextColor={C.faint}
+                  maxLength={40}
+                  autoCorrect={false}
+                  // Saisie libre : une référence mêle majuscules et minuscules
+                  // (« Dossier x007 ») ; le clavier forcé en capitales gênait.
+                  autoCapitalize="none"
+                  onFocus={onFieldFocus}
+                  accessibilityLabel={L.export.proReferenceLabel}
+                />
+                <Text style={styles.note}>{L.export.proReferenceHint}</Text>
+
               </>
             )}
 

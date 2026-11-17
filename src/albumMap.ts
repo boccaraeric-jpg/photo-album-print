@@ -1,3 +1,4 @@
+import { localizePlaceName } from './placeI18n';
 import { dict, localeTag, type Lang } from './i18n';
 import type { Photo, Typeface } from './types';
 import { photoDate } from './dateFormat';
@@ -124,8 +125,11 @@ export function collectPlaces(photos: Photo[], lang: Lang = 'fr'): Place[] {
       g.times.push(photoDate(p));
     } else {
       groups.set(key, {
-        name: parts[0] ?? coordLabel(lat, lon, lang),
-        country: parts.length > 1 ? parts[parts.length - 1] : '',
+        // Noms dans la langue de l'album (le regroupement, lui, reste fait sur
+        // le texte enregistré).
+        name: parts[0] ? localizePlaceName(parts[0], lang) : coordLabel(lat, lon, lang),
+        country: parts.length > 1 ? localizePlaceName(parts[parts.length - 1], lang) : '',
+
         lat,
         lon,
         k: 1,
@@ -735,6 +739,88 @@ export function buildMapModel(
  */
 export const MAP_SHARE = 0.4;
 export const MAP_GAP = 6;
+/**
+ * Part de la **hauteur** donnée à la carte quand elle se pose **sous** la photo
+ * (page carrée, moyennes côte à côte). Assez pour lire les noms autour du
+ * repère (une bande trop mince ne montrait qu'un ruban de carte), sans prendre
+ * la place de la photo : à 44 % la carte dominait (retour testeur).
+ */
+export const MAP_SHARE_BELOW = 0.35;
+/**
+ * Part **minimale** laissée à la carte quand les proportions de la photo sont
+ * connues : la photo prend la place dont elle a besoin, la carte le reste,
+ * entre ce minimum et la part d'usage (`MAP_SHARE`, `MAP_SHARE_BELOW`).
+ */
+export const MAP_SHARE_MIN = 0.34;
+/** Largeur maximale d'une carte à côté de sa photo, rapportée à celle de la photo. */
+export const MAP_VS_PHOTO = 0.85;
+/** Même minimum pour la carte posée sous la photo (bande plus basse sous un portrait). */
+export const MAP_SHARE_BELOW_MIN = 0.28;
+
+/**
+ * Photo et carte **côte à côte** dans une zone `w × h` : largeurs et hauteur
+ * commune, le bloc se centrant dans la zone. `aspect` = largeur / hauteur de
+ * la photo ; inconnu (0), partage fixe d'origine sur toute la hauteur.
+ *
+ * La photo et la carte ont la **même hauteur** : avec le partage fixe, une
+ * photo horizontale flottait à mi-hauteur d'une carte bien plus haute qu'elle,
+ * et un portrait se perdait au milieu de sa colonne, loin de sa carte (retour
+ * testeur). Commun aux deux moteurs.
+ */
+export function splitBeside(
+  w: number,
+  h: number,
+  aspect: number,
+  gap: number,
+): { photoW: number; mapW: number; h: number } {
+  const room = w - gap;
+  if (!(aspect > 0)) return { photoW: room * (1 - MAP_SHARE), mapW: room * MAP_SHARE, h };
+  const photoW = Math.min(h * aspect, room * (1 - MAP_SHARE_MIN));
+  // La carte ne dépasse jamais la photo en largeur : à côté d'un portrait elle
+  // prenait le dessus sur l'image (retour testeur).
+  const mapW = Math.min(room - photoW, room * MAP_SHARE, photoW * MAP_VS_PHOTO);
+  return { photoW, mapW, h: photoW / aspect };
+}
+
+/**
+ * Carte **sous** la photo dans une zone `w × h` (page carrée, moyennes côte à
+ * côte) : hauteurs de la photo et de la carte, le bloc se centrant dans la
+ * zone. Une photo horizontale ne prend que sa hauteur réelle (plus de blanc
+ * entre elle et la carte) ; un portrait monte jusqu'à ne laisser à la carte
+ * que `MAP_SHARE_BELOW_MIN` — à 35 % il sortait bien plus petit que la photo voisine.
+ */
+export function splitBelow(
+  w: number,
+  h: number,
+  aspect: number,
+  gap: number,
+): { photoH: number; mapH: number; mapW: number } {
+  const room = h - gap;
+  if (!(aspect > 0)) {
+    return { photoH: room * (1 - MAP_SHARE_BELOW), mapH: room * MAP_SHARE_BELOW, mapW: w };
+  }
+  const photoH = Math.min(w / aspect, room * (1 - MAP_SHARE_BELOW_MIN));
+  // Sous un portrait, la carte s'aligne sur la largeur de la photo au lieu de
+  // déborder de chaque côté en ruban (retour testeur), sans descendre sous
+  // `MAP_BELOW_MIN_W` de la colonne.
+  const photoW = Math.min(w, photoH * aspect);
+  const mapW = Math.min(w, Math.max(photoW, w * MAP_BELOW_MIN_W));
+  return { photoH, mapH: Math.min(room - photoH, room * MAP_SHARE_BELOW), mapW };
+}
+/** Largeur minimale d'une carte posée sous sa photo, en part de la colonne. */
+export const MAP_BELOW_MIN_W = 0.62;
+/**
+ * Échelle minimale du fond de carte posé sous une photo (points de page par
+ * point du repère `MINI_W × MINI_H`). Cadrée « cover » dans une bande basse,
+ * la carte sortait réduite au tiers et ses noms devenaient illisibles : en
+ * dessous de ce seuil elle est **rognée** autour du repère plutôt que réduite.
+ */
+export const MAP_BELOW_ZOOM = 0.46;
+/** Taille d'affichage du fond de carte sous une photo, dans une case `w × h`. */
+export function belowMapArt(w: number, h: number, unit = 1): { w: number; h: number } {
+  const s = Math.max(w / MINI_W, h / MINI_H, MAP_BELOW_ZOOM * unit);
+  return { w: MINI_W * s, h: MINI_H * s };
+}
 /** Médaillon de carte posé sur une photo pleine page (points A4). */
 export const FULL_MAP = { w: 168, h: 112, margin: 18, border: 4 };
 

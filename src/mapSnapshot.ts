@@ -1,4 +1,5 @@
 import { requireOptionalNativeModule } from 'expo';
+import { getLocales } from 'expo-localization';
 import * as FileSystem from 'expo-file-system/legacy';
 import { MINI_H, MINI_SPAN_M, MINI_W, photoCoords } from './albumMap';
 import type { Photo } from './types';
@@ -32,9 +33,23 @@ const DIR = `${FileSystem.documentDirectory ?? ''}map-snapshots/`;
 /** Délai maximal d'une carte : au-delà (réseau lent), repli hors ligne. */
 const TIMEOUT_MS = 12000;
 
+/**
+ * Langue dans laquelle Apple Plans écrit ses noms : celle de l'iPhone (aucun
+ * réglage ne permet d'en demander une autre). Elle entre dans le nom du
+ * fichier : sans elle, une carte faite en français ressortait telle quelle
+ * après un passage du téléphone en anglais (« Athènes », retour testeur).
+ */
+function mapLang(): string {
+  try {
+    return (getLocales()[0]?.languageCode ?? 'xx').replace(/[^a-z]/gi, '').slice(0, 3) || 'xx';
+  } catch {
+    return 'xx';
+  }
+}
+
 function fileFor(lat: number, lon: number): string {
   // ~10 m près : deux photos du même endroit partagent leur carte.
-  return `${DIR}${lat.toFixed(4)}_${lon.toFixed(4)}_${MINI_SPAN_M}.jpg`;
+  return `${DIR}${lat.toFixed(4)}_${lon.toFixed(4)}_${MINI_SPAN_M}_${mapLang()}.jpg`;
 }
 
 const pending = new Map<string, Promise<string | null>>();

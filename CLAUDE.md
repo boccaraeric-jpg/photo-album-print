@@ -114,6 +114,15 @@ Chacune a coûté un bug réel ; le récit est dans `ARCHITECTURE.md`.
   `readBase64(photo.uri)` sur l'original (PDF de ~190 Mo vécus). Seul « Photos (à réutiliser) » garde
   la pleine résolution.
 - Commentaire redevenu texte nu (`contexte.txt`, noms de fichiers, `isLongComment`) → `stripMarks()`.
+- ⛔ **iOS compose toute page à imprimer sur 1,25 × la largeur du papier** : le zoom d'impression
+  passe par `printZoom` / `printScale` (`pageFormat.ts`). Chrome ne le reproduit pas — contrôle PC en
+  variante iOS avec `@page { size }` en px (A4 `743px 1052px`, 16 × 21 `566px 744px`, 16 × 16
+  `566px 566px`).
+- Retouches de texte **à l'affichage seulement**, jamais sur la donnée enregistrée : lieu dans la
+  langue de l'album (`properPlace(place, lang)`, table `src/placeI18n.ts`), apostrophes d'élision
+  (`fixElisions`, `src/typography.ts`). Jamais de `toLowerCase()` sur la ligne lieu · date.
+- Rapport pro : pages explicites (`paginateProEntries`), hauteurs **estimées** — tout ce qui allonge
+  une fiche (gras, GPS, taille du texte) doit entrer dans `proEntryHeight`, sinon page blanche.
 
 **Fichiers et données**
 - ⛔ **iOS déplace le conteneur de l'app à chaque build** : jamais d'URI absolue persistée telle
@@ -130,7 +139,11 @@ Chacune a coûté un bug réel ; le récit est dans `ARCHITECTURE.md`.
   panneaux d'`ExportModal`), et fermer le modal en cours avant l'écran d'achat (`showPaywall(…, true)`).
 - **`fontWeight` est ignoré sur une police custom iOS** : choisir la clé `F` (`display` 800 / `mono`
   500 / `monoBold` 700, toutes Montserrat). Couleurs et polices via `C` / `F` de `src/theme.ts`.
-- Gestes en **`PanResponder`** seulement (`CropModal`, `AnnotateModal`) : pas de
+- Éditeurs plein écran : **Annuler à gauche, Valider à droite dans la barre de titre** ; outils en bas.
+  Un champ de texte dans un écran défilant doit **remonter au-dessus du clavier** (`ExportModal`,
+  `CommentModal`). Une fonction ajoutée ou un bouton renommé ⇒ relire l'aide (`src/helpContent.ts`).
+- Gestes en **`PanResponder`** seulement (`CropModal`, `AnnotateModal`, zoom Android de
+  `PhotoViewerModal`) : pas de
   `react-native-gesture-handler` ; `react-native-reanimated`/`worklets` présents mais inutilisés.
 - Saisie : **une seule zone de texte à l'écran** pour le commentaire (bascule rendu ↔ `TextInput`),
   boutons de mise en forme en **`onPressIn`** au-dessus du champ (iOS vide la sélection avant `onPress`).

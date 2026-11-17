@@ -1,3 +1,4 @@
+import { localizePlace } from './placeI18n';
 import JSZip from 'jszip';
 import * as FileSystem from 'expo-file-system/legacy';
 import { albumFileBase } from './pdf';
@@ -90,7 +91,7 @@ export async function zipPhotos(
       lines.push(`Photo ${num} : ${fname}`);
       const date = formatPhotoDate(photoDate(p), 'full', lang);
       if (date) lines.push(`  ${D.date} : ${date}`);
-      if (p.place?.trim()) lines.push(`  ${D.place} : ${p.place.trim()}`);
+      if (p.place?.trim()) lines.push(`  ${D.place} : ${localizePlace(p.place, lang)}`);
       if (p.comment.trim())
         lines.push(`  ${D.comment} : ${stripMarks(p.comment).trim()}`);
       lines.push('');
