@@ -44,6 +44,17 @@ d'import/transform). Arrêter Metro ensuite.
 - Bundle HTTP 200 ne prouve pas que l'iPhone a le nouveau code : contrôler que le **log Metro**
   montre bien un bundle servi à l'appareil, ou chercher une chaîne neuve dans le bundle téléchargé.
   Un appareil resté sur EAS Update / une vieille URL sert silencieusement l'ancienne version.
+- **Contrôle visuel du PDF sur PC** (le seul moyen de voir une mise en page sans téléphone) :
+  `node design/pdf-preview/preview.js [--format a4|16x21|16x16] [--style family|pro] [--os
+  ios|android] [--lang fr|en] [--opts '<json ExportOptions>']` — le vrai `buildAlbumHtml` sous node,
+  Chrome headless, puis des planches-contact `design/pdf-preview/out/<nom>/planche-NN.png` à
+  regarder (pages blanches signalées). **Variante iOS par défaut** (`@page { size }` en px, cf.
+  règles d'export). Planches : Python + PyMuPDF (`PYTHON=<python du venv>`), sinon `--no-sheets`.
+  Détail et limites : `design/pdf-preview/README.md`.
+  ⚠️ Le rendu **Skia** (`pageImages.ts`, « Images de l'album ») et tout écran de l'app ne se voient
+  **que sur un appareil** : le dire à l'utilisateur plutôt que d'annoncer une vérification.
+- L'utilisateur teste sur un **iPhone (TestFlight)** et un **Samsung (APK)** et dépose captures et
+  PDF sur son Bureau Windows (`~/Desktop`) : c'est là qu'il faut lire ses retours.
 - Sur l'appareil, l'étiquette en bas de `WelcomeScreen` (`versionLabel()`) finit par la **fin de
   l'`updateId`** chargé : c'est ce qu'on demande au testeur pour savoir s'il a la dernière update.
 
@@ -60,6 +71,11 @@ EAS Build / TestFlight, Google Play et les pièges de connexion. L'essentiel :
   prend `latest` (SDK suivant), le plugin tourne mais **l'autolinking ne l'embarque pas** — vécu avec
   `expo-speech-recognition` 56.0.1 (bonne version : **3.1.3**). Toujours
   `npx expo install <pkg>@<version-sdk>`, contrôler avec `npm view <pkg> dist-tags`.
+- Une update part pour **iOS et Android à la fois**, avec **un identifiant par plateforme** : donner
+  au testeur la fin de l'`iOS update ID` ou de l'`Android update ID` selon son téléphone. L'app ne
+  charge une update que **pendant l'écran d'accueil** (`applyLatestUpdate`) : fermer complètement
+  l'app, rouvrir, attendre quelques secondes avant « Commencer ».
+- Branche de travail : **`main`** (depuis le 17/11/2026). Pousser `main` **publie `docs/`**.
 
 ## Vue d'ensemble
 

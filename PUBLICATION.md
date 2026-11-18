@@ -42,6 +42,16 @@ publier un update, de lancer un build ou de toucher aux fiches des stores.
   (`autoIncrement`, `appVersionSource: remote`). TestFlight = profil **`production`**.
 - Flux : `eas build --platform ios --profile production` puis
   `eas submit --platform ios --profile production --latest` → App Store Connect → TestFlight.
+  En une commande, sans rester devant le terminal :
+  `npx eas-cli build -p ios --profile production --non-interactive --no-wait --auto-submit`
+  (build 18 arrivé ainsi sur TestFlight le 15/11/2026).
+- ⚠️ **`Apple 403 … A required agreement is missing or has expired`** au lancement du build : le
+  titulaire du compte doit accepter le nouveau contrat (developer.apple.com, et App Store Connect ›
+  Business où tout doit être « Actif »). Après signature, **attendre ~15 minutes** : deux relances
+  immédiates ont encore échoué. Ces refus ne consomment pas de quota de build, mais chacun **avance
+  le numéro de build** (15 → 18).
+- Soumettre une version **à la validation de l'App Store** se fait dans App Store Connect (choix du
+  build, captures, achats joints) : `eas` n'envoie que le binaire.
 - ⚠️ Les réglages **natifs** (ex. `CFBundleLocalizations` FR dans `app.json.ios.infoPlist`, qui
   traduisent les boutons caméra et le menu Coller/Sélectionner en français) n'arrivent **que par un
   build**, jamais par un EAS Update (OTA = JS uniquement).
@@ -59,6 +69,9 @@ publier un update, de lancer un build ou de toucher aux fiches des stores.
 ## Android & Google Play
 - Même base de code, même `app.json` : `android.package`, `adaptiveIcon` (4 couches), permissions
   média/micro et `androidIntentFilters` du partage entrant sont déjà en place.
+- Donner au testeur le **lien direct du fichier** (`https://expo.dev/artifacts/eas/….apk`, champ
+  `artifacts.buildUrl` de `eas build:list --json`), pas la page du build, qui exige une connexion au
+  compte Expo. Un QR code de ce lien évite de le taper. Le fichier expire deux semaines après le build.
 - **Test sur un téléphone, sans Play Store** : `eas build -p android --profile apk` (profil de
   `eas.json` = `production` + `distribution: internal` + `buildType: apk`) donne un **APK** à
   installer depuis le lien EAS (autoriser l'installation d'applications inconnues). Canal

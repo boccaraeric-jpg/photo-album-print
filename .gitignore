@@ -46,3 +46,6 @@ partage-qr.png
 
 # export EAS Update
 dist/
+
+# Sorties du banc d'essai PDF (design/pdf-preview/preview.js)
+design/pdf-preview/out/
