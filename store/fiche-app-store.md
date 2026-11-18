@@ -3,6 +3,9 @@
 Textes prêts à copier dans App Store Connect (Distribution → version iOS 1.0, puis
 Informations sur l'app). Limites d'Apple indiquées entre parenthèses.
 
+> Fiche relue le **18/11/2026**, à jour du build 18 (aide intégrée, recadrage, tri par date, rapport
+> professionnel enrichi). À relire à chaque fonction ajoutée, comme l'aide (`src/helpContent.ts`).
+
 ## Informations sur l'app (une fois)
 
 | Champ | Valeur |
@@ -25,7 +28,7 @@ Informations sur l'app). Limites d'Apple indiquées entre parenthèses.
 **Description (4000)**
 > ComClic transforme vos photos en un album soigné, prêt à partager ou à imprimer.
 >
-> Prenez ou importez vos photos, ajoutez un commentaire (au clavier ou à la voix), le lieu et la date se placent tout seuls. Choisissez ensuite la mise en page : taille des photos, encadrement, couleur de fond, typographie, couverture. L'aperçu vous montre chaque page avant l'envoi, et vous pouvez y régler une photo ou une page à part.
+> Prenez ou importez vos photos, ajoutez un commentaire (au clavier ou à la voix), le lieu et la date se placent tout seuls. Recadrez, ajustez la lumière, rangez vos photos à la main ou par date. Choisissez ensuite la mise en page : taille des photos, encadrement, couleur de fond, typographie, couverture. L'aperçu vous montre chaque page avant l'envoi, et vous pouvez y régler une photo ou une page à part.
 >
 > PARTAGEZ COMME VOUS VOULEZ
 > • En PDF, prêt à imprimer
@@ -38,9 +41,12 @@ Informations sur l'app). Limites d'Apple indiquées entre parenthèses.
 > • Commentaires en gras ou soulignés, en grand pour bien les lire
 > • Pages de texte pour une introduction ou une dédicace
 > • Correcteur d'orthographe et de grammaire hors ligne
+> • Album en français ou en anglais, lieux traduits
+> • Aide intégrée, toujours à portée de main
 >
 > VERSION COMPLÈTE
-> • Rapport professionnel : photos numérotées avec lieu, date et description
+> • Rapport professionnel : photos numérotées avec lieu, date et heure, description
+> • Page de garde, table récapitulative, auteur et référence du dossier, coordonnées GPS
 > • Formats livre photo 16 × 21 et 16 × 16 cm
 > • Couvertures pêle-mêle et grille
 > • Cartes des lieux visités
@@ -67,7 +73,7 @@ Informations sur l'app). Limites d'Apple indiquées entre parenthèses.
 **Description (4000)**
 > ComClic turns your photos into a polished album, ready to share or print.
 >
-> Take or import your photos and add a caption (typed or dictated); the place and date fill in on their own. Then choose the layout: photo size, framing, background color, typography, cover. The preview shows every page before you send it, and lets you adjust any photo or page on its own.
+> Take or import your photos and add a caption (typed or dictated); the place and date fill in on their own. Crop, adjust the light, and arrange your photos by hand or by date. Then choose the layout: photo size, framing, background color, typography, cover. The preview shows every page before you send it, and lets you adjust any photo or page on its own.
 >
 > SHARE YOUR WAY
 > • As a print-ready PDF
@@ -80,9 +86,12 @@ Informations sur l'app). Limites d'Apple indiquées entre parenthèses.
 > • Bold or underlined captions, in large print for easy reading
 > • Text pages for an introduction or a dedication
 > • Offline spelling and grammar check (French)
+> • Albums in English or French, with place names translated
+> • Built-in help, always one tap away
 >
 > FULL VERSION
-> • Professional report: numbered photos with place, date and description
+> • Professional report: numbered photos with place, date and time, description
+> • Cover page, summary table, author and file reference, GPS coordinates
 > • 16 × 21 and 16 × 16 cm photo book formats
 > • Scattered and grid covers
 > • Maps of the places you visited
@@ -114,7 +123,9 @@ Informations sur l'app). Limites d'Apple indiquées entre parenthèses.
   d'un iPhone 6,1 pouces (1170 × 2532) ont **exactement** les mêmes proportions : elles se
   redimensionnent en 1284 × 2778 sans déformation.
 - 3 à 10 captures, dans l'ordre : accueil (dossiers) · dossier avec photos commentées · mise en
-  page · aperçu d'une couverture · page avec carte · rapport professionnel · écran d'achat.
+  page · aperçu d'une couverture · page avec carte · rapport professionnel (table récapitulative
+  ou fiche avec référence) · écran d'achat. Refaire celles du rapport pro et de l'accueil : le
+  rendu et le bouton d'aide « ? » ont changé depuis octobre.
 - Pas d'iPad : `supportsTablet` est désactivé (l'app n'a pas été testée sur iPad).
 
 ## Confidentialité de l'app (questionnaire)
@@ -131,7 +142,7 @@ Dans la page de la version, section **Achats intégrés et abonnements** → sé
 
 - Connexion requise : **Non**.
 - Notes (en anglais) :
-> ComClic is free to download with a trial: users can share 3 albums of up to 15 photos. To see the paywall, create a folder, add more than 15 photos and tap Share, or tap the trial line at the bottom of the home screen. Purchases: ComClic Light (unlimited albums), ComClic Full (all features) and an upgrade from Light to Full, all non-consumable. Full-only features show a lock (layout options) or open the paywall (Professional, Full Backup, marker annotation). "Restore purchases" and "I have a code" are on the paywall. No account and no server: albums are stored on the device only. Maps next to photos use Apple Maps snapshots (network needed); everything else works offline.
+> ComClic is free to download with a trial: users can share 3 albums of up to 15 photos. To see the paywall, create a folder, add more than 15 photos and tap Share, or tap the trial line at the bottom of the home screen. Purchases: ComClic Light (unlimited albums), ComClic Full (all features) and an upgrade from Light to Full, all non-consumable. Full-only features show a lock (layout options) or open the paywall (Professional, Full Backup, marker annotation). "Restore purchases" and "I have a code" are on the paywall. A "?" button on the home screen and in each folder opens the built-in help. No account and no server: albums are stored on the device only. Maps next to photos use Apple Maps snapshots (network needed); everything else works offline.
 
 ## Conformité à l'exportation
 
